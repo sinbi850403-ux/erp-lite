@@ -16,6 +16,7 @@ const ALL_FIELDS = [
   { key: 'itemName',   label: '품목명',    numeric: false },
   { key: 'itemCode',   label: '품목코드',  numeric: false },
   { key: 'category',   label: '분류',      numeric: false },
+  { key: 'vendor',     label: '거래처',    numeric: false },
   { key: 'quantity',   label: '수량',      numeric: true  },
   { key: 'unit',       label: '단위',      numeric: false },
   { key: 'unitPrice',  label: '단가',      numeric: true  },
@@ -139,6 +140,14 @@ export function renderInventoryPage(container, navigateTo) {
     <div class="toolbar">
       <input type="text" class="search-input" id="search-input"
         placeholder="품목명, 코드, 분류로 검색..." />
+      <select class="filter-select" id="filter-item-code">
+        <option value="">전체 품목코드</option>
+        ${getItemCodes(data).map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
+      <select class="filter-select" id="filter-vendor">
+        <option value="">전체 거래처</option>
+        ${getVendors(data).map(v => `<option value="${v}">${v}</option>`).join('')}
+      </select>
       <select class="filter-select" id="filter-category">
         <option value="">전체 분류</option>
         ${getCategories(data).map(c => `<option value="${c}">${c}</option>`).join('')}
@@ -151,6 +160,7 @@ export function renderInventoryPage(container, navigateTo) {
         <option value="">전체 재고</option>
         <option value="low">⚠️ 부족 항목만</option>
       </select>
+      <button class="btn btn-ghost btn-sm" id="btn-filter-reset" title="필터 초기화">🔄 초기화</button>
       <div class="col-settings-wrap" style="position:relative;">
         <button class="btn btn-outline btn-sm" id="btn-col-settings" title="표시할 컬럼 선택">
           ⚙️ 표시 항목
@@ -194,7 +204,7 @@ export function renderInventoryPage(container, navigateTo) {
   `;
 
   // === 상태 변수 ===
-  let currentFilter = { keyword: '', category: '', warehouse: '', stock: '' };
+  let currentFilter = { keyword: '', category: '', warehouse: '', stock: '', itemCode: '', vendor: '' };
   let currentPageNum = 1;
 
   // === 테이블 헤더 렌더링 (컬럼 변경 시 재호출) ===
@@ -226,6 +236,8 @@ export function renderInventoryPage(container, navigateTo) {
 
       if (currentFilter.category && row.category !== currentFilter.category) return false;
       if (currentFilter.warehouse && row.warehouse !== currentFilter.warehouse) return false;
+      if (currentFilter.itemCode && row.itemCode !== currentFilter.itemCode) return false;
+      if (currentFilter.vendor && row.vendor !== currentFilter.vendor) return false;
       if (currentFilter.stock === 'low') {
         const min = safetyStock[row.itemName];
         if (min === undefined || (parseFloat(row.quantity) || 0) > min) return false;
@@ -485,21 +497,64 @@ export function renderInventoryPage(container, navigateTo) {
     currentPageNum = 1;
     renderTable();
   });
+  container.querySelector('#filter-item-code').addEventListener('change', (e) => {
+    currentFilter.itemCode = e.target.value;
+    currentPageNum = 1;
+    renderTable();
+    highlightActiveFilters();
+  });
+  container.querySelector('#filter-vendor').addEventListener('change', (e) => {
+    currentFilter.vendor = e.target.value;
+    currentPageNum = 1;
+    renderTable();
+    highlightActiveFilters();
+  });
   container.querySelector('#filter-category').addEventListener('change', (e) => {
     currentFilter.category = e.target.value;
     currentPageNum = 1;
     renderTable();
+    highlightActiveFilters();
   });
   container.querySelector('#filter-warehouse').addEventListener('change', (e) => {
     currentFilter.warehouse = e.target.value;
     currentPageNum = 1;
     renderTable();
+    highlightActiveFilters();
   });
   container.querySelector('#filter-stock').addEventListener('change', (e) => {
     currentFilter.stock = e.target.value;
     currentPageNum = 1;
     renderTable();
+    highlightActiveFilters();
   });
+
+  // 필터 초기화 버튼
+  container.querySelector('#btn-filter-reset').addEventListener('click', () => {
+    currentFilter = { keyword: '', category: '', warehouse: '', stock: '', itemCode: '', vendor: '' };
+    container.querySelector('#search-input').value = '';
+    container.querySelector('#filter-item-code').value = '';
+    container.querySelector('#filter-vendor').value = '';
+    container.querySelector('#filter-category').value = '';
+    container.querySelector('#filter-warehouse').value = '';
+    container.querySelector('#filter-stock').value = '';
+    currentPageNum = 1;
+    renderTable();
+    highlightActiveFilters();
+    showToast('필터를 초기화했습니다.', 'info');
+  });
+
+  // 필터 활성 상태 시각적 표시
+  function highlightActiveFilters() {
+    const filterIds = ['filter-item-code', 'filter-vendor', 'filter-category', 'filter-warehouse', 'filter-stock'];
+    filterIds.forEach(id => {
+      const el = container.querySelector(`#${id}`);
+      if (el && el.value) {
+        el.classList.add('filter-active');
+      } else if (el) {
+        el.classList.remove('filter-active');
+      }
+    });
+  }
 
   // 엑셀 내보내기 — 현재 표시 중인 컬럼만 내보내기
   container.querySelector('#btn-export').addEventListener('click', () => {
@@ -560,6 +615,12 @@ function openItemModal(container, navigateTo, editIdx = null) {
             <input class="form-input" id="f-category" value="${item.category || ''}" placeholder="예: 사무용품" />
           </div>
           <div class="form-group">
+            <label class="form-label">거래처</label>
+            <input class="form-input" id="f-vendor" value="${item.vendor || ''}" placeholder="예: (\uc8fc)한국상사" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
             <label class="form-label">수량 <span class="required">*</span></label>
             <input class="form-input" type="number" id="f-quantity" value="${item.quantity ?? ''}" placeholder="0" />
           </div>
@@ -615,6 +676,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       itemName: name,
       itemCode: overlay.querySelector('#f-itemCode').value.trim(),
       category: overlay.querySelector('#f-category').value.trim(),
+      vendor: overlay.querySelector('#f-vendor').value.trim(),
       quantity: qty === '' ? 0 : parseFloat(qty),
       unit: overlay.querySelector('#f-unit').value.trim(),
       unitPrice: parseFloat(overlay.querySelector('#f-unitPrice').value) || 0,
@@ -672,4 +734,20 @@ function getCategories(data) {
 
 function getWarehouses(data) {
   return [...new Set(data.map(r => r.warehouse).filter(Boolean))].sort();
+}
+
+/**
+ * 품목코드 목록 추출
+ * 왜 별도 함수? → 드롭다운 필터에서 특정 품목코드로 빠르게 조회하기 위함
+ */
+function getItemCodes(data) {
+  return [...new Set(data.map(r => r.itemCode).filter(Boolean))].sort();
+}
+
+/**
+ * 거래처 목록 추출
+ * 왜 별도 함수? → 거래처별 필터로 특정 업체의 품목만 볼 수 있게 하기 위함
+ */
+function getVendors(data) {
+  return [...new Set(data.map(r => r.vendor).filter(Boolean))].sort();
 }

@@ -59,7 +59,16 @@ export function renderInoutPage(container, navigateTo) {
         <option value="in">📥 입고만</option>
         <option value="out">📤 출고만</option>
       </select>
+      <select class="filter-select" id="tx-vendor-filter">
+        <option value="">전체 거래처</option>
+        ${getVendorList(items).map(v => `<option value="${v}">${v}</option>`).join('')}
+      </select>
+      <select class="filter-select" id="tx-code-filter">
+        <option value="">전체 품목코드</option>
+        ${getCodeList(items).map(c => `<option value="${c}">${c}</option>`).join('')}
+      </select>
       <input type="date" class="filter-select" id="tx-date-filter" style="padding:7px 10px;" />
+      <button class="btn btn-ghost btn-sm" id="tx-filter-reset" title="필터 초기화">🔄 초기화</button>
     </div>
 
     <!-- 이력 테이블 -->
@@ -93,7 +102,7 @@ export function renderInoutPage(container, navigateTo) {
   `;
 
   let currentPageNum = 1;
-  let filter = { keyword: '', type: '', date: '' };
+  let filter = { keyword: '', type: '', date: '', vendor: '', itemCode: '' };
 
   function getFilteredTx() {
     return transactions.filter(tx => {
@@ -104,6 +113,13 @@ export function renderInoutPage(container, navigateTo) {
       )) return false;
       if (filter.type && tx.type !== filter.type) return false;
       if (filter.date && tx.date !== filter.date) return false;
+      // 거래처 필터: 해당 품목의 거래처를 items에서 찾아서 비교
+      if (filter.vendor) {
+        const matchItem = items.find(item => item.itemName === tx.itemName || item.itemCode === tx.itemCode);
+        if (!matchItem || matchItem.vendor !== filter.vendor) return false;
+      }
+      // 품목코드 필터
+      if (filter.itemCode && tx.itemCode !== filter.itemCode) return false;
       return true;
     });
   }
@@ -184,10 +200,32 @@ export function renderInoutPage(container, navigateTo) {
     currentPageNum = 1;
     renderTxTable();
   });
+  container.querySelector('#tx-vendor-filter').addEventListener('change', (e) => {
+    filter.vendor = e.target.value;
+    currentPageNum = 1;
+    renderTxTable();
+  });
+  container.querySelector('#tx-code-filter').addEventListener('change', (e) => {
+    filter.itemCode = e.target.value;
+    currentPageNum = 1;
+    renderTxTable();
+  });
   container.querySelector('#tx-date-filter').addEventListener('change', (e) => {
     filter.date = e.target.value;
     currentPageNum = 1;
     renderTxTable();
+  });
+  // 필터 초기화
+  container.querySelector('#tx-filter-reset').addEventListener('click', () => {
+    filter = { keyword: '', type: '', date: '', vendor: '', itemCode: '' };
+    container.querySelector('#tx-search').value = '';
+    container.querySelector('#tx-type-filter').value = '';
+    container.querySelector('#tx-vendor-filter').value = '';
+    container.querySelector('#tx-code-filter').value = '';
+    container.querySelector('#tx-date-filter').value = '';
+    currentPageNum = 1;
+    renderTxTable();
+    showToast('필터를 초기화했습니다.', 'info');
   });
 
   // 입고/출고 등록 버튼
@@ -378,4 +416,19 @@ function openTxModal(container, navigateTo, type, items) {
 function countToday(transactions, type) {
   const today = new Date().toISOString().split('T')[0];
   return transactions.filter(tx => tx.type === type && tx.date === today).length;
+}
+
+/**
+ * 등록된 품목들의 거래처 목록 추출
+ * 왜? → 입출고 이력을 거래처별로 필터링하기 위해 필요
+ */
+function getVendorList(items) {
+  return [...new Set(items.map(i => i.vendor).filter(Boolean))].sort();
+}
+
+/**
+ * 등록된 품목들의 품목코드 목록 추출
+ */
+function getCodeList(items) {
+  return [...new Set(items.map(i => i.itemCode).filter(Boolean))].sort();
 }

@@ -12,6 +12,7 @@ const ERP_FIELDS = [
   { key: 'itemName', label: '품목명', required: true },
   { key: 'itemCode', label: '품목코드', required: false },
   { key: 'category', label: '분류', required: false },
+  { key: 'vendor', label: '거래처', required: false },
   { key: 'quantity', label: '수량', required: true },
   { key: 'unit', label: '단위', required: false },
   { key: 'unitPrice', label: '단가', required: false },
@@ -190,6 +191,7 @@ function autoMap(headers, mapping) {
     unitPrice: ['단가', 'price', '가격', '원가'],
     totalPrice: ['합계', 'total', '금액', '합계금액', '총액', '총금액'],
     warehouse: ['창고', '위치', 'warehouse', 'location', '보관', '저장위치'],
+    vendor: ['거래처', '업체', '업체명', '공급업체', '공급처', '매입처', 'vendor', 'supplier', '거래선'],
     note: ['비고', 'note', 'memo', '메모', '참고', '특이사항'],
   };
 

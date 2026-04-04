@@ -692,6 +692,21 @@ html, body {
   font-size: var(--font-size-sm);
   background: #fff;
   color: var(--text-primary);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+/* 필터가 활성화(값이 선택)되었을 때 하이라이트 */
+.filter-select.filter-active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
 }
 
 /* --- 빈 상태 --- */

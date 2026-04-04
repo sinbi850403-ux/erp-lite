@@ -219,6 +219,35 @@ export function renderSummaryPage(container, navigateTo) {
       </div>
     ` : ''}
 
+    <!-- 거래처별 현황 -->
+    ${summary.vendors.length > 0 ? `
+      <div class="card">
+        <div class="card-title">🤝 거래처별 현황</div>
+        <div class="table-wrapper" style="border:none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>거래처</th>
+                <th class="text-right">품목 수</th>
+                <th class="text-right">총 수량</th>
+                <th class="text-right">총 금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summary.vendors.map(v => `
+                <tr>
+                  <td><strong>${v.name || '(미지정)'}</strong></td>
+                  <td class="text-right">${v.count}</td>
+                  <td class="text-right">${v.qty.toLocaleString('ko-KR')}</td>
+                  <td class="text-right">${v.price > 0 ? '₩' + v.price.toLocaleString('ko-KR') : '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ` : ''}
+
     <!-- 입출고 최근 동향 -->
     ${transactions.length > 0 ? `
       <div class="card">
@@ -346,6 +375,18 @@ function buildSummary(data, transactions, safetyStock) {
   });
   const warehouses = Object.values(whMap).sort((a, b) => b.qty - a.qty);
 
+  // 거래처별 집계
+  const vendorMap = {};
+  data.forEach(row => {
+    const v = row.vendor || '';
+    if (!v) return;
+    if (!vendorMap[v]) vendorMap[v] = { name: v, count: 0, qty: 0, price: 0 };
+    vendorMap[v].count++;
+    vendorMap[v].qty += parseFloat(row.quantity) || 0;
+    vendorMap[v].price += parseFloat(row.totalPrice) || 0;
+  });
+  const vendors = Object.values(vendorMap).sort((a, b) => b.qty - a.qty);
+
   // 수량 상위 10
   const topByQty = [...data]
     .sort((a, b) => (parseFloat(b.quantity) || 0) - (parseFloat(a.quantity) || 0))
@@ -388,7 +429,7 @@ function buildSummary(data, transactions, safetyStock) {
     }
   }
 
-  return { totalQty, totalPrice, categories, warehouses, topByQty, warnings, dailyTrend };
+  return { totalQty, totalPrice, categories, warehouses, vendors, topByQty, warnings, dailyTrend };
 }
 
 /**
