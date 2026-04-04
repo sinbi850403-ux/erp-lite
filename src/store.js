@@ -27,6 +27,10 @@ const DEFAULT_STATE = {
   customFields: [],     // [{key, label, type, options?}]
   // 업종 템플릿
   industryTemplate: 'general', // 'general' | 'food' | 'clothing' | ...
+  // 거래처 마스터
+  vendorMaster: [],     // [{name, type, bizNumber, ceoName, contactName, phone, ...}]
+  // 재고 실사 이력
+  stocktakeHistory: [], // [{date, inspector, adjustCount, totalItems}]
 };
 
 let state = { ...DEFAULT_STATE };

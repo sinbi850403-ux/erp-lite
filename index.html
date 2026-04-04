@@ -64,11 +64,20 @@
         <button class="nav-btn" data-page="inout">
           <span class="nav-icon">🔄</span> 입출고 관리
         </button>
+        <button class="nav-btn" data-page="bulk">
+          <span class="nav-icon">⚡</span> 일괄 처리
+        </button>
         <button class="nav-btn" data-page="scanner">
           <span class="nav-icon">📱</span> 바코드 스캔
         </button>
         <button class="nav-btn" data-page="transfer">
           <span class="nav-icon">🏭</span> 창고 이동
+        </button>
+        <button class="nav-btn" data-page="stocktake">
+          <span class="nav-icon">📋</span> 재고 실사
+        </button>
+        <button class="nav-btn" data-page="vendors">
+          <span class="nav-icon">🤝</span> 거래처 관리
         </button>
       </nav>
 
@@ -104,14 +113,19 @@
 
       <div class="sidebar-footer">
         <div style="display:flex; gap:4px; margin-bottom:8px; align-items:center;">
+          <button class="btn btn-ghost btn-sm" id="btn-global-search" style="color:rgba(255,255,255,0.7); font-size:12px;" title="검색 (Ctrl+K)">
+            🔍 검색
+          </button>
           <button class="btn btn-ghost btn-sm" id="btn-notifications" style="color:rgba(255,255,255,0.7); font-size:12px; position:relative;" title="알림">
             🔔 알림 <span class="notif-badge" id="notif-badge"></span>
           </button>
+        </div>
+        <div style="display:flex; gap:4px; margin-bottom:8px; align-items:center;">
           <button class="btn btn-ghost btn-sm" id="btn-backup" style="color:rgba(255,255,255,0.5); font-size:11px;" title="데이터 백업">💾 백업</button>
           <button class="btn btn-ghost btn-sm" id="btn-restore" style="color:rgba(255,255,255,0.5); font-size:11px;" title="데이터 복원">📥 복원</button>
         </div>
         <input type="file" id="restore-input" accept=".json" style="display:none" />
-        ERP-Lite v2.0<br/>
+        ERP-Lite v2.5<br/>
         © 2026
       </div>
     </aside>

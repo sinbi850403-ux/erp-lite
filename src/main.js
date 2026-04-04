@@ -17,6 +17,10 @@ import { renderHomePage } from './page-home.js';
 import { renderTransferPage } from './page-transfer.js';
 import { renderLedgerPage } from './page-ledger.js';
 import { renderSettingsPage } from './page-settings.js';
+import { renderVendorsPage } from './page-vendors.js';
+import { renderStocktakePage } from './page-stocktake.js';
+import { renderBulkPage } from './page-bulk.js';
+import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
 
@@ -37,6 +41,9 @@ const pages = {
   transfer: renderTransferPage,
   ledger: renderLedgerPage,
   settings: renderSettingsPage,
+  vendors: renderVendorsPage,
+  stocktake: renderStocktakePage,
+  bulk: renderBulkPage,
 };
 
 /**
@@ -92,6 +99,12 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
   e.stopPropagation();
   renderNotificationPanel();
+});
+
+// 글로벌 검색 초기화 & 버튼
+initGlobalSearch(navigateTo);
+document.getElementById('btn-global-search')?.addEventListener('click', () => {
+  toggleGlobalSearch();
 });
 
 // === 모바일 토글 ===
