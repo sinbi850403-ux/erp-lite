@@ -1394,3 +1394,129 @@ html, body {
 #scanner-region canvas {
   border-radius: 8px;
 }
+
+/* --- 설정 템플릿 카드 --- */
+.template-card {
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.template-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.template-card.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* --- 수불부 컴팩트 카드 --- */
+.card-compact {
+  padding: 12px 16px;
+}
+
+.card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* --- 대시보드 레이아웃 반응형 --- */
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* --- 성공/위험 버튼 대형 --- */
+.btn-success {
+  background: var(--success);
+  color: #fff;
+  border: none;
+}
+
+.btn-success:hover {
+  background: #15803d;
+}
+
+/* --- 위험 행 (유통기한 만료) --- */
+.row-danger {
+  background: rgba(220, 38, 38, 0.05) !important;
+}
+
+.row-warning {
+  background: rgba(245, 158, 11, 0.05) !important;
+}
+
+/* --- 비율 바 (ABC 분석용) --- */
+.ratio-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ratio-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ratio-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.ratio-bar-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 35px;
+  text-align: right;
+}
+
+/* --- 경고 박스 --- */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #92400e;
+}
+
+.alert-info {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #1e40af;
+}
+
+/* --- slideUp 애니메이션 --- */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- 번호 컬럼 --- */
+.col-num {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}

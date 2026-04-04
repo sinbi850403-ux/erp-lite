@@ -1,0 +1,27 @@
+{
+  "name": "ERP-Lite",
+  "short_name": "ERP-Lite",
+  "description": "중소기업을 위한 간편한 재고·원가 관리 도구",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1b2838",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "ko",
+  "dir": "ltr"
+}

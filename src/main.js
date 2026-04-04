@@ -13,14 +13,19 @@ import { renderSummaryPage } from './page-summary.js';
 import { renderScannerPage } from './page-scanner.js';
 import { renderDocumentsPage } from './page-documents.js';
 import { renderDashboardPage } from './page-dashboard.js';
+import { renderHomePage } from './page-home.js';
+import { renderTransferPage } from './page-transfer.js';
+import { renderLedgerPage } from './page-ledger.js';
+import { renderSettingsPage } from './page-settings.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
 
-// 현재 페이지
-let currentPage = 'upload';
+// 현재 페이지 (홈을 기본으로)
+let currentPage = 'home';
 
 // 페이지별 렌더 함수
 const pages = {
+  home: renderHomePage,
   upload: renderUploadPage,
   mapping: renderMappingPage,
   inventory: renderInventoryPage,
@@ -29,6 +34,9 @@ const pages = {
   scanner: renderScannerPage,
   documents: renderDocumentsPage,
   dashboard: renderDashboardPage,
+  transfer: renderTransferPage,
+  ledger: renderLedgerPage,
+  settings: renderSettingsPage,
 };
 
 /**
@@ -200,3 +208,12 @@ async function initApp() {
 }
 
 initApp();
+
+// PWA Service Worker 등록
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('SW registered'))
+      .catch((err) => console.log('SW failed:', err));
+  });
+}

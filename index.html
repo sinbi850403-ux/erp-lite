@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ERP-Lite | 재고·원가 운영도구</title>
   <meta name="description" content="중소기업을 위한 간단한 재고/원가/입출고 관리 도구" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" />
 </head>
 <body>
   <!-- 모바일 토글 버튼 -->
@@ -26,12 +29,21 @@
 
       <div class="sidebar-divider"></div>
 
-      <!-- 메인 메뉴 -->
+      <!-- 홈 -->
+      <nav style="padding:0 12px;">
+        <button class="nav-btn active" data-page="home">
+          <span class="nav-icon">🏠</span> 대시보드
+        </button>
+      </nav>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- 데이터 -->
       <div class="nav-section">
         <div class="nav-section-title">데이터</div>
       </div>
       <nav id="nav">
-        <button class="nav-btn active" data-page="upload">
+        <button class="nav-btn" data-page="upload">
           <span class="nav-icon">📂</span> 파일 업로드
         </button>
         <button class="nav-btn" data-page="mapping">
@@ -41,6 +53,7 @@
 
       <div class="sidebar-divider"></div>
 
+      <!-- 관리 -->
       <div class="nav-section">
         <div class="nav-section-title">관리</div>
       </div>
@@ -54,10 +67,14 @@
         <button class="nav-btn" data-page="scanner">
           <span class="nav-icon">📱</span> 바코드 스캔
         </button>
+        <button class="nav-btn" data-page="transfer">
+          <span class="nav-icon">🏭</span> 창고 이동
+        </button>
       </nav>
 
       <div class="sidebar-divider"></div>
 
+      <!-- 보고 -->
       <div class="nav-section">
         <div class="nav-section-title">보고</div>
       </div>
@@ -68,12 +85,22 @@
         <button class="nav-btn" data-page="dashboard">
           <span class="nav-icon">📈</span> 고급 분석
         </button>
+        <button class="nav-btn" data-page="ledger">
+          <span class="nav-icon">📒</span> 수불부
+        </button>
         <button class="nav-btn" data-page="documents">
           <span class="nav-icon">📄</span> 문서 생성
         </button>
       </nav>
 
       <div class="sidebar-divider"></div>
+
+      <!-- 설정 -->
+      <nav style="padding:0 12px;">
+        <button class="nav-btn" data-page="settings">
+          <span class="nav-icon">⚙️</span> 설정
+        </button>
+      </nav>
 
       <div class="sidebar-footer">
         <div style="display:flex; gap:4px; margin-bottom:8px; align-items:center;">
@@ -84,7 +111,7 @@
           <button class="btn btn-ghost btn-sm" id="btn-restore" style="color:rgba(255,255,255,0.5); font-size:11px;" title="데이터 복원">📥 복원</button>
         </div>
         <input type="file" id="restore-input" accept=".json" style="display:none" />
-        ERP-Lite v1.5<br/>
+        ERP-Lite v2.0<br/>
         © 2026
       </div>
     </aside>

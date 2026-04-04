@@ -18,9 +18,15 @@ const DEFAULT_STATE = {
   transactions: [],     // [{id, type, itemName, quantity, date, note, ...}]
   // 안전재고 설정
   safetyStock: {},      // { 품목명: 최소수량 }
-  // 컬럼 표시 설정 (null이면 전체 표시, 배열이면 해당 키만 표시)
+  // 컬럼 표시 설정
   visibleColumns: null, // ['itemName','quantity','unitPrice'] 형태
   // 각 mappedData row에는 expiryDate, lotNumber 필드도 포함 가능
+  // 창고 간 이동 이력
+  transfers: [],        // [{date, fromWarehouse, toWarehouse, itemName, quantity, ...}]
+  // 커스텀 필드 (사용자 정의 컬럼)
+  customFields: [],     // [{key, label, type, options?}]
+  // 업종 템플릿
+  industryTemplate: 'general', // 'general' | 'food' | 'clothing' | ...
 };
 
 let state = { ...DEFAULT_STATE };
