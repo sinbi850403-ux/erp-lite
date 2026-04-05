@@ -89,14 +89,26 @@ export function setPlan(planId) {
 
 /**
  * 특정 페이지 접근 가능 여부
+ * 왜 관리자 체크? → 총관리자는 요금제 무관하게 모든 기능 사용 가능
  */
+// 총관리자 이메일 (page-admin.js의 ADMIN_EMAILS와 동기화 필수)
+const SUPER_ADMINS = ['sinbi0214@naver.com', 'sinbi850403@gmail.com', 'admin@invex.io.kr'];
+
 export function canAccessPage(pageId) {
+  // 총관리자는 모든 페이지 무제한 접근
+  const user = _getCurrentUser?.();
+  if (user && SUPER_ADMINS.includes(user.email)) return true;
+
   const currentPlan = getCurrentPlan();
   const plan = PLANS[currentPlan];
   if (!plan) return false;
   if (plan.pages.includes('*')) return true;
   return plan.pages.includes(pageId);
 }
+
+// 순환참조 방지용: firebase-auth에서 함수를 lazy 주입
+let _getCurrentUser = null;
+export function injectGetCurrentUser(fn) { _getCurrentUser = fn; }
 
 /**
  * 페이지의 최소 요금제 반환

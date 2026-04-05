@@ -35,10 +35,13 @@ import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWit
 import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
-import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan } from './plan.js';
+import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser } from './plan.js';
 
 // 다크 모드 초기화
 initTheme();
+
+// 총관리자 기능 해제를 위해 getCurrentUser를 plan.js에 주입
+injectGetCurrentUser(getCurrentUser);
 
 // Firebase 인증 초기화 — 로그인 상태에 따라 앱 접근 제어
 let isAuthReady = false;
