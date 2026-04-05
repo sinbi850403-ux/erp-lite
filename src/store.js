@@ -45,6 +45,14 @@ const DEFAULT_STATE = {
   warehouses: [
     { id: 'wh-default', name: '본사 창고', type: 'main', address: '', manager: '', memo: '', createdAt: '' }
   ],
+  // 권한 관리 (Enterprise: RBAC)
+  roles: [],              // [{id, name, icon, color, description, permissions, isSystem}]
+  members: [],            // [{id, name, email, roleId, status, joinedAt}]
+  // API 연동 (Enterprise)
+  apiKeys: [],            // [{id, name, key, scope, createdAt, lastUsed, visible}]
+  webhooks: [],           // [{id, name, url, events, active, createdAt}]
+  // 창고 필터 (UI 상태)
+  activeWarehouseFilter: '',
 };
 
 let state = { ...DEFAULT_STATE };
