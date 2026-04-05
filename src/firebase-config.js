@@ -17,12 +17,13 @@ import { getFirestore } from 'firebase/firestore';
 // === Firebase 설정 ===
 // TODO: Firebase Console에서 발급받은 값으로 교체해주세요
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDuMCWvrJbGcdvovNvY-fQ6hR4kSyoc9dk",
+  authDomain: "erp-lite-9e83a.firebaseapp.com",
+  projectId: "erp-lite-9e83a",
+  storageBucket: "erp-lite-9e83a.firebasestorage.app",
+  messagingSenderId: "141493032",
+  appId: "1:141493032:web:a006b2312da6ecf9c7c61d",
+  measurementId: "G-2SNZ9SEEZM"
 };
 
 // Firebase 초기화
