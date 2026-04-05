@@ -28,7 +28,7 @@ import { renderWarehousesPage } from './page-warehouses.js';
 import { renderRolesPage } from './page-roles.js';
 import { renderApiPage } from './page-api.js';
 import { renderBillingPage } from './page-billing.js';
-import { renderAdminPage } from './page-admin.js';
+import { renderAdminPage, isAdmin } from './page-admin.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './firebase-auth.js';
@@ -122,6 +122,10 @@ initAuth((user, profile) => {
     }
     startSync(user.uid);
     updateUserUI(user, profile);
+    
+    // 총관리자만 관리자 메뉴 표시
+    const adminBtn = document.querySelector('[data-page="admin"]');
+    if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
     
     // 최초 로그인 시에만 앱 초기화 (중복 방지)
     if (!isAuthReady) {

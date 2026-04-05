@@ -10,10 +10,11 @@ import { showToast } from './toast.js';
 import { getCurrentUser } from './firebase-auth.js';
 import { PLANS, getCurrentPlan, setPlan } from './plan.js';
 
-// 관리자 이메일 목록 (여기에 본인 이메일 추가)
+// 총관리자(사이트 소유자) 이메일 목록
 const ADMIN_EMAILS = [
-  'admin@invex.io.kr',
-  // TODO: 실제 관리자 이메일 추가
+  'sinbi0214@naver.com',     // 총관리자 (네이버)
+  'sinbi850403@gmail.com',   // 총관리자 (구글)
+  'admin@invex.io.kr',       // 시스템 관리자
 ];
 
 /**
