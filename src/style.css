@@ -536,6 +536,26 @@ html, body {
   color: var(--text-muted);
 }
 
+/* 엑셀 템플릿 다운로드 카드 */
+.template-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.template-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
 /* --- 뱃지 --- */
 .badge {
   display: inline-flex;

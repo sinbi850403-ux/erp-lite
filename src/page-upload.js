@@ -7,6 +7,7 @@
 import { readExcelFile } from './excel.js';
 import { setState, resetState, getState } from './store.js';
 import { showToast } from './toast.js';
+import { downloadTemplate, getTemplateList } from './excel-templates.js';
 
 // ERP 필드 정의 (page-mapping.js와 동일)
 const ERP_FIELDS = [
@@ -73,6 +74,23 @@ export function renderUploadPage(container, navigateTo) {
       </button>
     </div>
 
+    <!-- 엑셀 양식 다운로드 -->
+    <div class="card" style="margin-top:24px;">
+      <h3 style="font-size:16px; font-weight:700; margin-bottom:4px;">📋 엑셀 양식 다운로드</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+        업종에 맞는 양식을 다운받아 데이터를 입력하고 업로드하세요. 샘플 데이터가 포함되어 있습니다.
+      </p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
+        ${getTemplateList().map(tpl => `
+          <button class="template-card" data-template="${tpl.key}" title="${tpl.desc}">
+            <div style="font-size:14px; font-weight:600; margin-bottom:2px;">${tpl.name}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${tpl.desc}</div>
+            <div style="font-size:11px; color:var(--accent); margin-top:6px;">⬇ 다운로드</div>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+
     ${state.fileName ? `
       <div class="alert alert-info" style="margin-top:16px;">
         📄 현재 불러온 파일: <strong>${state.fileName}</strong>
@@ -112,6 +130,15 @@ export function renderUploadPage(container, navigateTo) {
 
   container.querySelector('#btn-sample')?.addEventListener('click', () => {
     loadSampleData(navigateTo);
+  });
+
+  // 템플릿 다운로드 이벤트
+  container.querySelectorAll('.template-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.template;
+      downloadTemplate(key);
+      showToast('엑셀 양식을 다운로드합니다 📥', 'success');
+    });
   });
 
   container.querySelector('#btn-go-inv')?.addEventListener('click', () => {
