@@ -160,7 +160,7 @@ export function renderLoginScreen(container) {
     <div style="display:flex; align-items:center; justify-content:center; min-height:80vh;">
       <div style="text-align:center; max-width:400px; padding:40px;">
         <div style="font-size:48px; margin-bottom:16px;">📦</div>
-        <h1 style="font-size:28px; font-weight:800; margin-bottom:8px;">ERP-Lite</h1>
+        <h1 style="font-size:28px; font-weight:800; margin-bottom:8px;">INVEX</h1>
         <p style="color:var(--text-muted); margin-bottom:32px; font-size:14px;">
           중소기업 맞춤 재고·경영 관리 시스템
         </p>

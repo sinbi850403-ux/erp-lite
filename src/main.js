@@ -1,5 +1,5 @@
 /**
- * main.js - ERP-Lite 앱 진입점
+ * main.js - INVEX 앱 진입점
  * 역할: 페이지 라우팅, 네비게이션 관리, 모바일 지원, 데이터 백업/복원
  */
 
@@ -192,7 +192,7 @@ document.getElementById('btn-backup')?.addEventListener('click', () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ERP-Lite_백업_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `INVEX_백업_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('데이터를 백업했습니다.', 'success');

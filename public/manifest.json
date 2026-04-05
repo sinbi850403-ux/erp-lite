@@ -1,7 +1,7 @@
 {
-  "name": "ERP-Lite",
-  "short_name": "ERP-Lite",
-  "description": "중소기업을 위한 간편한 재고·원가 관리 도구",
+  "name": "INVEX",
+  "short_name": "INVEX",
+  "description": "INVEX - 중소기업을 위한 스마트 재고·원가 관리 플랫폼",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1b2838",

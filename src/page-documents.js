@@ -207,7 +207,7 @@ function renderPurchaseOrder(el, items, lowStockItems, vendors, safetyStock) {
     const info = {
       date: el.querySelector('#po-date').value,
       vendor: el.querySelector('#po-vendor').value || '전체',
-      company: el.querySelector('#po-company').value || 'ERP-Lite 사용자',
+      company: el.querySelector('#po-company').value || 'INVEX 사용자',
       manager: el.querySelector('#po-manager').value || '',
       note: el.querySelector('#po-note').value || '',
     };
@@ -356,7 +356,7 @@ function renderQuote(el, items) {
     const info = {
       date: el.querySelector('#qt-date').value,
       to: el.querySelector('#qt-to').value || '거래처',
-      from: el.querySelector('#qt-from').value || 'ERP-Lite 사용자',
+      from: el.querySelector('#qt-from').value || 'INVEX 사용자',
       valid: el.querySelector('#qt-valid').value || '',
     };
     generateQuotePDF(quoteItems, info);
@@ -420,7 +420,7 @@ function renderStatement(el, items, transactions) {
     const info = {
       from,
       to,
-      supplier: el.querySelector('#st-supplier').value || 'ERP-Lite 사용자',
+      supplier: el.querySelector('#st-supplier').value || 'INVEX 사용자',
       receiver: el.querySelector('#st-receiver').value || '거래처',
     };
     generateStatementPDF(filteredTx, info);

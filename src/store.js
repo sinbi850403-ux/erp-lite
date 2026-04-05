@@ -46,7 +46,7 @@ const DEFAULT_STATE = {
 let state = { ...DEFAULT_STATE };
 
 // === IndexedDB 관련 ===
-const DB_NAME = 'erp-lite-db';
+const DB_NAME = 'invex-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'appState';
 
@@ -94,7 +94,7 @@ async function saveToDB() {
         fileName: state.fileName,
         currentStep: state.currentStep,
       };
-      localStorage.setItem('erp-lite-fallback', JSON.stringify(slim));
+      localStorage.setItem('invex-fallback', JSON.stringify(slim));
     } catch (_) { /* 무시 */ }
   }
 }
@@ -162,7 +162,7 @@ export async function restoreState() {
 
   // IndexedDB에 없으면 localStorage 폴백 시도
   try {
-    const fallback = localStorage.getItem('erp-lite-fallback');
+    const fallback = localStorage.getItem('invex-fallback') || localStorage.getItem('erp-lite-fallback');
     if (fallback) {
       const parsed = JSON.parse(fallback);
       state = { ...DEFAULT_STATE, ...parsed };

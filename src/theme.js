@@ -4,7 +4,7 @@
  * 왜 필요? → 창고/야간 근무자에게 다크모드는 눈 보호 필수 기능
  */
 
-const THEME_KEY = 'erp-lite-theme';
+const THEME_KEY = 'invex-theme';
 
 /**
  * 테마 초기화 - 앱 시작 시 호출

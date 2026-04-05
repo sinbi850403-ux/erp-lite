@@ -106,9 +106,9 @@ export function downloadTemplate(templateKey) {
 
   // 안내 시트 (사용법 설명)
   const guideData = [
-    ['📌 ERP-Lite 엑셀 양식 사용 안내'],
+    ['📌 INVEX 엑셀 양식 사용 안내'],
     [''],
-    ['이 엑셀 파일을 ERP-Lite에 업로드하면 자동으로 재고에 등록됩니다.'],
+    ['이 엑셀 파일을 INVEX에 업로드하면 자동으로 재고에 등록됩니다.'],
     [''],
     ['■ 필수 컬럼'],
     ['  - 품목명: 상품/자재의 이름 (필수)'],
@@ -141,7 +141,7 @@ export function downloadTemplate(templateKey) {
   XLSX.utils.book_append_sheet(wb, guideWs, '사용 안내');
 
   // 파일 다운로드
-  const fileName = `ERP-Lite_${tpl.name.replace(/[^\w가-힣]/g, '')}_양식.xlsx`;
+  const fileName = `INVEX_${tpl.name.replace(/[^\w가-힣]/g, '')}_양식.xlsx`;
   XLSX.writeFile(wb, fileName);
 }
 

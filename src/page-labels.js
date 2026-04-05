@@ -145,7 +145,7 @@ export function renderLabelsPage(container, navigateTo) {
     printWindow.document.write(`
       <!DOCTYPE html>
       <html><head>
-        <title>라벨 인쇄 - ERP-Lite</title>
+        <title>라벨 인쇄 - INVEX</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Noto Sans KR', sans-serif; padding: 10px; }
