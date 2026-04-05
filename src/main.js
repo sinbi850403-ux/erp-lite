@@ -33,6 +33,7 @@ import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, logout }
 import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
+import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan } from './plan.js';
 
 // 다크 모드 초기화
 initTheme();
@@ -79,10 +80,17 @@ const pages = {
 
 /**
  * 페이지 전환
- * 모바일에서는 nav 클릭 시 사이드바 자동 닫힘
+ * 요금제 체크 → 접근 불가 시 업그레이드 모달 표시
  */
 function navigateTo(pageName) {
   if (!pages[pageName]) return;
+
+  // 요금제 접근 제어
+  if (!canAccessPage(pageName)) {
+    showUpgradeModal(pageName);
+    return;
+  }
+
   currentPage = pageName;
 
   // 모든 nav 영역의 버튼 활성 상태 업데이트
@@ -119,10 +127,101 @@ function updateNotifBadge() {
   }
 }
 
-// 모든 nav 영역의 버튼에 이벤트 연결
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    navigateTo(btn.dataset.page);
+// 사이드바 메뉴에 요금제 배지 적용 + 이벤트 연결
+function updateSidebarBadges() {
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const pageId = btn.dataset.page;
+    if (!pageId) return;
+
+    // 이벤트 연결
+    btn.addEventListener('click', () => navigateTo(pageId));
+
+    // 기존 배지 제거
+    btn.querySelectorAll('.plan-badge').forEach(b => b.remove());
+
+    const badge = getPageBadge(pageId);
+    if (badge) {
+      // 잠금 스타일 적용
+      btn.style.opacity = '0.55';
+      const badgeEl = document.createElement('span');
+      badgeEl.className = 'plan-badge';
+      badgeEl.textContent = badge.text;
+      badgeEl.style.cssText = `font-size:9px; background:linear-gradient(135deg,${badge.color},${badge.color}cc); color:#fff; padding:1px 5px; border-radius:4px; margin-left:auto;`;
+      btn.appendChild(badgeEl);
+    } else {
+      btn.style.opacity = '1';
+    }
+  });
+}
+updateSidebarBadges();
+
+// 사이드바 하단 요금제 표시 업데이트
+function updatePlanDisplay() {
+  const planId = getCurrentPlan();
+  const plan = PLANS[planId];
+  const el = document.getElementById('plan-name');
+  if (el && plan) {
+    el.textContent = `${plan.icon} ${plan.name}`;
+    el.style.color = plan.color;
+  }
+}
+updatePlanDisplay();
+
+// 요금제 클릭 → 변경 팝업
+document.getElementById('plan-display')?.addEventListener('click', () => {
+  const current = getCurrentPlan();
+  const existing = document.getElementById('plan-picker-modal');
+  if (existing) { existing.remove(); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'plan-picker-modal';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header">
+        <h3>📋 요금제 선택</h3>
+        <button class="btn btn-ghost btn-sm" id="plan-pick-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+          ${Object.values(PLANS).map(p => `
+            <div class="plan-pick-card" data-plan="${p.id}" style="
+              border:2px solid ${current === p.id ? p.color : 'var(--border)'};
+              border-radius:12px; padding:20px; text-align:center; cursor:pointer;
+              background:${current === p.id ? p.color + '15' : 'var(--bg-secondary)'};
+              transition:all 0.2s;
+            ">
+              <div style="font-size:28px;">${p.icon}</div>
+              <div style="font-size:16px; font-weight:700; margin:4px 0;">${p.name}</div>
+              <div style="font-size:20px; font-weight:800; color:${p.color};">${p.price}</div>
+              <div style="font-size:11px; color:var(--text-muted);">${p.period}</div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${p.description}</div>
+              ${current === p.id ? '<div style="margin-top:8px; font-size:11px; color:var(--success); font-weight:600;">✓ 현재 요금제</div>' : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-top:12px; font-size:11px; color:var(--text-muted); text-align:center;">
+          * 무료 체험: 모든 기능을 즉시 활성화합니다
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#plan-pick-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  modal.querySelectorAll('.plan-pick-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const planId = card.dataset.plan;
+      setPlan(planId);
+      modal.remove();
+      showToast(`${PLANS[planId].icon} ${PLANS[planId].name} 요금제로 변경되었습니다.`, 'success');
+      // 사이드바 배지 + 표시 갱신
+      updateSidebarBadges();
+      updatePlanDisplay();
+    });
   });
 });
 

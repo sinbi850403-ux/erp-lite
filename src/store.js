@@ -53,6 +53,8 @@ const DEFAULT_STATE = {
   webhooks: [],           // [{id, name, url, events, active, createdAt}]
   // 창고 필터 (UI 상태)
   activeWarehouseFilter: '',
+  // 현재 요금제 (free / pro / enterprise)
+  currentPlan: 'free',
 };
 
 let state = { ...DEFAULT_STATE };
