@@ -11,6 +11,7 @@ import { applyPlugin } from 'jspdf-autotable';
 applyPlugin(jsPDF);
 import { getState } from './store.js';
 import { showToast } from './toast.js';
+import { applyKoreanFont, getKoreanFontStyle } from './pdf-font.js';
 
 /**
  * 문서 자동생성 페이지 렌더링
@@ -442,45 +443,50 @@ function renderStatement(el, items, transactions) {
  * 발주서 PDF 생성
  * 왜 jsPDF? → 외부 서버 없이 브라우저에서 바로 PDF를 만들 수 있어서 보안성도 높음
  */
-function generatePurchaseOrderPDF(selectedItems, info) {
+async function generatePurchaseOrderPDF(selectedItems, info) {
   try {
+    showToast('PDF 생성 중... (폰트 로딩)', 'info', 2000);
     const doc = new jsPDF();
+    const fontStyle = getKoreanFontStyle();
+    await applyKoreanFont(doc);
 
     // 헤더
     doc.setFontSize(20);
-    doc.text('PURCHASE ORDER', 105, 20, { align: 'center' });
+    doc.text('발 주 서', 105, 20, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(`Date: ${info.date}`, 15, 35);
-    doc.text(`Company: ${info.company}`, 15, 42);
-    doc.text(`Manager: ${info.manager}`, 15, 49);
-    doc.text(`Vendor: ${info.vendor}`, 15, 56);
+    doc.text(`발주일자: ${info.date}`, 15, 35);
+    doc.text(`발주회사: ${info.company}`, 15, 42);
+    doc.text(`담당자: ${info.manager}`, 15, 49);
+    doc.text(`거래처: ${info.vendor}`, 15, 56);
 
     // 테이블
     const tableData = selectedItems.map((item, i) => {
       const price = parseFloat(item.unitPrice) || 0;
       const subtotal = price * item.orderQty;
-      return [i + 1, item.itemName, item.itemCode || '-', item.orderQty, price.toLocaleString(), subtotal.toLocaleString()];
+      return [i + 1, item.itemName, item.itemCode || '-', item.orderQty, '₩' + price.toLocaleString(), '₩' + subtotal.toLocaleString()];
     });
 
     const total = selectedItems.reduce((s, item) => s + ((parseFloat(item.unitPrice) || 0) * item.orderQty), 0);
 
     doc.autoTable({
       startY: 65,
-      head: [['No', 'Item Name', 'Code', 'Qty', 'Unit Price', 'Amount']],
+      head: [['No', '품목명', '코드', '수량', '단가', '금액']],
       body: tableData,
-      foot: [['', '', '', '', 'TOTAL', total.toLocaleString()]],
+      foot: [['', '', '', '', '합계', '₩' + total.toLocaleString()]],
       theme: 'grid',
-      headStyles: { fillColor: [37, 99, 235] },
-      footStyles: { fillColor: [240, 242, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+      headStyles: { fillColor: [37, 99, 235], ...fontStyle },
+      bodyStyles: { ...fontStyle },
+      footStyles: { fillColor: [240, 242, 245], textColor: [0, 0, 0], fontStyle: 'bold', ...fontStyle },
+      styles: { ...fontStyle },
     });
 
     if (info.note) {
       const finalY = doc.lastAutoTable.finalY || 120;
       doc.setFontSize(9);
-      doc.text(`Note: ${info.note}`, 15, finalY + 15);
+      doc.text(`비고: ${info.note}`, 15, finalY + 15);
     }
 
-    doc.save(`PurchaseOrder_${info.date}.pdf`);
+    doc.save(`발주서_${info.date}.pdf`);
     showToast('발주서 PDF를 다운로드했습니다.', 'success');
   } catch (err) {
     showToast('PDF 생성 실패: ' + err.message, 'error');
@@ -490,37 +496,42 @@ function generatePurchaseOrderPDF(selectedItems, info) {
 /**
  * 견적서 PDF 생성
  */
-function generateQuotePDF(quoteItems, info) {
+async function generateQuotePDF(quoteItems, info) {
   try {
+    showToast('PDF 생성 중... (폰트 로딩)', 'info', 2000);
     const doc = new jsPDF();
+    const fontStyle = getKoreanFontStyle();
+    await applyKoreanFont(doc);
 
     doc.setFontSize(20);
-    doc.text('QUOTATION', 105, 20, { align: 'center' });
+    doc.text('견 적 서', 105, 20, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(`Date: ${info.date}`, 15, 35);
-    doc.text(`To: ${info.to}`, 15, 42);
-    doc.text(`From: ${info.from}`, 15, 49);
-    doc.text(`Valid: ${info.valid}`, 15, 56);
+    doc.text(`견적일자: ${info.date}`, 15, 35);
+    doc.text(`수신: ${info.to}`, 15, 42);
+    doc.text(`발신: ${info.from}`, 15, 49);
+    doc.text(`유효기간: ${info.valid}`, 15, 56);
 
     const tableData = quoteItems.map((item, i) => {
       const price = parseFloat(item.unitPrice) || 0;
       const subtotal = price * item.qty;
-      return [i + 1, item.itemName, item.itemCode || '-', item.qty, price.toLocaleString(), subtotal.toLocaleString()];
+      return [i + 1, item.itemName, item.itemCode || '-', item.qty, '₩' + price.toLocaleString(), '₩' + subtotal.toLocaleString()];
     });
 
     const total = quoteItems.reduce((s, item) => s + ((parseFloat(item.unitPrice) || 0) * item.qty), 0);
 
     doc.autoTable({
       startY: 65,
-      head: [['No', 'Item Name', 'Code', 'Qty', 'Unit Price', 'Amount']],
+      head: [['No', '품목명', '코드', '수량', '단가', '금액']],
       body: tableData,
-      foot: [['', '', '', '', 'TOTAL', total.toLocaleString()]],
+      foot: [['', '', '', '', '합계', '₩' + total.toLocaleString()]],
       theme: 'grid',
-      headStyles: { fillColor: [22, 163, 74] },
-      footStyles: { fillColor: [240, 242, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+      headStyles: { fillColor: [22, 163, 74], ...fontStyle },
+      bodyStyles: { ...fontStyle },
+      footStyles: { fillColor: [240, 242, 245], textColor: [0, 0, 0], fontStyle: 'bold', ...fontStyle },
+      styles: { ...fontStyle },
     });
 
-    doc.save(`Quotation_${info.date}.pdf`);
+    doc.save(`견적서_${info.date}.pdf`);
     showToast('견적서 PDF를 다운로드했습니다.', 'success');
   } catch (err) {
     showToast('PDF 생성 실패: ' + err.message, 'error');
@@ -530,34 +541,39 @@ function generateQuotePDF(quoteItems, info) {
 /**
  * 거래명세서 PDF 생성
  */
-function generateStatementPDF(transactions, info) {
+async function generateStatementPDF(transactions, info) {
   try {
+    showToast('PDF 생성 중... (폰트 로딩)', 'info', 2000);
     const doc = new jsPDF();
+    const fontStyle = getKoreanFontStyle();
+    await applyKoreanFont(doc);
 
     doc.setFontSize(20);
-    doc.text('TRANSACTION STATEMENT', 105, 20, { align: 'center' });
+    doc.text('거 래 명 세 서', 105, 20, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(`Period: ${info.from} ~ ${info.to}`, 15, 35);
-    doc.text(`Supplier: ${info.supplier}`, 15, 42);
-    doc.text(`Receiver: ${info.receiver}`, 15, 49);
+    doc.text(`기간: ${info.from} ~ ${info.to}`, 15, 35);
+    doc.text(`공급자: ${info.supplier}`, 15, 42);
+    doc.text(`공급받는자: ${info.receiver}`, 15, 49);
 
     const tableData = transactions.map((tx, i) => [
       i + 1,
       tx.date,
-      tx.type === 'in' ? 'IN' : 'OUT',
+      tx.type === 'in' ? '입고' : '출고',
       tx.itemName,
       tx.itemCode || '-',
       tx.quantity,
-      (parseFloat(tx.unitPrice) || 0).toLocaleString(),
-      ((parseFloat(tx.unitPrice) || 0) * (parseFloat(tx.quantity) || 0)).toLocaleString(),
+      '₩' + (parseFloat(tx.unitPrice) || 0).toLocaleString(),
+      '₩' + ((parseFloat(tx.unitPrice) || 0) * (parseFloat(tx.quantity) || 0)).toLocaleString(),
     ]);
 
     doc.autoTable({
       startY: 58,
-      head: [['No', 'Date', 'Type', 'Item', 'Code', 'Qty', 'Price', 'Amount']],
+      head: [['No', '일자', '구분', '품목명', '코드', '수량', '단가', '금액']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [100, 100, 100] },
+      headStyles: { fillColor: [100, 100, 100], ...fontStyle },
+      bodyStyles: { ...fontStyle },
+      styles: { ...fontStyle },
       columnStyles: {
         2: { cellWidth: 15 },
         5: { halign: 'right' },
@@ -566,7 +582,7 @@ function generateStatementPDF(transactions, info) {
       },
     });
 
-    doc.save(`Statement_${info.from}_${info.to}.pdf`);
+    doc.save(`거래명세서_${info.from}_${info.to}.pdf`);
     showToast('거래명세서 PDF를 다운로드했습니다.', 'success');
   } catch (err) {
     showToast('PDF 생성 실패: ' + err.message, 'error');

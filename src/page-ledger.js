@@ -12,6 +12,7 @@ import { applyPlugin } from 'jspdf-autotable';
 
 // jsPDF에 autoTable 플러그인 연결 (ESM 환경에서 필수)
 applyPlugin(jsPDF);
+import { applyKoreanFont, getKoreanFontStyle } from './pdf-font.js';
 
 export function renderLedgerPage(container, navigateTo) {
   const state = getState();
@@ -159,7 +160,7 @@ export function renderLedgerPage(container, navigateTo) {
   });
 
   // PDF 다운로드
-  container.querySelector('#btn-ledger-pdf').addEventListener('click', () => {
+  container.querySelector('#btn-ledger-pdf').addEventListener('click', async () => {
     const from = container.querySelector('#ledger-from').value;
     const to = container.querySelector('#ledger-to').value;
     const itemFilter = container.querySelector('#ledger-item-filter').value;
@@ -167,30 +168,35 @@ export function renderLedgerPage(container, navigateTo) {
     if (data.length === 0) { showToast('내보낼 데이터가 없습니다.', 'warning'); return; }
 
     try {
+      showToast('PDF 생성 중... (폰트 로딩)', 'info', 2000);
       const doc = new jsPDF('landscape');
+      const fontStyle = getKoreanFontStyle();
+      await applyKoreanFont(doc);
+
       doc.setFontSize(16);
-      doc.text('INVENTORY LEDGER', 148, 15, { align: 'center' });
+      doc.text('재고 수불대장', 148, 15, { align: 'center' });
       doc.setFontSize(10);
-      doc.text(`Period: ${from} ~ ${to}`, 14, 25);
+      doc.text(`기간: ${from} ~ ${to}`, 14, 25);
 
       const tableData = data.map((r, i) => [
         i + 1, r.itemName, r.itemCode || '-', r.unit || '-',
         r.openingQty, r.inQty > 0 ? '+' + r.inQty : '-',
         r.outQty > 0 ? '-' + r.outQty : '-', r.closingQty,
-        r.unitPrice > 0 ? r.unitPrice.toLocaleString() : '-',
-        r.closingValue > 0 ? r.closingValue.toLocaleString() : '-',
+        r.unitPrice > 0 ? '₩' + r.unitPrice.toLocaleString() : '-',
+        r.closingValue > 0 ? '₩' + r.closingValue.toLocaleString() : '-',
       ]);
 
       doc.autoTable({
         startY: 32,
-        head: [['No', 'Item', 'Code', 'Unit', 'Opening', 'In', 'Out', 'Closing', 'Price', 'Value']],
+        head: [['No', '품목명', '코드', '단위', '기초재고', '입고', '출고', '기말재고', '단가', '재고금액']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [37, 99, 235] },
-        styles: { fontSize: 8 },
+        headStyles: { fillColor: [37, 99, 235], ...fontStyle },
+        bodyStyles: { ...fontStyle },
+        styles: { fontSize: 8, ...fontStyle },
       });
 
-      doc.save(`Ledger_${from}_${to}.pdf`);
+      doc.save(`수불대장_${from}_${to}.pdf`);
       showToast('수불부 PDF를 다운로드했습니다.', 'success');
     } catch (err) {
       showToast('PDF 생성 실패: ' + err.message, 'error');
