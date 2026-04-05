@@ -59,6 +59,9 @@ const DEFAULT_STATE = {
   subscription: {},       // {planId, status, startDate, nextPayDate, cardLast4, ...}
   // 결제 이력
   paymentHistory: [],     // [{id, date, planName, amount, status, method}]
+  // 관리자 데이터
+  adminUsers: [],         // [{uid, name, email, plan, role, status, createdAt, lastLogin}]
+  adminNotices: [],       // [{id, title, content, date}]
 };
 
 let state = { ...DEFAULT_STATE };

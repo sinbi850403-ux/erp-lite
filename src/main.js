@@ -28,6 +28,7 @@ import { renderWarehousesPage } from './page-warehouses.js';
 import { renderRolesPage } from './page-roles.js';
 import { renderApiPage } from './page-api.js';
 import { renderBillingPage } from './page-billing.js';
+import { renderAdminPage } from './page-admin.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, logout } from './firebase-auth.js';
@@ -115,6 +116,7 @@ const pages = {
   roles: renderRolesPage,
   api: renderApiPage,
   billing: renderBillingPage,
+  admin: renderAdminPage,
 };
 
 /**
