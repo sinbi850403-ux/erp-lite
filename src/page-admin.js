@@ -312,6 +312,23 @@ export async function renderAdminPage(container, navigateTo) {
         </div>
       </div>
     </div>
+
+    <!-- 고객 문의 관리 -->
+    <div class="card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+      <div style="padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:16px;">💬</span>
+          <div>
+            <div style="font-weight:700; font-size:14px;">고객 문의 관리</div>
+            <div style="font-size:11px; color:var(--text-muted);">접수된 문의에 답변하세요</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-load-tickets">🔄 새로고침</button>
+      </div>
+      <div id="admin-tickets-area" style="max-height:500px; overflow-y:auto; padding:16px;">
+        <div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">불러오는 중...</div>
+      </div>
+    </div>
   `;
 
   // ═══════════════════════════════════════════
@@ -373,6 +390,10 @@ export async function renderAdminPage(container, navigateTo) {
   container.querySelector('#btn-add-notice')?.addEventListener('click', () => {
     showNoticeModal(container, navigateTo);
   });
+
+  // 고객 문의 로드
+  loadAdminTickets(container);
+  container.querySelector('#btn-load-tickets')?.addEventListener('click', () => loadAdminTickets(container));
 }
 
 // ═══════════════════════════════════════════
@@ -657,5 +678,120 @@ function showNoticeModal(container, navigateTo) {
     modal.remove();
     showToast('공지가 게시되었습니다.', 'success');
     renderAdminPage(container, navigateTo);
+  });
+}
+
+// ═══════════════════════════════════════════
+// 고객 문의 관리 — 목록 로드 + 답변
+// ═══════════════════════════════════════════
+const TICKET_STATUS = {
+  open: { label: '답변 대기', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  progress: { label: '확인 중', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  closed: { label: '답변 완료', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+};
+
+async function loadAdminTickets(container) {
+  const area = container.querySelector('#admin-tickets-area');
+  if (!area || !isConfigured) return;
+
+  try {
+    const q = query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      area.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:13px;">접수된 문의가 없습니다.</div>';
+      return;
+    }
+
+    area.innerHTML = '';
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const st = TICKET_STATUS[d.status] || TICKET_STATUS.open;
+      const date = d.createdAt?.toDate
+        ? d.createdAt.toDate().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : '-';
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px; border-radius:8px; margin-bottom:6px; border:1px solid var(--border); gap:12px;';
+      row.innerHTML = `
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+            <span style="font-size:10px; padding:1px 6px; border-radius:3px; background:${st.bg}; color:${st.color}; font-weight:600;">${st.label}</span>
+            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title}</span>
+          </div>
+          <div style="font-size:10px; color:var(--text-muted);">${d.userName || ''} (${d.userEmail || ''}) · ${date}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${docSnap.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
+      `;
+      area.appendChild(row);
+    });
+
+    // 답변 버튼 이벤트
+    area.querySelectorAll('.btn-reply-ticket').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ticketId = btn.dataset.id;
+        const ticketDoc = snap.docs.find(d => d.id === ticketId);
+        if (ticketDoc) showReplyModal(ticketId, ticketDoc.data(), container);
+      });
+    });
+  } catch (e) {
+    area.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:13px;">문의 목록을 불러올 수 없습니다.</div>';
+  }
+}
+
+/**
+ * 답변 모달 — 관리자가 문의에 답변
+ */
+function showReplyModal(ticketId, data, container) {
+  const existing = document.getElementById('reply-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'reply-modal';
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h3>💬 문의 답변</h3>
+        <button class="modal-close" id="reply-close">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <div style="margin-bottom:16px; padding:12px; background:var(--bg-secondary); border-radius:8px;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${data.title}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${data.userName} (${data.userEmail})</div>
+          <div style="font-size:12px; line-height:1.6; white-space:pre-wrap;">${data.content}</div>
+        </div>
+        <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">답변 내용</label>
+        <textarea id="reply-content" class="input" rows="5" style="width:100%; resize:vertical; font-family:inherit;">${data.reply || ''}</textarea>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+          <button class="btn btn-ghost" id="reply-cancel">취소</button>
+          <button class="btn btn-primary" id="reply-submit">답변 저장</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  modal.querySelector('#reply-close').addEventListener('click', () => modal.remove());
+  modal.querySelector('#reply-cancel').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  modal.querySelector('#reply-submit').addEventListener('click', async () => {
+    const reply = document.getElementById('reply-content').value.trim();
+    if (!reply) { showToast('답변 내용을 입력하세요.', 'warning'); return; }
+
+    try {
+      await updateDoc(doc(db, 'support_tickets', ticketId), {
+        reply,
+        status: 'closed',
+        repliedAt: new Date(),
+      });
+      modal.remove();
+      showToast('답변이 저장되었습니다.', 'success');
+      loadAdminTickets(container);
+    } catch (e) {
+      showToast('저장 실패: ' + e.message, 'error');
+    }
   });
 }
