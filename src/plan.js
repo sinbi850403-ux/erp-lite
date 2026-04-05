@@ -158,7 +158,7 @@ export function showUpgradeModal(pageId) {
         </h3>
         <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px; line-height:1.6;">
           이 기능은 <strong style="color:${plan.color};">${plan.icon} ${plan.name}</strong> 이상 요금제에서 사용할 수 있습니다.
-          <br/>업그레이드하여 모든 기능을 활용하세요!
+          <br/>업그레이드 후 이용해주세요.
         </p>
 
         <div style="background:var(--bg-secondary); border-radius:12px; padding:20px; margin-bottom:24px; text-align:left;">
@@ -169,7 +169,7 @@ export function showUpgradeModal(pageId) {
         <div style="display:flex; gap:8px; justify-content:center;">
           <button class="btn btn-ghost" id="upgrade-close">닫기</button>
           <button class="btn btn-primary" id="upgrade-action" style="background:linear-gradient(135deg, ${plan.color}, ${plan.color}dd);">
-            ⚡ ${plan.name}로 업그레이드
+            ${plan.name}로 업그레이드
           </button>
         </div>
 

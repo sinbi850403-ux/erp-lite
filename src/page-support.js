@@ -102,7 +102,7 @@ export function renderSupportPage(container) {
         });
       }
 
-      showToast('문의가 접수되었습니다! 빠르게 답변드리겠습니다.', 'success');
+      showToast('문의가 접수되었습니다. 확인 후 답변드리겠습니다.', 'success');
       document.getElementById('support-title').value = '';
       document.getElementById('support-content').value = '';
     } catch (e) {

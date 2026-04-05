@@ -74,14 +74,14 @@ export function renderMyPage(container) {
         `}
       </div>
 
-      <!-- 계정 삭제 (위험 영역) -->
+      <!-- 계정 삭제 -->
       <div class="card" style="padding:24px; border:1px solid rgba(239,68,68,0.3);">
-        <h3 style="font-size:15px; font-weight:700; color:#ef4444; margin-bottom:8px;">⚠️ 위험 구역</h3>
+        <h3 style="font-size:15px; font-weight:700; color:#ef4444; margin-bottom:8px;">회원 탈퇴</h3>
         <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
-          계정을 삭제하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+          탈퇴하면 저장된 재고 데이터, 거래 내역 등 모든 정보가 삭제됩니다.
         </p>
         <button id="btn-delete-account" class="btn" style="background:#ef4444; color:white; font-size:13px;">
-          회원 탈퇴
+          탈퇴하기
         </button>
       </div>
     </div>
@@ -134,7 +134,7 @@ export function renderMyPage(container) {
 
   // 회원 탈퇴
   document.getElementById('btn-delete-account')?.addEventListener('click', async () => {
-    const confirmed = confirm('정말로 탈퇴하시겠습니까?\n\n모든 데이터가 영구 삭제되며 복구할 수 없습니다.');
+    const confirmed = confirm('정말 탈퇴하시겠습니까?\n\n저장된 재고, 거래 내역 등 모든 데이터가 삭제됩니다.');
     if (!confirmed) return;
     const doubleCheck = prompt('탈퇴를 진행하려면 "회원탈퇴"를 입력하세요:');
     if (doubleCheck !== '회원탈퇴') { showToast('탈퇴가 취소되었습니다.', 'info'); return; }

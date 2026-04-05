@@ -8,11 +8,11 @@ export function renderGuidePage(container, navigateTo) {
   container.innerHTML = `
     <div style="max-width:800px; margin:0 auto; padding:24px;">
       <h2 style="font-size:22px; font-weight:800; margin-bottom:8px;">📖 사용 가이드</h2>
-      <p style="color:var(--text-muted); font-size:13px; margin-bottom:24px;">INVEX를 처음 사용하시나요? 아래 가이드를 따라해보세요!</p>
+      <p style="color:var(--text-muted); font-size:13px; margin-bottom:24px;">처음이신가요? 아래 순서대로 따라하시면 금방 익히실 수 있어요.</p>
 
       <!-- 빠른 시작 -->
       <div class="card" style="padding:24px; margin-bottom:16px; border-left:3px solid #8b5cf6;">
-        <h3 style="font-size:16px; font-weight:700; margin-bottom:16px;">🚀 빠른 시작 (5분 가이드)</h3>
+        <h3 style="font-size:16px; font-weight:700; margin-bottom:16px;">빠른 시작</h3>
         <div id="guide-steps" style="display:flex; flex-direction:column; gap:12px;">
         </div>
       </div>
@@ -63,7 +63,7 @@ export function renderGuidePage(container, navigateTo) {
   const faqContainer = document.getElementById('faq-list');
   const faqs = [
     { q: '무료 플랜으로 뭘 할 수 있나요?', a: '재고 현황 조회, 기본 입출고 관리, 엑셀 업로드가 가능합니다. 최대 100개 품목까지 관리할 수 있습니다.' },
-    { q: '데이터는 안전한가요?', a: '모든 데이터는 Google Firebase에 암호화되어 저장됩니다. SSL/TLS 보안 연결을 사용하며, 접근 권한이 철저히 관리됩니다.' },
+    { q: '데이터는 안전한가요?', a: '네, Google Firebase에 암호화 저장되며, 모든 통신은 HTTPS로 보호됩니다.' },
     { q: 'Pro로 업그레이드하면 뭐가 달라지나요?', a: '무제한 품목 관리, 바코드 스캔, 원가 분석, 문서 생성, 거래처 관리, 다중 창고 등 고급 기능을 사용할 수 있습니다.' },
     { q: '엑셀 없이도 사용할 수 있나요?', a: '네! 재고 현황 페이지에서 직접 품목을 추가할 수 있습니다. 엑셀 업로드는 기존 데이터를 빠르게 가져오기 위한 편의 기능입니다.' },
     { q: '여러 사람이 동시에 사용할 수 있나요?', a: 'Enterprise 플랜에서는 팀원 관리와 권한 설정이 가능합니다. 여러 사용자가 동시에 작업할 수 있습니다.' },
