@@ -26,11 +26,24 @@ import { renderLabelsPage } from './page-labels.js';
 import { renderAccountsPage } from './page-accounts.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
+import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, logout } from './firebase-auth.js';
+import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
 
 // 다크 모드 초기화
 initTheme();
+
+// Firebase 인증 초기화 — 로그인 상태 변경 시 동기화 시작/중지
+initAuth((user, profile) => {
+  if (user) {
+    startSync(user.uid);
+    updateUserUI(user, profile);
+  } else {
+    stopSync();
+    updateUserUI(null, null);
+  }
+});
 
 // 현재 페이지 (홈을 기본으로)
 let currentPage = 'home';
@@ -241,6 +254,37 @@ async function initApp() {
 }
 
 initApp();
+
+// 사용자 UI 업데이트 (로그인/로그아웃 시 호출)
+function updateUserUI(user, profile) {
+  const userArea = document.getElementById('user-info-area');
+  if (!userArea) return;
+
+  if (user) {
+    const name = profile?.name || user.displayName || '사용자';
+    const photo = user.photoURL;
+    const plan = (profile?.plan || 'free').toUpperCase();
+    const syncStatus = getSyncStatus();
+    userArea.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+        ${photo ? `<img src="${photo}" style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.2);" />` : ''}
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:11px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div>
+          <div style="font-size:10px; color:rgba(255,255,255,0.5);">${plan} ${syncStatus.isConnected ? '☁️' : ''}</div>
+        </div>
+        <button class="btn-icon" id="btn-logout" title="로그아웃" style="font-size:11px; color:rgba(255,255,255,0.5);">↗</button>
+      </div>
+    `;
+    document.getElementById('btn-logout')?.addEventListener('click', () => { logout(); });
+  } else {
+    userArea.innerHTML = `
+      <button class="btn btn-ghost btn-sm" id="btn-login" style="color:rgba(255,255,255,0.7); font-size:12px; width:100%;">
+        🔐 로그인
+      </button>
+    `;
+    document.getElementById('btn-login')?.addEventListener('click', () => { loginWithGoogle(); });
+  }
+}
 
 // PWA Service Worker 등록
 if ('serviceWorker' in navigator) {
