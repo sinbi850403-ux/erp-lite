@@ -41,6 +41,10 @@ const DEFAULT_STATE = {
   currency: { code: 'KRW', symbol: '₩', rate: 1 },
   // 사용자명
   userName: '관리자',
+  // 창고 마스터 (Enterprise: 다중 창고 관리)
+  warehouses: [
+    { id: 'wh-default', name: '본사 창고', type: 'main', address: '', manager: '', memo: '', createdAt: '' }
+  ],
 };
 
 let state = { ...DEFAULT_STATE };
