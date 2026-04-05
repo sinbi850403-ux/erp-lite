@@ -3,7 +3,7 @@
  * 왜 게시판? → 이메일은 보내면 끝이지만, 게시판은 문의 내역과 답변 상태를 확인할 수 있음
  */
 import { getCurrentUser, getUserProfileData } from './firebase-auth.js';
-import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, deleteDoc } from 'firebase/firestore';
 import { db, isConfigured } from './firebase-config.js';
 import { showToast } from './toast.js';
 
@@ -73,12 +73,20 @@ async function loadMyTickets(container, user) {
   try {
     const q = query(
       collection(db, 'support_tickets'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
     const snapshot = await getDocs(q);
 
-    if (snapshot.empty) {
+    // 클라이언트에서 최신순 정렬 (복합 인덱스 불필요)
+    const tickets = [];
+    snapshot.forEach(d => tickets.push({ id: d.id, ...d.data() }));
+    tickets.sort((a, b) => {
+      const ta = a.createdAt?.toDate?.() || new Date(0);
+      const tb = b.createdAt?.toDate?.() || new Date(0);
+      return tb - ta;
+    });
+
+    if (tickets.length === 0) {
       listEl.innerHTML = `
         <div style="text-align:center; padding:60px 20px;">
           <div style="font-size:36px; margin-bottom:12px; opacity:0.4;">📭</div>
@@ -90,8 +98,8 @@ async function loadMyTickets(container, user) {
     }
 
     listEl.innerHTML = '';
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
+    tickets.forEach(ticket => {
+      const data = ticket;
       const status = STATUS_MAP[data.status] || STATUS_MAP.open;
       const typeLabel = TYPE_MAP[data.type] || data.type;
       const date = data.createdAt?.toDate
@@ -115,7 +123,7 @@ async function loadMyTickets(container, user) {
       `;
       row.addEventListener('mouseover', () => row.style.borderColor = 'rgba(139,92,246,0.3)');
       row.addEventListener('mouseout', () => row.style.borderColor = '');
-      row.addEventListener('click', () => renderDetailView(container, docSnap.id, data));
+      row.addEventListener('click', () => renderDetailView(container, ticket.id, data));
       listEl.appendChild(row);
     });
   } catch (e) {
