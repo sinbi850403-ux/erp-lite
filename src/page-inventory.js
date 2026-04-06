@@ -50,12 +50,18 @@ function getVisibleFields(data) {
   );
 
   if (visibleColumns && Array.isArray(visibleColumns)) {
+    // [VAT 패치] 기존 설정이 있더라도 새롭게 추가된 공급가액, 부가세는 우선 보이게 보정
+    const updatedVisible = [...visibleColumns];
+    if (!updatedVisible.includes('supplyValue')) updatedVisible.push('supplyValue');
+    if (!updatedVisible.includes('vat')) updatedVisible.push('vat');
+    
     // 사용자 설정이 있으면 → 설정에 포함된 것만 (순서는 ALL_FIELDS 순서 유지)
-    return ALL_FIELDS.filter(f => visibleColumns.includes(f.key)).map(f => f.key);
+    return ALL_FIELDS.filter(f => updatedVisible.includes(f.key)).map(f => f.key);
   }
 
   // 설정 없으면 → 데이터가 있는 필드만 자동 선택
-  return ALL_FIELDS.filter(f => hasData.has(f.key)).map(f => f.key);
+  // 여기도 신규 컬럼이 비어있더라도 일단 헤더에 보이도록 강제 포함 (유저 요청)
+  return ALL_FIELDS.filter(f => hasData.has(f.key) || f.key === 'supplyValue' || f.key === 'vat').map(f => f.key);
 }
 
 /**
