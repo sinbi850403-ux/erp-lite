@@ -67,7 +67,7 @@ export function renderStocktakePage(container, navigateTo) {
                   <th>코드</th>
                   <th>창고</th>
                   <th class="text-right">시스템 재고</th>
-                  <th class="text-right" style="background:#e8f5e9;">실물 재고</th>
+                  <th class="text-right">실물 재고</th>
                   <th class="text-right">차이</th>
                   <th>상태</th>
                   <th>비고</th>
@@ -83,7 +83,7 @@ export function renderStocktakePage(container, navigateTo) {
                       <td style="color:var(--text-muted); font-size:12px;">${item.itemCode || '-'}</td>
                       <td style="font-size:12px;">${item.warehouse || '-'}</td>
                       <td class="text-right">${sysQty.toLocaleString('ko-KR')}</td>
-                      <td class="text-right" style="background:#e8f5e9;">
+                      <td class="text-right">
                         <input type="number" class="form-input st-actual" data-idx="${i}" value="" placeholder="${sysQty}" style="width:80px; padding:3px 6px; text-align:right; font-weight:600;" />
                       </td>
                       <td class="text-right st-diff" data-idx="${i}" style="font-weight:600;">-</td>
