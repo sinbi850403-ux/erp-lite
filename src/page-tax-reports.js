@@ -8,7 +8,7 @@
 
 import { getState } from './store.js';
 import { showToast } from './toast.js';
-import { exportToExcel } from './excel.js';
+import * as XLSX from 'xlsx';
 
 export function renderTaxReportsPage(container, navigateTo) {
   const state = getState();
@@ -553,6 +553,7 @@ function calcTxAmount(tx) {
 
 /**
  * 엑셀 다운로드 (단일 시트)
+ * aoa(2D 배열)를 엑셀 시트로 변환하여 다운로드
  */
 function downloadReport(filename, rows) {
   if (rows.length <= 5) {
@@ -561,7 +562,21 @@ function downloadReport(filename, rows) {
   }
 
   try {
-    exportToExcel(rows, `${filename}.xlsx`);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // 열 너비 자동 조정
+    const colWidths = [];
+    rows.forEach(row => {
+      if (!Array.isArray(row)) return;
+      row.forEach((cell, ci) => {
+        const len = String(cell || '').length * 2 + 4;
+        colWidths[ci] = Math.max(colWidths[ci] || 10, Math.min(len, 40));
+      });
+    });
+    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '시트1');
+    XLSX.writeFile(wb, `${filename}.xlsx`);
     showToast(`${filename} 다운로드 완료!`, 'success');
   } catch (e) {
     showToast('다운로드 실패: ' + e.message, 'error');
@@ -574,30 +589,27 @@ function downloadReport(filename, rows) {
  */
 function downloadMultiSheetReport(filename, sheets) {
   try {
-    // xlsx 동적 import
-    import('xlsx').then(XLSX => {
-      const wb = XLSX.utils.book_new();
+    const wb = XLSX.utils.book_new();
 
-      Object.entries(sheets).forEach(([sheetName, rows]) => {
-        const ws = XLSX.utils.aoa_to_sheet(rows);
+    Object.entries(sheets).forEach(([sheetName, rows]) => {
+      const ws = XLSX.utils.aoa_to_sheet(rows);
 
-        // 열 너비 자동 조정
-        const colWidths = [];
-        rows.forEach(row => {
-          if (!Array.isArray(row)) return;
-          row.forEach((cell, ci) => {
-            const len = String(cell || '').length * 2 + 4;
-            colWidths[ci] = Math.max(colWidths[ci] || 10, Math.min(len, 40));
-          });
+      // 열 너비 자동 조정
+      const colWidths = [];
+      rows.forEach(row => {
+        if (!Array.isArray(row)) return;
+        row.forEach((cell, ci) => {
+          const len = String(cell || '').length * 2 + 4;
+          colWidths[ci] = Math.max(colWidths[ci] || 10, Math.min(len, 40));
         });
-        ws['!cols'] = colWidths.map(w => ({ wch: w }));
-
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
       });
+      ws['!cols'] = colWidths.map(w => ({ wch: w }));
 
-      XLSX.writeFile(wb, `${filename}.xlsx`);
-      showToast(`${filename} 전체 서류 다운로드 완료!`, 'success');
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
     });
+
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+    showToast(`${filename} 전체 서류 다운로드 완료!`, 'success');
   } catch (e) {
     showToast('다운로드 실패: ' + e.message, 'error');
   }
