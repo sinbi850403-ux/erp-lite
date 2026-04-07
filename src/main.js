@@ -44,6 +44,8 @@ import { renderProfitPage } from './page-profit.js';
 import { renderBackupPage } from './page-backup.js';
 import { renderOrdersPage } from './page-orders.js';
 import { renderForecastPage } from './page-forecast.js';
+import { renderReferralPage } from './page-referral.js';
+import { renderWeeklyReportPage } from './page-weekly-report.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
@@ -367,6 +369,8 @@ const pages = {
   backup: renderBackupPage,
   orders: renderOrdersPage,
   forecast: renderForecastPage,
+  referral: renderReferralPage,
+  'weekly-report': renderWeeklyReportPage,
 };
 
 /**

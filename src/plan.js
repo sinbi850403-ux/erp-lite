@@ -62,12 +62,12 @@ const PAGE_MIN_PLAN = {
   // Free 기능
   home: 'free', upload: 'free', mapping: 'free',
   inventory: 'free', inout: 'free', settings: 'free', billing: 'free', admin: 'free',
-  mypage: 'free', guide: 'free', support: 'free', team: 'free', backup: 'free',
+  mypage: 'free', guide: 'free', support: 'free', team: 'free', backup: 'free', referral: 'free',
   // Pro 기능
   bulk: 'pro', scanner: 'pro', labels: 'pro', transfer: 'pro',
   stocktake: 'pro', vendors: 'pro', summary: 'pro', dashboard: 'pro',
   costing: 'pro', accounts: 'pro', ledger: 'pro', documents: 'pro', auditlog: 'pro',
-  'tax-reports': 'pro', 'auto-order': 'pro', orders: 'pro', profit: 'pro', forecast: 'pro',
+  'tax-reports': 'pro', 'auto-order': 'pro', orders: 'pro', profit: 'pro', forecast: 'pro', 'weekly-report': 'pro',
   // Enterprise 기능
   warehouses: 'enterprise', roles: 'enterprise', api: 'enterprise',
 };
