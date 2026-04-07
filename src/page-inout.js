@@ -6,7 +6,7 @@
 
 import { getState, addTransaction, deleteTransaction } from './store.js';
 import { showToast } from './toast.js';
-import { downloadExcel } from './excel.js';
+import { downloadExcel, readExcelFile } from './excel.js';
 
 const PAGE_SIZE = 15;
 
@@ -26,6 +26,7 @@ export function renderInoutPage(container, navigateTo) {
       </div>
       <div class="page-actions">
         <button class="btn btn-outline" id="btn-export-tx">📥 이력 내보내기</button>
+        <button class="btn btn-outline" id="btn-bulk-upload">📄 엑셀 일괄 등록</button>
         <button class="btn btn-success" id="btn-in">📥 입고 등록</button>
         <button class="btn btn-danger" id="btn-out">📤 출고 등록</button>
       </div>
@@ -258,8 +259,279 @@ export function renderInoutPage(container, navigateTo) {
     showToast('이력을 엑셀로 내보냈습니다.', 'success');
   });
 
+  // 엑셀 일괄 등록
+  container.querySelector('#btn-bulk-upload').addEventListener('click', () => {
+    openBulkUploadModal(container, navigateTo, items);
+  });
+
   // 초기 렌더링
   renderTxTable();
+}
+
+/**
+ * 엑셀 일괄 입출고 업로드 모달
+ * 왜 필요? → 건별 등록은 수십 건 이상일 때 비효율적.
+ *   엑셀로 한번에 올리면 시간을 크게 절약할 수 있음.
+ */
+function openBulkUploadModal(container, navigateTo, items) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:700px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📄 엑셀 일괄 입출고 등록</h3>
+        <button class="modal-close" id="bulk-close">✕</button>
+      </div>
+      <div class="modal-body" id="bulk-body">
+        <div class="alert alert-info" style="margin-bottom:16px;">
+          <strong>사용 방법:</strong><br/>
+          ① 아래 '양식 다운로드' 버튼으로 엑셀 양식을 받으세요<br/>
+          ② 양식에 입출고 데이터를 작성하세요<br/>
+          ③ 작성된 파일을 업로드하면 한번에 등록됩니다
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <button class="btn btn-outline" id="bulk-download-template">📋 양식 다운로드</button>
+        </div>
+
+        <div style="border:2px dashed var(--border); border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color 0.2s;" id="bulk-dropzone">
+          <div style="font-size:28px; margin-bottom:8px;">📁</div>
+          <div style="font-size:13px; color:var(--text-muted);">엑셀 파일을 여기에 드래그하거나 클릭하세요</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">.xlsx, .xls 파일 지원</div>
+          <input type="file" id="bulk-file-input" accept=".xlsx,.xls" style="display:none;" />
+        </div>
+
+        <div id="bulk-preview" style="display:none; margin-top:16px;"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#bulk-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  // 양식 다운로드 — 사용자가 작성할 템플릿
+  overlay.querySelector('#bulk-download-template').addEventListener('click', () => {
+    const template = [
+      {
+        '구분': '입고',
+        '거래처': '(주)삼성전자',
+        '품목명': '갤럭시S25',
+        '품목코드': 'SM-S925',
+        '수량': 100,
+        '단가': 1200000,
+        '일자': new Date().toISOString().split('T')[0],
+        '비고': '1차 입고',
+      },
+      {
+        '구분': '출고',
+        '거래처': '쿠팡',
+        '품목명': '갤럭시S25',
+        '품목코드': 'SM-S925',
+        '수량': 30,
+        '단가': 1200000,
+        '일자': new Date().toISOString().split('T')[0],
+        '비고': '쿠팡 출고',
+      },
+    ];
+    downloadExcel(template, '입출고_일괄등록_양식');
+    showToast('양식을 다운로드했습니다. 형식에 맞게 작성 후 업로드하세요.', 'success');
+  });
+
+  // 파일 업로드 (클릭 + 드래그)
+  const dropzone = overlay.querySelector('#bulk-dropzone');
+  const fileInput = overlay.querySelector('#bulk-file-input');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--accent)';
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.style.borderColor = 'var(--border)';
+  });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border)';
+    const file = e.dataTransfer.files[0];
+    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close);
+  });
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close);
+  });
+}
+
+/**
+ * 업로드된 엑셀 파일을 파싱하여 미리보기 + 일괄 등록
+ * 왜 미리보기? → 잘못된 데이터가 등록되는 것을 방지
+ */
+async function processUploadedFile(file, overlay, container, navigateTo, items, closeModal) {
+  const previewEl = overlay.querySelector('#bulk-preview');
+  previewEl.style.display = 'block';
+  previewEl.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">파일 분석 중...</div>';
+
+  try {
+    const { sheets, sheetNames } = await readExcelFile(file);
+    const sheetData = sheets[sheetNames[0]]; // 첫 번째 시트 사용
+
+    if (!sheetData || sheetData.length < 2) {
+      previewEl.innerHTML = '<div class="alert alert-warning">데이터가 없거나 헤더만 있습니다. 양식을 확인해 주세요.</div>';
+      return;
+    }
+
+    // 헤더 파싱 — 컬럼 위치 자동 감지
+    const headers = sheetData[0].map(h => String(h).trim());
+    const colMap = {
+      type: headers.findIndex(h => h === '구분'),
+      vendor: headers.findIndex(h => h === '거래처'),
+      itemName: headers.findIndex(h => h === '품목명'),
+      itemCode: headers.findIndex(h => h === '품목코드'),
+      quantity: headers.findIndex(h => h === '수량'),
+      unitPrice: headers.findIndex(h => h === '단가'),
+      date: headers.findIndex(h => h === '일자'),
+      note: headers.findIndex(h => h === '비고'),
+    };
+
+    // 필수 컬럼 확인
+    if (colMap.type === -1 || colMap.itemName === -1 || colMap.quantity === -1) {
+      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "구분", "품목명", "수량" 컬럼이 있어야 합니다.</div>';
+      return;
+    }
+
+    // 데이터 행 파싱
+    const rows = [];
+    for (let i = 1; i < sheetData.length; i++) {
+      const row = sheetData[i];
+      if (!row || row.length === 0) continue;
+
+      const typeStr = String(row[colMap.type] || '').trim();
+      const type = typeStr === '출고' ? 'out' : 'in';
+      const itemName = String(row[colMap.itemName] || '').trim();
+      const quantity = parseFloat(row[colMap.quantity]) || 0;
+
+      if (!itemName || quantity <= 0) continue; // 빈 행 건너뜀
+
+      // 기존 품목과 매칭 시도
+      const matchedItem = items.find(item =>
+        item.itemName === itemName ||
+        (colMap.itemCode >= 0 && item.itemCode && item.itemCode === String(row[colMap.itemCode] || '').trim())
+      );
+
+      // 일자 처리 — 엑셀 날짜 포맷 호환
+      let dateStr = '';
+      if (colMap.date >= 0) {
+        const rawDate = row[colMap.date];
+        if (typeof rawDate === 'number') {
+          // 엑셀 시리얼 날짜 → JS 날짜로 변환
+          const d = new Date((rawDate - 25569) * 86400 * 1000);
+          dateStr = d.toISOString().split('T')[0];
+        } else {
+          dateStr = String(rawDate || '').trim();
+        }
+      }
+      if (!dateStr) dateStr = new Date().toISOString().split('T')[0];
+
+      rows.push({
+        type,
+        vendor: colMap.vendor >= 0 ? String(row[colMap.vendor] || '').trim() : '',
+        itemName,
+        itemCode: colMap.itemCode >= 0 ? String(row[colMap.itemCode] || '').trim() : (matchedItem?.itemCode || ''),
+        quantity,
+        unitPrice: colMap.unitPrice >= 0 ? (parseFloat(row[colMap.unitPrice]) || 0) : 0,
+        date: dateStr,
+        note: colMap.note >= 0 ? String(row[colMap.note] || '').trim() : '',
+        matched: !!matchedItem, // 기존 품목 매칭 여부
+      });
+    }
+
+    if (rows.length === 0) {
+      previewEl.innerHTML = '<div class="alert alert-warning">유효한 데이터가 없습니다. "구분"은 입고/출고, "수량"은 0 초과여야 합니다.</div>';
+      return;
+    }
+
+    // 미리보기 테이블
+    const inCount = rows.filter(r => r.type === 'in').length;
+    const outCount = rows.filter(r => r.type === 'out').length;
+    const unmatchedCount = rows.filter(r => !r.matched).length;
+
+    previewEl.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <strong>📊 분석 결과:</strong>
+        <span style="margin-left:8px; color:var(--success);">입고 ${inCount}건</span>
+        <span style="margin-left:8px; color:var(--danger);">출고 ${outCount}건</span>
+        ${unmatchedCount > 0 ? `<span style="margin-left:8px; color:var(--warning);">⚠️ 미매칭 ${unmatchedCount}건</span>` : ''}
+      </div>
+      <div class="table-wrapper" style="max-height:250px; overflow-y:auto; margin-bottom:12px;">
+        <table class="data-table" style="font-size:12px;">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>거래처</th>
+              <th>품목명</th>
+              <th>수량</th>
+              <th>단가</th>
+              <th>일자</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td><span class="${r.type === 'in' ? 'type-in' : 'type-out'}">${r.type === 'in' ? '입고' : '출고'}</span></td>
+                <td>${r.vendor || '-'}</td>
+                <td>${r.itemName}</td>
+                <td class="text-right">${r.quantity.toLocaleString('ko-KR')}</td>
+                <td class="text-right">${r.unitPrice ? '₩' + r.unitPrice.toLocaleString('ko-KR') : '-'}</td>
+                <td>${r.date}</td>
+                <td>${r.matched
+                  ? '<span style="color:var(--success); font-size:11px;">✅ 매칭</span>'
+                  : '<span style="color:var(--warning); font-size:11px;">⚠️ 미매칭</span>'
+                }</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${unmatchedCount > 0 ? '<div class="alert alert-warning" style="margin-bottom:12px; font-size:12px;">⚠️ 미매칭 품목은 재고에 등록되어 있지 않아 수량이 반영되지 않습니다. 이력만 기록됩니다.</div>' : ''}
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-outline" id="bulk-cancel">취소</button>
+        <button class="btn btn-primary" id="bulk-confirm">✅ ${rows.length}건 일괄 등록</button>
+      </div>
+    `;
+
+    // 취소
+    previewEl.querySelector('#bulk-cancel').addEventListener('click', () => {
+      previewEl.style.display = 'none';
+    });
+
+    // 일괄 등록 확인
+    previewEl.querySelector('#bulk-confirm').addEventListener('click', () => {
+      let successCount = 0;
+      rows.forEach(row => {
+        addTransaction({
+          type: row.type,
+          vendor: row.vendor,
+          itemName: row.itemName,
+          itemCode: row.itemCode,
+          quantity: row.quantity,
+          unitPrice: row.unitPrice,
+          date: row.date,
+          note: row.note,
+        });
+        successCount++;
+      });
+
+      showToast(`✅ ${successCount}건 일괄 등록 완료! (입고 ${inCount}건, 출고 ${outCount}건)`, 'success');
+      closeModal();
+      renderInoutPage(container, navigateTo);
+    });
+
+  } catch (err) {
+    previewEl.innerHTML = `<div class="alert alert-danger">파일 처리 중 오류: ${err.message}</div>`;
+  }
 }
 
 /**
