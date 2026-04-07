@@ -4,6 +4,11 @@
  */
 
 import './style.css';
+import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-monitor.js';
+
+// 에러 모니터링 초기화 (가능한 한 빨리 실행)
+// 왜 여기서? → 앱 초기화 과정의 에러도 잡기 위함
+initErrorMonitor();
 import { restoreState, getState, setState } from './store.js';
 import { renderUploadPage } from './page-upload.js';
 import { renderMappingPage } from './page-mapping.js';
@@ -259,6 +264,8 @@ initAuth((user, profile) => {
     }
     startSync(user.uid);
     updateUserUI(user, profile);
+    // 에러 모니터링에 사용자 정보 설정 (어떤 사용자에게 에러가 발생했는지 추적)
+    setMonitorUser(user.uid, user.email);
     
     // 총관리자만 관리자 메뉴 표시
     const adminBtn = document.querySelector('[data-page="admin"]');
@@ -273,6 +280,7 @@ initAuth((user, profile) => {
     // ❌ 미로그인 → 게이트 표시
     stopSync();
     updateUserUI(null, null);
+    clearMonitorUser();
     if (gate) {
       gate.style.display = 'flex';
       gate.style.opacity = '1';

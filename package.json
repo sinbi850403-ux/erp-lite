@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.9",
+    "@sentry/browser": "^10.47.0",
     "firebase": "^12.11.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
