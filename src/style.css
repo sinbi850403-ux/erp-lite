@@ -12,7 +12,9 @@
 }
 
 /* 폼 요소 기본 스타일 리셋 (Chrome, Edge, Safari, Firefox) */
-input, button, select, textarea {
+/* 왜 :not(checkbox/radio)? → appearance:none이 체크박스/라디오의 기본 UI를 제거하여 안 보이게 됨 */
+input:not([type="checkbox"]):not([type="radio"]),
+button, select, textarea {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -25,6 +27,16 @@ input, button, select, textarea {
   padding: 8px 12px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* 체크박스·라디오 — 기본 스타일 유지 + 다크 모드 보정 */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin: 0;
 }
 
 /* Chrome autofill 가시성 보정 */
