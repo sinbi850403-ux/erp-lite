@@ -1,34 +1,340 @@
-/* auth.css - 회원가입/로그인 폼 가시성 개선 */
+/* ============================================================
+   auth.css - 로그인/회원가입 폼 전체 스타일
+   왜? → 인라인 style 제거 후 CSS 클래스로 통일하여
+         모든 브라우저(Chrome, Safari, Firefox, Edge)와
+         모바일에서 동일한 가시성을 보장하기 위함
+   ============================================================ */
 
-/* 입력 필드 기본 스타일 (이미 인라인에 정의돼 있으나 재정의를 위해) */
-input {
-  color: var(--text-primary, #e2e8f0);
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
+/* ─── 게이트 (전체 오버레이) ─── */
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* 왜? → 폰트를 명시해서 브라우저 기본 폰트 차이를 없앰 */
+}
+
+/* ─── 컨테이너 ─── */
+.auth-container {
+  text-align: center;
+  max-width: 420px;
+  padding: 40px 24px;
+  width: 100%;
+}
+
+/* ─── 로고·타이틀 ─── */
+.auth-logo {
+  font-size: 56px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(59,130,246,0.3));
+}
+
+.auth-title {
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent; /* Firefox 폴백 */
+}
+
+.auth-subtitle {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+/* ─── 탭 전환 (로그인 / 회원가입) ─── */
+.auth-tabs {
+  display: flex;
+  margin-bottom: 20px;
   border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: #94a3b8;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.auth-tab.active {
+  background: rgba(59,130,246,0.15);
+  color: #3b82f6;
+}
+
+/* ─── 폼 ─── */
+.auth-form {
+  margin-bottom: 16px;
+}
+
+.auth-field {
+  margin-bottom: 10px;
+}
+
+/* ─── 입력 필드 (핵심: 가시성 보장) ─── 
+   왜 rgba(255,255,255,0.12)로 올렸나?
+   → 이전 0.05는 #0f172a 배경에서 거의 투명해서 
+     텍스트와 배경 구분이 안됨. 0.12로 올려서 
+     입력 영역이 시각적으로 분리되도록 함.
+*/
+.auth-input {
+  width: 100%;
   padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+  /* 왜 #ffffff? → #e2e8f0보다 확실히 밝아서 어떤 브라우저에서든 선명하게 보임 */
   font-size: 14px;
+  font-family: inherit;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none; /* iOS Safari 기본 스타일 제거 */
+  appearance: none;
 }
 
-/* placeholder 색상 – 다크 모드에서도 충분히 대비 */
-input::placeholder {
-  color: var(--text-muted, #94a3b8);
-  opacity: 1; /* Chrome 기본 opacity 0.5를 무시 */
+/* placeholder - 모든 브라우저 대응 */
+.auth-input::placeholder {
+  color: #cbd5e1;
+  /* 왜 #cbd5e1? → #94a3b8보다 밝아서 다크 배경에서도 확실히 보임 */
+  opacity: 1;
+  /* 왜? → Chrome·Firefox는 기본적으로 placeholder에 opacity를 적용하는데,
+     이를 1로 강제해서 모든 브라우저에서 동일한 밝기를 보장 */
 }
 
-/* Chrome 자동완성(autofill) 스타일 보정 */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus {
-  -webkit-text-fill-color: var(--text-primary, #e2e8f0) !important; /* 텍스트 색상 유지 */
-  -webkit-box-shadow: 0 0 0px 1000px var(--bg-primary, #0f172a) inset; /* 배경 색상 강제 */
-  transition: background-color 5000s ease-in-out 0s; /* 깜빡임 방지 */
-}
+.auth-input::-webkit-input-placeholder { color: #cbd5e1; opacity: 1; }
+.auth-input::-moz-placeholder { color: #cbd5e1; opacity: 1; }
+.auth-input:-ms-input-placeholder { color: #cbd5e1; opacity: 1; }
+.auth-input::placeholder { color: #cbd5e1; opacity: 1; }
 
-/* 포커스 시 테두리 색상 강조 */
-input:focus {
+/* 포커스 */
+.auth-input:focus {
   border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.25);
+  /* 왜? → 포커스 링(glow)이 있어야 입력 필드가 활성화됐음을 시각적으로 알 수 있음 */
+}
+
+/* ─── Chrome/Safari/Edge 자동완성(autofill) 보정 ───
+   왜? → 브라우저 자동완성 시 배경이 노란색/파란색으로 바뀌고
+         텍스트 색상이 강제 변경되어 다크 테마에서 글자가 안 보임.
+         -webkit-text-fill-color와 box-shadow로 색상을 강제 유지.
+*/
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
+  /* 왜 #1e293b? → 배경과 자연스럽게 어울리면서도 입력 영역이 구분됨 */
+  box-shadow: 0 0 0px 1000px #1e293b inset !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #ffffff;
+  /* 왜? → 커서(캐럿)도 흰색으로 강제해서 입력 위치가 보이도록 */
+}
+
+/* ─── 비밀번호 찾기 링크 ─── */
+.auth-forgot {
+  text-align: right;
+  margin-bottom: 14px;
+}
+
+.auth-link-small {
+  font-size: 11px;
+  color: #3b82f6;
+  text-decoration: none;
+}
+.auth-link-small:hover {
+  text-decoration: underline;
+}
+
+/* ─── 버튼 공통 ─── */
+.auth-btn {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+}
+.auth-btn:hover {
+  transform: translateY(-1px);
+}
+.auth-btn:active {
+  transform: translateY(0);
+}
+
+/* 로그인 버튼 */
+.auth-btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+}
+.auth-btn-primary:hover {
+  box-shadow: 0 6px 24px rgba(59,130,246,0.4);
+}
+
+/* 회원가입 버튼 */
+.auth-btn-signup {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+}
+.auth-btn-signup:hover {
+  box-shadow: 0 6px 24px rgba(139,92,246,0.4);
+}
+
+/* Google 소셜 로그인 버튼 */
+.auth-btn-google {
+  padding: 12px 24px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
+  font-weight: 500;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.auth-btn-google:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.25);
+  transform: translateY(-1px);
+}
+
+/* ─── 약관 동의 ─── */
+.auth-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.auth-checkbox {
+  margin-top: 2px;
+  accent-color: #8b5cf6;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.auth-link-purple {
+  color: #a78bfa;
+  text-decoration: underline;
+}
+.auth-link-purple:hover {
+  color: #c4b5fd;
+}
+
+.auth-required {
+  color: #ef4444;
+}
+
+/* ─── 구분선 ─── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+}
+.auth-divider-text {
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ─── 로딩 ─── */
+.auth-loading {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* ─── 푸터 텍스트 ─── */
+.auth-footer-text {
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 20px;
+  line-height: 1.6;
+}
+
+.auth-link-blue {
+  color: #3b82f6;
+  text-decoration: none;
+}
+.auth-link-blue:hover {
+  text-decoration: underline;
+}
+
+.auth-security {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.auth-security p {
+  font-size: 11px;
+  color: #475569;
+}
+
+/* ============================================================
+   모바일 반응형 (320px ~ 480px)
+   왜? → 좁은 화면에서도 입력 필드가 충분한 크기를 유지하고
+         터치 타겟이 44px 이상이 되도록 보장
+   ============================================================ */
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 24px 16px;
+  }
+  .auth-logo {
+    font-size: 44px;
+    margin-bottom: 12px;
+  }
+  .auth-title {
+    font-size: 26px;
+  }
+  .auth-subtitle {
+    font-size: 12px;
+    margin-bottom: 18px;
+  }
+  .auth-input {
+    padding: 14px 12px;
+    font-size: 16px;
+    /* 왜 16px? → iOS Safari에서 font-size < 16px이면 
+       입력 시 자동 확대(zoom)가 발생하는 것을 방지 */
+  }
+  .auth-btn {
+    padding: 14px;
+    font-size: 15px;
+  }
+  .auth-tab {
+    padding: 12px;
+  }
 }
