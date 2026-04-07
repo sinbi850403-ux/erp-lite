@@ -9,6 +9,11 @@
   color: #1a1a2e;
   background: #fff;
   min-height: 100vh;
+  /* 전체 화면 오버레이: 사이드바/앱 위에 완전히 덮음 */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow-y: auto;
 }
 
 /* === 네비게이션 === */
