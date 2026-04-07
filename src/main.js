@@ -38,6 +38,7 @@ import { renderMyPage } from './page-mypage.js';
 import { renderGuidePage } from './page-guide.js';
 import { renderSupportPage } from './page-support.js';
 import { renderTeamPage } from './page-team.js';
+import { renderTaxReportsPage } from './page-tax-reports.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './firebase-auth.js';
@@ -332,6 +333,7 @@ const pages = {
   guide: renderGuidePage,
   support: renderSupportPage,
   team: renderTeamPage,
+  'tax-reports': renderTaxReportsPage,
 };
 
 /**
