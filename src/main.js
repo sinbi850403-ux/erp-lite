@@ -52,22 +52,25 @@ let isAuthReady = false;
 // === 로그인 게이트 이벤트 ===
 
 // 탭 전환 (로그인 ↔ 회원가입)
+// 탭 전환 (로그인 ↔ 회원가입) — CSS 클래스 기반으로 변경
+// 왜? → 인라인 style은 CSS 파일보다 우선순위가 높아 auth.css를 무시함
 document.getElementById('tab-login')?.addEventListener('click', () => {
   document.getElementById('form-login').style.display = 'block';
   document.getElementById('form-signup').style.display = 'none';
-  document.getElementById('tab-login').style.background = 'rgba(59,130,246,0.15)';
-  document.getElementById('tab-login').style.color = '#3b82f6';
-  document.getElementById('tab-signup').style.background = 'transparent';
-  document.getElementById('tab-signup').style.color = 'var(--text-muted, #94a3b8)';
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  tabLogin.classList.add('active');
+  tabLogin.classList.remove('active-signup');
+  tabSignup.classList.remove('active', 'active-signup');
 });
 
 document.getElementById('tab-signup')?.addEventListener('click', () => {
   document.getElementById('form-login').style.display = 'none';
   document.getElementById('form-signup').style.display = 'block';
-  document.getElementById('tab-signup').style.background = 'rgba(139,92,246,0.15)';
-  document.getElementById('tab-signup').style.color = '#8b5cf6';
-  document.getElementById('tab-login').style.background = 'transparent';
-  document.getElementById('tab-login').style.color = 'var(--text-muted, #94a3b8)';
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  tabSignup.classList.add('active', 'active-signup');
+  tabLogin.classList.remove('active', 'active-signup');
 });
 
 // 이메일 로그인
@@ -119,39 +122,43 @@ document.getElementById('link-privacy')?.addEventListener('click', (e) => {
  * 법률 문서 모달
  */
 function showLegalModal(title, content) {
+  // 왜 CSS 클래스? → 인라인 style에서 CSS 변수를 쓰면 라이트 모드에서
+  // --text-primary가 #1a1a2e(어두움)로 적용되어 글자가 안 보임
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:20px;';
+  modal.className = 'legal-modal-overlay';
   modal.innerHTML = `
-    <div style="background:var(--bg-primary, #0f172a); border:1px solid rgba(255,255,255,0.1); border-radius:12px; max-width:600px; width:100%; max-height:80vh; display:flex; flex-direction:column; overflow:hidden;">
-      <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:16px; font-weight:700;">📋 ${title}</h3>
-        <button id="legal-close" style="background:none; border:none; color:var(--text-muted, #94a3b8); font-size:18px; cursor:pointer; padding:4px 8px;">✕</button>
+    <div class="legal-modal">
+      <div class="legal-modal-header">
+        <h3>📋 ${title}</h3>
+        <button class="legal-modal-close">✕</button>
       </div>
-      <div style="padding:20px; overflow-y:auto; font-size:13px; line-height:1.8; color:var(--text-secondary, #cbd5e1);">
+      <div class="legal-modal-body">
         ${content}
       </div>
     </div>
   `;
   document.body.appendChild(modal);
-  modal.querySelector('#legal-close').addEventListener('click', () => modal.remove());
+  modal.querySelector('.legal-modal-close').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
 function getTermsContent() {
+  // 왜 인라인 style을 제거? → CSS 변수가 라이트 모드에서 어두운 색을 반환하여
+  // 어두운 모달 배경 위에 글자가 안 보이는 문제 발생. auth.css의 .legal-modal-body h4 규칙이 적용됨.
   return `
-    <h4 style="color:var(--text-primary, #e2e8f0); margin-bottom:12px;">제1조 (목적)</h4>
+    <h4>제1조 (목적)</h4>
     <p>이 약관은 INVEX(이하 "서비스")가 제공하는 재고·경영 관리 서비스의 이용조건 및 절차, 회사와 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
     
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제2조 (정의)</h4>
+    <h4>제2조 (정의)</h4>
     <p>① "서비스"란 INVEX가 제공하는 웹 기반 재고관리, 입출고 처리, 원가분석, 문서생성 등의 기능을 말합니다.<br/>
     ② "이용자"란 본 약관에 따라 서비스를 이용하는 자를 말합니다.<br/>
     ③ "계정"이란 이용자의 식별과 서비스 이용을 위해 이용자가 설정하고 회사가 승인하는 이메일 및 비밀번호의 조합을 말합니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제3조 (약관의 효력 및 변경)</h4>
+    <h4>제3조 (약관의 효력 및 변경)</h4>
     <p>① 본 약관은 서비스 화면에 게시하거나 이메일 등의 방법으로 이용자에게 공지함으로써 효력이 발생합니다.<br/>
     ② 회사는 관련 법령을 위배하지 않는 범위에서 본 약관을 개정할 수 있습니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제4조 (서비스의 제공)</h4>
+    <h4>제4조 (서비스의 제공)</h4>
     <p>① 회사는 다음과 같은 서비스를 제공합니다.<br/>
     - 재고 현황 관리 및 모니터링<br/>
     - 입출고 처리 및 이력 관리<br/>
@@ -160,68 +167,68 @@ function getTermsContent() {
     - 거래처 관리<br/>
     ② 서비스는 Free, Pro, Enterprise 요금제로 구분되며, 각 요금제별 제공 기능이 다릅니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제5조 (이용자의 의무)</h4>
+    <h4>제5조 (이용자의 의무)</h4>
     <p>① 이용자는 타인의 정보를 도용하여서는 안 됩니다.<br/>
     ② 이용자는 서비스를 이용하여 불법행위를 하여서는 안 됩니다.<br/>
     ③ 이용자는 자신의 계정 정보를 안전하게 관리할 책임이 있습니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제6조 (서비스 이용 제한)</h4>
+    <h4>제6조 (서비스 이용 제한)</h4>
     <p>회사는 이용자가 본 약관을 위반하거나 서비스의 정상적인 운영을 방해한 경우, 서비스 이용을 제한하거나 계정을 삭제할 수 있습니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">제7조 (면책조항)</h4>
+    <h4>제7조 (면책조항)</h4>
     <p>① 천재지변, 전쟁 등 불가항력으로 인한 서비스 중단에 대해 회사는 책임을 지지 않습니다.<br/>
     ② 이용자의 귀책사유로 인한 서비스 이용 장애에 대해 회사는 책임을 지지 않습니다.</p>
 
-    <p style="margin-top:20px; color:var(--text-muted, #64748b); font-size:11px;">시행일: 2026년 4월 1일</p>
+    <p class="legal-date">시행일: 2026년 4월 1일</p>
   `;
 }
 
 function getPrivacyContent() {
   return `
-    <h4 style="color:var(--text-primary, #e2e8f0); margin-bottom:12px;">1. 개인정보의 수집 및 이용 목적</h4>
+    <h4>1. 개인정보의 수집 및 이용 목적</h4>
     <p>INVEX(이하 "서비스")는 다음의 목적을 위하여 개인정보를 처리합니다.</p>
     <p>① 회원 가입 및 관리: 회원 가입 의사 확인, 서비스 제공에 따른 본인 식별·인증, 회원자격 유지·관리<br/>
     ② 서비스 제공: 재고관리, 입출고 처리, 보고서 생성 등 핵심 서비스 제공<br/>
     ③ 고객 지원: 민원 처리, 공지사항 전달</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">2. 수집하는 개인정보 항목</h4>
-    <table style="width:100%; border-collapse:collapse; font-size:12px; margin:8px 0;">
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-        <td style="padding:8px; color:var(--text-muted);">필수항목</td>
-        <td style="padding:8px;">이름(닉네임), 이메일 주소, 비밀번호</td>
-      </tr>
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
-        <td style="padding:8px; color:var(--text-muted);">자동수집</td>
-        <td style="padding:8px;">접속 IP, 접속 시간, 브라우저 정보</td>
+    <h4>2. 수집하는 개인정보 항목</h4>
+    <table>
+      <tr>
+        <td>필수항목</td>
+        <td>이름(닉네임), 이메일 주소, 비밀번호</td>
       </tr>
       <tr>
-        <td style="padding:8px; color:var(--text-muted);">소셜 로그인</td>
-        <td style="padding:8px;">Google 계정 이름, 이메일, 프로필 사진</td>
+        <td>자동수집</td>
+        <td>접속 IP, 접속 시간, 브라우저 정보</td>
+      </tr>
+      <tr>
+        <td>소셜 로그인</td>
+        <td>Google 계정 이름, 이메일, 프로필 사진</td>
       </tr>
     </table>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">3. 개인정보의 보유 및 이용 기간</h4>
+    <h4>3. 개인정보의 보유 및 이용 기간</h4>
     <p>① 회원 탈퇴 시까지 보유하며, 탈퇴 후 지체 없이 파기합니다.<br/>
     ② 단, 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 보존합니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">4. 개인정보의 제3자 제공</h4>
+    <h4>4. 개인정보의 제3자 제공</h4>
     <p>서비스는 이용자의 개인정보를 원칙적으로 제3자에게 제공하지 않습니다. 다만, 다음의 경우에는 예외로 합니다.<br/>
     ① 이용자가 사전에 동의한 경우<br/>
     ② 법령의 규정에 의거하거나 수사 목적으로 법령에 정해진 절차에 따라 요청이 있는 경우</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">5. 개인정보의 안전성 확보 조치</h4>
+    <h4>5. 개인정보의 안전성 확보 조치</h4>
     <p>서비스는 개인정보의 안전성 확보를 위해 다음과 같은 조치를 취하고 있습니다.<br/>
     ① 비밀번호 암호화 저장 (Firebase Authentication)<br/>
     ② 데이터 전송 시 SSL/TLS 암호화<br/>
     ③ 접근 권한 관리 및 접근 통제</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">6. 이용자의 권리</h4>
+    <h4>6. 이용자의 권리</h4>
     <p>이용자는 언제든지 자신의 개인정보를 조회, 수정, 삭제할 수 있으며, 회원 탈퇴를 통해 개인정보 처리의 정지를 요청할 수 있습니다.</p>
 
-    <h4 style="color:var(--text-primary, #e2e8f0); margin:16px 0 12px;">7. 개인정보 보호책임자</h4>
+    <h4>7. 개인정보 보호책임자</h4>
     <p>이메일: sinbi0214@naver.com</p>
 
-    <p style="margin-top:20px; color:var(--text-muted, #64748b); font-size:11px;">시행일: 2026년 4월 1일</p>
+    <p class="legal-date">시행일: 2026년 4월 1일</p>
   `;
 }
 
