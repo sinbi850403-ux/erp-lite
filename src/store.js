@@ -153,13 +153,22 @@ export function getState() {
 }
 
 /**
- * 상태 업데이트 + 자동 저장
+ * 상태 업데이트 + 자동 저장 + 클라우드 동기화
  * @param {object} partial - 변경할 속성들
  */
+// 클라우드 동기화 콜백 (외부에서 주입)
+let _syncCallback = null;
+
+export function setSyncCallback(fn) {
+  _syncCallback = fn;
+}
+
 export function setState(partial) {
   state = { ...state, ...partial };
-  // 비동기로 저장 (UI 블로킹 방지)
+  // 비동기로 로컬 저장 (UI 블로킹 방지)
   saveToDB();
+  // 클라우드 동기화 트리거 (설정된 경우)
+  if (_syncCallback) _syncCallback();
 }
 
 /**

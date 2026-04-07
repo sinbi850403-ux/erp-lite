@@ -37,10 +37,13 @@ import { renderAdminPage, isAdmin } from './page-admin.js';
 import { renderMyPage } from './page-mypage.js';
 import { renderGuidePage } from './page-guide.js';
 import { renderSupportPage } from './page-support.js';
+import { renderTeamPage } from './page-team.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './firebase-auth.js';
 import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
+import { startWorkspaceSync, stopWorkspaceSync, syncWorkspaceToCloud } from './workspace.js';
+import { setSyncCallback } from './store.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
 import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser } from './plan.js';
@@ -263,6 +266,10 @@ initAuth((user, profile) => {
       setTimeout(() => { gate.style.display = 'none'; }, 300);
     }
     startSync(user.uid);
+    // 워크스페이스 동기화도 시작 (팀원 간 실시간 공유)
+    startWorkspaceSync(user.uid);
+    // 데이터 변경 시 자동으로 워크스페이스에 동기화
+    setSyncCallback(() => syncWorkspaceToCloud());
     updateUserUI(user, profile);
     // 에러 모니터링에 사용자 정보 설정 (어떤 사용자에게 에러가 발생했는지 추적)
     setMonitorUser(user.uid, user.email);
@@ -279,6 +286,8 @@ initAuth((user, profile) => {
   } else {
     // ❌ 미로그인 → 게이트 표시
     stopSync();
+    stopWorkspaceSync();
+    setSyncCallback(null);
     updateUserUI(null, null);
     clearMonitorUser();
     if (gate) {
@@ -321,6 +330,7 @@ const pages = {
   mypage: renderMyPage,
   guide: renderGuidePage,
   support: renderSupportPage,
+  team: renderTeamPage,
 };
 
 /**
