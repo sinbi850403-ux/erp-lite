@@ -46,6 +46,7 @@ import { renderOrdersPage } from './page-orders.js';
 import { renderForecastPage } from './page-forecast.js';
 import { renderReferralPage } from './page-referral.js';
 import { renderWeeklyReportPage } from './page-weekly-report.js';
+import { renderPosPage } from './page-pos.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
@@ -304,9 +305,11 @@ initAuth((user, profile) => {
     // 에러 모니터링에 사용자 정보 설정 (어떤 사용자에게 에러가 발생했는지 추적)
     setMonitorUser(user.uid, user.email);
     
-    // 총관리자만 관리자 메뉴 표시
+    // 총관리자만 관리자 메뉴 + POS 매출분석 표시
     const adminBtn = document.querySelector('[data-page="admin"]');
+    const posBtn = document.querySelector('[data-page="pos"]');
     if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
+    if (posBtn) posBtn.style.display = isAdmin() ? '' : 'none';
     
     // 최초 로그인 시에만 앱 초기화 (중복 방지)
     if (!isAuthReady) {
@@ -371,6 +374,7 @@ const pages = {
   forecast: renderForecastPage,
   referral: renderReferralPage,
   'weekly-report': renderWeeklyReportPage,
+  pos: renderPosPage,
 };
 
 /**
