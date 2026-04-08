@@ -1,277 +1,324 @@
 /**
- * page-profit.js - 손익 분석 대시보드
+ * page-profit.js - 손익 분석 대시보드 (회계사/세무사 관점)
  * 
- * 역할: 매입/매출 기반으로 이익률, 월별 수익 추이, 품목별 수익성을 분석
- * 왜 필요? → 사장님이 가장 궁금한 건 "이번 달 얼마 남았나?" 이 하나
+ * ★ 소상공인이 가장 중요하게 보는 3가지:
+ *   1. 이번 달 얼마 남았나? (매출총이익)
+ *   2. 어떤 품목이 가장 많이 벌어주나? (품목별 이익률)
+ *   3. 마진이 얼마인가? (매출총이익률)
+ * 
+ * 회계 용어 정리:
+ *   - 매출액 = 수량 × 판매가(소가)
+ *   - 매출원가(매입원가) = 수량 × 매입가(원가)
+ *   - 매출총이익 = 매출액 - 매출원가
+ *   - 매출총이익률(%) = (매출총이익 / 매출액) × 100
+ *   - 마진율(%) = (이익 / 원가) × 100 = "원가 대비 얼마나 남는지"
+ *   - 이익률(%) = (이익 / 판매가) × 100 = "판매가 대비 얼마나 남는지"
  */
 
 import { getState } from './store.js';
-import { renderWeeklyTrendChart, renderMonthlyChart, renderCategoryChart } from './charts.js';
-import { calcSaleAmount, calcPurchaseAmount } from './price-utils.js';
-
+import { getSalePrice } from './price-utils.js';
 
 export function renderProfitPage(container, navigateTo) {
   const state = getState();
   const transactions = state.transactions || [];
   const items = state.mappedData || [];
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+  // === 재고 기반 손익 (품목 데이터에서 계산) ===
+  // 왜? → 거래 이력이 없어도 재고 목록만 있으면 잠재 이익을 보여줌
+  const inventoryAnalysis = items.map(item => {
+    const qty = parseFloat(item.quantity) || 0;
+    const costPrice = parseFloat(item.unitPrice) || 0;     // 매입가
+    const salePrice = getSalePrice(item);                    // 판매가 (없으면 20% 마진 추정)
+    const hasRealSalePrice = parseFloat(item.salePrice) > 0; // 실제 판매가 입력 여부
 
-  // === 전체 기간 손익 ===
-  const totalPurchase = transactions.filter(tx => tx.type === 'in')
-    .reduce((s, tx) => s + calcPurchaseAmount(tx), 0);
-  const totalSales = transactions.filter(tx => tx.type === 'out')
-    .reduce((s, tx) => s + calcSaleAmount(tx), 0);
-  const totalProfit = totalSales - totalPurchase;
-  const profitRate = totalSales > 0 ? ((totalProfit / totalSales) * 100).toFixed(1) : '0';
+    const totalCost = qty * costPrice;                       // 매입 총액
+    const totalRevenue = qty * salePrice;                    // 매출 총액 (예상)
+    const profit = totalRevenue - totalCost;                 // 이익
+    const profitRate = totalRevenue > 0 ? (profit / totalRevenue * 100) : 0; // 이익률(%)
+    const marginRate = totalCost > 0 ? (profit / totalCost * 100) : 0;      // 마진율(%)
 
-  // === 이번 달 손익 ===
-  const prefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
-  const monthTx = transactions.filter(tx => (tx.date || '').startsWith(prefix));
-  const monthPurchase = monthTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + calcPurchaseAmount(tx), 0);
-  const monthSales = monthTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + calcSaleAmount(tx), 0);
-  const monthProfit = monthSales - monthPurchase;
-  const monthRate = monthSales > 0 ? ((monthProfit / monthSales) * 100).toFixed(1) : '0';
+    return {
+      name: item.itemName || '(미분류)',
+      code: item.itemCode || '',
+      category: item.category || '',
+      qty,
+      costPrice,
+      salePrice,
+      hasRealSalePrice,
+      totalCost,
+      totalRevenue,
+      profit,
+      profitRate,
+      marginRate,
+    };
+  }).filter(d => d.qty > 0 || d.totalCost > 0); // 수량 또는 금액이 있는 것만
 
-  // === 월별 손익 추이 (최근 6개월) ===
-  const monthlyData = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const y = d.getFullYear();
-    const m = d.getMonth() + 1;
-    const p = `${y}-${String(m).padStart(2, '0')}`;
-    const mTx = transactions.filter(tx => (tx.date || '').startsWith(p));
-    const mIn = mTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + calcPurchaseAmount(tx), 0);
-    const mOut = mTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + calcSaleAmount(tx), 0);
-    monthlyData.push({ label: `${m}월`, purchase: mIn, sales: mOut, profit: mOut - mIn });
-  }
+  // === 전체 합산 ===
+  const totalCost = inventoryAnalysis.reduce((s, d) => s + d.totalCost, 0);
+  const totalRevenue = inventoryAnalysis.reduce((s, d) => s + d.totalRevenue, 0);
+  const totalProfit = totalRevenue - totalCost;
+  const avgProfitRate = totalRevenue > 0 ? (totalProfit / totalRevenue * 100).toFixed(1) : '0';
+  const avgMarginRate = totalCost > 0 ? (totalProfit / totalCost * 100).toFixed(1) : '0';
 
-  // === 품목별 수익성 TOP 10 ===
-  const itemProfitMap = {};
-  transactions.forEach(tx => {
-    const name = tx.itemName || '미분류';
-    if (!itemProfitMap[name]) itemProfitMap[name] = { purchase: 0, sales: 0 };
-    if (tx.type === 'in') {
-      itemProfitMap[name].purchase += calcPurchaseAmount(tx);
-    } else {
-      itemProfitMap[name].sales += calcSaleAmount(tx);
-    }
+  // 판매가 입력된 비율
+  const salePriceCount = inventoryAnalysis.filter(d => d.hasRealSalePrice).length;
+  const salePricePercent = inventoryAnalysis.length > 0
+    ? Math.round(salePriceCount / inventoryAnalysis.length * 100) : 0;
+
+  // === 이익 TOP 5 / 마진 낮은 TOP 5 ===
+  const sorted = [...inventoryAnalysis].sort((a, b) => b.profit - a.profit);
+  const top5 = sorted.slice(0, 5);
+  const lowMargin = [...inventoryAnalysis]
+    .filter(d => d.totalCost > 0 && d.hasRealSalePrice)
+    .sort((a, b) => a.profitRate - b.profitRate)
+    .slice(0, 5);
+
+  // === 분류별 이익 ===
+  const categoryMap = {};
+  inventoryAnalysis.forEach(d => {
+    const cat = d.category || '(미분류)';
+    if (!categoryMap[cat]) categoryMap[cat] = { cost: 0, revenue: 0, profit: 0, count: 0 };
+    categoryMap[cat].cost += d.totalCost;
+    categoryMap[cat].revenue += d.totalRevenue;
+    categoryMap[cat].profit += d.profit;
+    categoryMap[cat].count += 1;
   });
-
-  const itemProfits = Object.entries(itemProfitMap)
+  const categoryData = Object.entries(categoryMap)
     .map(([name, d]) => ({
-      name, purchase: d.purchase, sales: d.sales,
-      profit: d.sales - d.purchase,
-      rate: d.sales > 0 ? ((d.sales - d.purchase) / d.sales * 100).toFixed(1) : '0',
+      name, ...d,
+      rate: d.revenue > 0 ? (d.profit / d.revenue * 100).toFixed(1) : '0',
     }))
     .sort((a, b) => b.profit - a.profit);
 
-  // === 거래처별 수익성 ===
-  const vendorProfitMap = {};
-  transactions.forEach(tx => {
-    const v = tx.vendor || '(미지정)';
-    if (!vendorProfitMap[v]) vendorProfitMap[v] = { purchase: 0, sales: 0 };
-    if (tx.type === 'in') {
-      vendorProfitMap[v].purchase += calcPurchaseAmount(tx);
-    } else {
-      vendorProfitMap[v].sales += calcSaleAmount(tx);
-    }
-  });
-
-  const vendorProfits = Object.entries(vendorProfitMap)
-    .map(([name, d]) => ({
-      name, purchase: d.purchase, sales: d.sales,
-      profit: d.sales - d.purchase,
-    }))
-    .sort((a, b) => b.sales - a.sales)
-    .slice(0, 8);
+  // === 거래 기반 손익 (월별) ===
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthTx = transactions.filter(tx => (tx.date || '').startsWith(currentMonth));
+  const monthIn = monthTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + (parseFloat(tx.totalPrice || tx.quantity * tx.unitPrice) || 0), 0);
+  const monthOut = monthTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + (parseFloat(tx.totalPrice || tx.quantity * (getSalePrice(tx))) || 0), 0);
 
   container.innerHTML = `
     <div class="page-header">
       <div>
         <h1 class="page-title"><span class="title-icon">💹</span> 손익 분석</h1>
-        <div class="page-desc">매입/매출 기반 수익성을 한눈에 파악합니다.</div>
+        <div class="page-desc">매입가·판매가 기반 이익률을 정확하게 분석합니다.</div>
       </div>
     </div>
 
-    <!-- 핵심 KPI -->
-    <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
-      <div class="stat-card">
-        <div class="stat-label">이번 달 매출</div>
-        <div class="stat-value text-accent" style="font-size:18px;">₩${monthSales.toLocaleString('ko-KR')}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">이번 달 매입</div>
-        <div class="stat-value" style="font-size:18px;">₩${monthPurchase.toLocaleString('ko-KR')}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">이번 달 이익</div>
-        <div class="stat-value ${monthProfit >= 0 ? 'text-success' : 'text-danger'}" style="font-size:18px;">
-          ${monthProfit >= 0 ? '+' : ''}₩${monthProfit.toLocaleString('ko-KR')}
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">이익률</div>
-        <div class="stat-value ${parseFloat(monthRate) >= 0 ? 'text-success' : 'text-danger'}">${monthRate}%</div>
-      </div>
+    <!-- 판매가 입력 안내 (입력률이 낮으면 경고) -->
+    ${salePricePercent < 50 ? `
+    <div class="alert alert-info" style="margin-bottom:16px;">
+      ⚠️ <strong>판매가(소가) 입력률: ${salePricePercent}%</strong> (${salePriceCount}/${inventoryAnalysis.length}개 품목)
+      <br/><span style="font-size:12px; color:var(--text-muted);">
+        재고 현황에서 판매단가를 입력하면 더 정확한 이익률을 볼 수 있습니다. 미입력 품목은 매입가 +20% 추정치로 계산됩니다.
+      </span>
     </div>
+    ` : ''}
 
-    <!-- 누적 실적 -->
-    <div class="card" style="background:linear-gradient(135deg, rgba(63,185,80,0.05), rgba(37,99,235,0.05));">
-      <div class="card-title">📊 전체 누적 실적</div>
-      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; text-align:center;">
+    <!-- ━━━ 1. 손익 요약 (가장 중요한 숫자) ━━━ -->
+    <div class="card" style="background:linear-gradient(135deg, rgba(63,185,80,0.05), rgba(37,99,235,0.05)); margin-bottom:20px;">
+      <div class="card-title" style="font-size:16px;">📊 손익 요약 (매출총이익)</div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:16px; text-align:center; margin-top:12px;">
         <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">총 매출</div>
-          <div style="font-size:20px; font-weight:700; color:var(--accent);">₩${totalSales.toLocaleString('ko-KR')}</div>
+          <div style="font-size:11px; color:var(--text-muted);">예상 매출액</div>
+          <div style="font-size:11px; color:var(--text-muted);">수량 × 판매가</div>
+          <div style="font-size:22px; font-weight:800; color:var(--accent); margin-top:4px;">₩${totalRevenue.toLocaleString('ko-KR')}</div>
         </div>
         <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">총 매입</div>
-          <div style="font-size:20px; font-weight:700;">₩${totalPurchase.toLocaleString('ko-KR')}</div>
+          <div style="font-size:11px; color:var(--text-muted);">매입 원가</div>
+          <div style="font-size:11px; color:var(--text-muted);">수량 × 매입가</div>
+          <div style="font-size:22px; font-weight:800; margin-top:4px;">₩${totalCost.toLocaleString('ko-KR')}</div>
         </div>
         <div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">총 이익 (이익률 ${profitRate}%)</div>
-          <div style="font-size:20px; font-weight:700; color:${totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+          <div style="font-size:11px; color:var(--text-muted);">매출총이익</div>
+          <div style="font-size:11px; color:var(--text-muted);">매출 - 원가</div>
+          <div style="font-size:22px; font-weight:800; color:${totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'}; margin-top:4px;">
             ${totalProfit >= 0 ? '+' : ''}₩${totalProfit.toLocaleString('ko-KR')}
           </div>
         </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">이익률</div>
+          <div style="font-size:11px; color:var(--text-muted);">이익 ÷ 매출 × 100</div>
+          <div style="font-size:22px; font-weight:800; color:${parseFloat(avgProfitRate) >= 0 ? 'var(--success)' : 'var(--danger)'}; margin-top:4px;">
+            ${avgProfitRate}%
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">마진율</div>
+          <div style="font-size:11px; color:var(--text-muted);">이익 ÷ 원가 × 100</div>
+          <div style="font-size:22px; font-weight:800; color:var(--accent); margin-top:4px;">
+            ${avgMarginRate}%
+          </div>
+        </div>
       </div>
-    </div>
-
-    <!-- 월별 추이 차트 -->
-    <div class="card">
-      <div class="card-title">📈 월별 매출/매입/이익 추이</div>
-      <div style="height:280px; position:relative;">
-        <canvas id="chart-profit-monthly"></canvas>
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
+        💡 <strong>이익률</strong> = 판매가 대비 남는 금액 비율 | <strong>마진율</strong> = 원가 대비 남는 금액 비율
+        (예: 1만원에 사서 1.5만원에 팔면 → 이익률 33.3%, 마진율 50%)
       </div>
     </div>
 
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
-      <!-- 품목별 TOP 10 -->
+      <!-- ━━━ 2. 이익 TOP 5 (효자 품목) ━━━ -->
       <div class="card">
-        <div class="card-title">💎 품목별 수익성 TOP 10</div>
-        ${itemProfits.slice(0, 10).map((item, i) => {
-          const maxSales = itemProfits[0]?.sales || 1;
-          const pct = Math.round((item.sales / maxSales) * 100);
-          return `
-            <div style="margin-bottom:10px;">
-              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
-                <span><span style="color:var(--text-muted); margin-right:4px;">${i + 1}</span> <strong>${item.name}</strong></span>
-                <span style="color:${item.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight:600;">
-                  ${item.profit >= 0 ? '+' : ''}₩${item.profit.toLocaleString('ko-KR')} (${item.rate}%)
-                </span>
+        <div class="card-title">🏆 이익 TOP 5 (효자 품목)</div>
+        ${top5.length === 0 ? '<div style="text-align:center; padding:20px; color:var(--text-muted);">데이터 없음</div>' : ''}
+        ${top5.map((d, i) => `
+          <div style="padding:8px 0; border-bottom:1px solid var(--border-light);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span style="color:var(--text-muted); font-size:12px; margin-right:4px;">${i + 1}</span>
+                <strong>${d.name}</strong>
+                ${d.code ? `<span style="color:var(--text-muted); font-size:11px; margin-left:4px;">(${d.code})</span>` : ''}
               </div>
-              <div style="display:flex; gap:2px; height:6px;">
-                <div style="flex:${item.sales}; background:var(--success); border-radius:3px; opacity:0.7;"></div>
-                <div style="flex:${item.purchase}; background:var(--danger); border-radius:3px; opacity:0.7;"></div>
-              </div>
-              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:2px;">
-                <span>매출 ₩${item.sales.toLocaleString('ko-KR')}</span>
-                <span>매입 ₩${item.purchase.toLocaleString('ko-KR')}</span>
-              </div>
+              <span style="font-weight:700; color:var(--success); font-size:14px;">
+                +₩${d.profit.toLocaleString('ko-KR')}
+              </span>
             </div>
-          `;
-        }).join('')}
-        ${itemProfits.length === 0 ? '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">거래 데이터가 없습니다</div>' : ''}
-      </div>
-
-      <!-- 거래처별 실적 -->
-      <div class="card">
-        <div class="card-title">🤝 거래처별 거래 실적</div>
-        ${vendorProfits.map(v => `
-          <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border-light); font-size:13px;">
-            <div style="flex:1;">
-              <strong>${v.name}</strong>
-            </div>
-            <div style="text-align:right; font-size:11px;">
-              <div style="color:var(--success);">매출 ₩${v.sales.toLocaleString('ko-KR')}</div>
-              <div style="color:var(--text-muted);">매입 ₩${v.purchase.toLocaleString('ko-KR')}</div>
+            <div style="display:flex; gap:12px; font-size:11px; color:var(--text-muted); margin-top:4px;">
+              <span>매입가 ₩${d.costPrice.toLocaleString('ko-KR')}</span>
+              <span>→</span>
+              <span>판매가 ₩${d.salePrice.toLocaleString('ko-KR')}
+                ${!d.hasRealSalePrice ? '<span style="color:var(--warning);">(추정)</span>' : ''}
+              </span>
+              <span>×${d.qty}개</span>
+              <span style="font-weight:600; color:var(--accent);">이익률 ${d.profitRate.toFixed(1)}%</span>
             </div>
           </div>
         `).join('')}
-        ${vendorProfits.length === 0 ? '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">거래처 데이터가 없습니다</div>' : ''}
+      </div>
+
+      <!-- ━━━ 3. 마진 낮은 TOP 5 (주의 품목) ━━━ -->
+      <div class="card">
+        <div class="card-title">⚠️ 마진 낮은 품목 TOP 5 (주의)</div>
+        ${lowMargin.length === 0 ? '<div style="text-align:center; padding:20px; color:var(--text-muted);">판매가가 입력된 품목이 없습니다</div>' : ''}
+        ${lowMargin.map((d, i) => `
+          <div style="padding:8px 0; border-bottom:1px solid var(--border-light);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span style="color:var(--text-muted); font-size:12px; margin-right:4px;">${i + 1}</span>
+                <strong>${d.name}</strong>
+              </div>
+              <span style="font-weight:700; color:${d.profitRate < 10 ? 'var(--danger)' : 'var(--warning)'}; font-size:14px;">
+                이익률 ${d.profitRate.toFixed(1)}%
+              </span>
+            </div>
+            <div style="display:flex; gap:12px; font-size:11px; color:var(--text-muted); margin-top:4px;">
+              <span>매입가 ₩${d.costPrice.toLocaleString('ko-KR')}</span>
+              <span>→</span>
+              <span>판매가 ₩${d.salePrice.toLocaleString('ko-KR')}</span>
+              <span>이익 ₩${(d.salePrice - d.costPrice).toLocaleString('ko-KR')}/개</span>
+            </div>
+          </div>
+        `).join('')}
       </div>
     </div>
+
+    <!-- ━━━ 4. 분류별 이익 분석 ━━━ -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">📋 분류별 이익 분석</div>
+      <div class="table-wrapper" style="border:none;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>분류</th>
+              <th class="text-right">품목수</th>
+              <th class="text-right">매입 총액</th>
+              <th class="text-right">매출 총액 (예상)</th>
+              <th class="text-right">이익</th>
+              <th class="text-right">이익률</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${categoryData.map(c => `
+              <tr>
+                <td><strong>${c.name}</strong></td>
+                <td class="text-right">${c.count}개</td>
+                <td class="text-right">₩${c.cost.toLocaleString('ko-KR')}</td>
+                <td class="text-right">₩${c.revenue.toLocaleString('ko-KR')}</td>
+                <td class="text-right" style="font-weight:700; color:${c.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                  ${c.profit >= 0 ? '+' : ''}₩${c.profit.toLocaleString('ko-KR')}
+                </td>
+                <td class="text-right" style="font-weight:700; color:${parseFloat(c.rate) >= 20 ? 'var(--success)' : parseFloat(c.rate) >= 10 ? 'var(--warning)' : 'var(--danger)'};">
+                  ${c.rate}%
+                </td>
+              </tr>
+            `).join('')}
+            ${categoryData.length === 0 ? '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">분류 데이터가 없습니다</td></tr>' : ''}
+          </tbody>
+          <tfoot>
+            <tr style="font-weight:700; background:var(--bg-card);">
+              <td>합계</td>
+              <td class="text-right">${inventoryAnalysis.length}개</td>
+              <td class="text-right">₩${totalCost.toLocaleString('ko-KR')}</td>
+              <td class="text-right">₩${totalRevenue.toLocaleString('ko-KR')}</td>
+              <td class="text-right" style="color:${totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                ${totalProfit >= 0 ? '+' : ''}₩${totalProfit.toLocaleString('ko-KR')}
+              </td>
+              <td class="text-right">${avgProfitRate}%</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ━━━ 5. 전체 품목 이익률 상세 ━━━ -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">📦 품목별 이익률 상세 (${inventoryAnalysis.length}개)</div>
+      <div class="table-wrapper" style="border:none;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>품목명</th>
+              <th>분류</th>
+              <th class="text-right">수량</th>
+              <th class="text-right">매입가</th>
+              <th class="text-right">판매가</th>
+              <th class="text-right">개당 이익</th>
+              <th class="text-right">이익률(%)</th>
+              <th class="text-right">마진율(%)</th>
+              <th class="text-right">총 이익</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map((d, i) => {
+              const perUnitProfit = d.salePrice - d.costPrice;
+              return `
+              <tr>
+                <td class="col-num">${i + 1}</td>
+                <td>
+                  <strong>${d.name}</strong>
+                  ${!d.hasRealSalePrice ? '<span style="font-size:10px; color:var(--warning); margin-left:3px;">추정</span>' : ''}
+                </td>
+                <td style="font-size:12px; color:var(--text-muted);">${d.category || '-'}</td>
+                <td class="text-right">${d.qty.toLocaleString('ko-KR')}</td>
+                <td class="text-right">₩${d.costPrice.toLocaleString('ko-KR')}</td>
+                <td class="text-right">₩${d.salePrice.toLocaleString('ko-KR')}</td>
+                <td class="text-right" style="color:${perUnitProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                  ${perUnitProfit >= 0 ? '+' : ''}₩${perUnitProfit.toLocaleString('ko-KR')}
+                </td>
+                <td class="text-right" style="font-weight:600; color:${d.profitRate >= 20 ? 'var(--success)' : d.profitRate >= 10 ? 'var(--warning)' : 'var(--danger)'};">
+                  ${d.profitRate.toFixed(1)}%
+                </td>
+                <td class="text-right" style="color:var(--text-muted);">${d.marginRate.toFixed(1)}%</td>
+                <td class="text-right" style="font-weight:700; color:${d.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                  ${d.profit >= 0 ? '+' : ''}₩${d.profit.toLocaleString('ko-KR')}
+                </td>
+              </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 회계 용어 설명 (교육적 목적) -->
+    <div style="margin-top:20px; padding:16px; border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--text-muted);">
+      <strong>📖 용어 설명</strong><br/>
+      • <strong>이익률(%)</strong> = (판매가 - 매입가) ÷ 판매가 × 100 → "팔 때 얼마나 남는지" (세무서·은행 기준)<br/>
+      • <strong>마진율(%)</strong> = (판매가 - 매입가) ÷ 매입가 × 100 → "원가 대비 얼마나 올려 파는지" (상인 기준)<br/>
+      • <strong style="color:var(--warning);">추정</strong> 표시 = 판매가를 입력하지 않아 매입가 +20%로 추정한 품목<br/>
+      • 재고 현황에서 <strong>판매단가</strong>를 입력하면 정확한 분석이 가능합니다.
+    </div>
   `;
-
-  // 차트 렌더링
-  setTimeout(() => {
-    renderProfitChart('chart-profit-monthly', monthlyData);
-  }, 50);
-}
-
-
-
-/**
- * 손익 추이 차트 (매출/매입/이익 3선)
- */
-function renderProfitChart(canvasId, data) {
-  // charts.js의 Chart를 직접 import
-  import('chart.js').then(({ Chart }) => {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const dark = document.documentElement.classList.contains('dark-mode');
-    const textColor = dark ? '#8b949e' : '#5a6474';
-    const gridColor = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-
-    new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: data.map(d => d.label),
-        datasets: [
-          {
-            label: '매출',
-            data: data.map(d => d.sales),
-            backgroundColor: 'rgba(63,185,80,0.7)',
-            borderRadius: 4,
-            order: 2,
-          },
-          {
-            label: '매입',
-            data: data.map(d => d.purchase),
-            backgroundColor: 'rgba(248,81,73,0.5)',
-            borderRadius: 4,
-            order: 3,
-          },
-          {
-            label: '이익',
-            data: data.map(d => d.profit),
-            type: 'line',
-            borderColor: '#58a6ff',
-            backgroundColor: 'rgba(88,166,255,0.1)',
-            fill: true,
-            tension: 0.4,
-            borderWidth: 2,
-            pointRadius: 5,
-            pointBackgroundColor: '#58a6ff',
-            order: 1,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11 }, usePointStyle: true } },
-          tooltip: {
-            backgroundColor: dark ? '#21262d' : '#fff',
-            titleColor: dark ? '#e6edf3' : '#1a1a2e',
-            bodyColor: dark ? '#b1bac4' : '#5a6474',
-            borderColor: dark ? '#30363d' : '#e2e6eb',
-            borderWidth: 1, padding: 10, cornerRadius: 6,
-            callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ₩${ctx.parsed.y.toLocaleString('ko-KR')}` },
-          },
-        },
-        scales: {
-          x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
-          y: {
-            ticks: { color: textColor, font: { size: 10 }, callback: (v) => `₩${(v/10000).toFixed(0)}만` },
-            grid: { color: gridColor },
-          },
-        },
-      },
-    });
-  });
 }
