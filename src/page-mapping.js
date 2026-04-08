@@ -235,6 +235,18 @@ function buildMappedData(dataRows, mapping) {
         const ci = mapping[field.key];
         obj[field.key] = ci !== undefined ? (row[ci] ?? '') : '';
       });
+
+      // 왜 재계산? → 원본 엑셀의 공급가액/부가세/합계 값이 부정확할 수 있으므로
+      // 수량 × 단가(매입)를 기준으로 항상 일관되게 재계산
+      const qty = parseFloat(obj.quantity) || 0;
+      const unitPrice = parseFloat(obj.unitPrice) || 0;
+      const supply = qty * unitPrice;
+      const vat = Math.floor(supply * 0.1);
+
+      obj.supplyValue = supply;
+      obj.vat = vat;
+      obj.totalPrice = supply + vat;
+
       return obj;
     });
 }
