@@ -77,7 +77,7 @@ export function renderCostingPage(container, navigateTo) {
 
     <!-- 원가 테이블 -->
     <div class="card card-flush">
-      <div style="padding:12px 16px; border-bottom:1px solid var(--border); background:#f8f9fb;">
+      <div style="padding:12px 16px; border-bottom:1px solid var(--border); background:var(--bg-card);">
         <strong>💰 품목별 원가 분석</strong>
         <span style="color:var(--text-muted); font-size:12px; margin-left:8px;">(${costData.length}개 품목)</span>
       </div>

@@ -686,7 +686,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
             <div style="font-size:11px;color:var(--text-muted);padding-bottom:8px;">💡 판매단가를 입력하면 정확한 이익률을 계산할 수 있습니다.</div>
           </div>
         </div>
-        <div class="form-row" style="background:#f8f9fa; padding:10px; border-radius:6px; margin-bottom:12px;">
+        <div class="form-row" style="background:var(--bg-hover); padding:10px; border-radius:6px; margin-bottom:12px;">
           <div class="form-group">
             <label class="form-label" style="font-size:12px;">공급가액</label>
             <input class="form-input" type="number" id="f-supplyValue" value="${item.supplyValue ?? ''}" disabled style="background:#eef1f5;" />

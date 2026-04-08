@@ -275,7 +275,7 @@ function renderQuote(el, items) {
           <tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-muted);">품목을 추가해 주세요</td></tr>
         </tbody>
         <tfoot>
-          <tr style="font-weight:700; background:#f8f9fb;">
+          <tr style="font-weight:700; background:var(--bg-card);">
             <td colspan="4" class="text-right">합계</td>
             <td class="text-right" id="qt-total">₩0</td>
             <td></td>

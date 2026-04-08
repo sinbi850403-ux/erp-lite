@@ -84,7 +84,7 @@ export function renderLedgerPage(container, navigateTo) {
     }
 
     tableArea.innerHTML = `
-      <div style="padding:16px 20px; border-bottom:1px solid var(--border); background:#f8f9fb;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--border); background:var(--bg-card);">
         <strong>📒 수불대장</strong>
         <span style="color:var(--text-muted); font-size:13px; margin-left:8px;">${from} ~ ${to} (${ledgerData.length}개 품목)</span>
       </div>
@@ -121,7 +121,7 @@ export function renderLedgerPage(container, navigateTo) {
             `).join('')}
           </tbody>
           <tfoot>
-            <tr style="font-weight:700; background:#f0f2f5;">
+            <tr style="font-weight:700; background:var(--bg-card);">
               <td colspan="4" class="text-right">합계</td>
               <td class="text-right">${ledgerData.reduce((s, r) => s + r.openingQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right type-in">+${ledgerData.reduce((s, r) => s + r.inQty, 0).toLocaleString('ko-KR')}</td>
