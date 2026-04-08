@@ -82,7 +82,7 @@ const ALL_PERMISSIONS = [
   { id: 'api', name: 'API 연동', icon: '🔌', group: '시스템' },
 ];
 
-function fmt(n) { return (n || 0).toLocaleString('ko-KR'); }
+function fmt(n) { return Math.round(n || 0).toLocaleString('ko-KR'); }
 
 export function renderRolesPage(container, navigateTo) {
   const state = getState();

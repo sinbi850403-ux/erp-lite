@@ -61,7 +61,7 @@ export function renderSummaryPage(container, navigateTo) {
       </div>
       <div class="stat-card">
         <div class="stat-label">총 재고 금액</div>
-        <div class="stat-value text-success">${summary.totalPrice > 0 ? '₩' + summary.totalPrice.toLocaleString('ko-KR') : '-'}</div>
+        <div class="stat-value text-success">${summary.totalPrice > 0 ? '₩' + Math.round(summary.totalPrice).toLocaleString('ko-KR') : '-'}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">분류 수</div>
@@ -173,7 +173,7 @@ export function renderSummaryPage(container, navigateTo) {
                   <td><strong>${cat.name || '(미분류)'}</strong></td>
                   <td class="text-right">${cat.count}</td>
                   <td class="text-right">${cat.qty.toLocaleString('ko-KR')}</td>
-                  <td class="text-right">${cat.price > 0 ? '₩' + cat.price.toLocaleString('ko-KR') : '-'}</td>
+                  <td class="text-right">${cat.price > 0 ? '₩' + Math.round(cat.price).toLocaleString('ko-KR') : '-'}</td>
                   <td>
                     <div class="ratio-bar">
                       <div class="ratio-bar-track">
@@ -210,7 +210,7 @@ export function renderSummaryPage(container, navigateTo) {
                   <td><strong>${wh.name || '(미지정)'}</strong></td>
                   <td class="text-right">${wh.count}</td>
                   <td class="text-right">${wh.qty.toLocaleString('ko-KR')}</td>
-                  <td class="text-right">${wh.price > 0 ? '₩' + wh.price.toLocaleString('ko-KR') : '-'}</td>
+                  <td class="text-right">${wh.price > 0 ? '₩' + Math.round(wh.price).toLocaleString('ko-KR') : '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -239,7 +239,7 @@ export function renderSummaryPage(container, navigateTo) {
                   <td><strong>${v.name || '(미지정)'}</strong></td>
                   <td class="text-right">${v.count}</td>
                   <td class="text-right">${v.qty.toLocaleString('ko-KR')}</td>
-                  <td class="text-right">${v.price > 0 ? '₩' + v.price.toLocaleString('ko-KR') : '-'}</td>
+                  <td class="text-right">${v.price > 0 ? '₩' + Math.round(v.price).toLocaleString('ko-KR') : '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -307,8 +307,8 @@ export function renderSummaryPage(container, navigateTo) {
                 <td><strong>${item.itemName || '-'}</strong></td>
                 <td style="color:var(--text-muted);">${item.category || '-'}</td>
                 <td class="text-right">${parseFloat(item.quantity || 0).toLocaleString('ko-KR')}</td>
-                <td class="text-right">${item.unitPrice ? '₩' + parseFloat(item.unitPrice).toLocaleString('ko-KR') : '-'}</td>
-                <td class="text-right">${item.totalPrice ? '₩' + parseFloat(item.totalPrice).toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${item.unitPrice ? '₩' + Math.round(parseFloat(item.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${item.totalPrice ? '₩' + Math.round(parseFloat(item.totalPrice)).toLocaleString('ko-KR') : '-'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -479,7 +479,7 @@ function buildDonutChart(categories, totalPrice) {
             ? '₩' + (totalPrice / 100000000).toFixed(1) + '억'
             : totalPrice >= 10000
               ? '₩' + Math.round(totalPrice / 10000).toLocaleString('ko-KR') + '만'
-              : '₩' + totalPrice.toLocaleString('ko-KR')
+              : '₩' + Math.round(totalPrice).toLocaleString('ko-KR')
           }
         </div>
       </div>

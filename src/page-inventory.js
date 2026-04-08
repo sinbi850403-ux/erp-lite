@@ -793,31 +793,32 @@ function formatCell(key, value) {
   if (['quantity', 'unitPrice', 'salePrice', 'supplyValue', 'vat', 'totalPrice'].includes(key)) {
     const num = parseFloat(value);
     if (!isNaN(num)) {
+      // 왜 Math.round? → 원단위 반올림 (한국 원화는 소수점 없음)
       if (key === 'unitPrice' || key === 'salePrice' || key === 'supplyValue' || key === 'vat' || key === 'totalPrice') {
-        return '₩' + num.toLocaleString('ko-KR');
+        return '₩' + Math.round(num).toLocaleString('ko-KR');
       }
-      return num.toLocaleString('ko-KR');
+      return Math.round(num).toLocaleString('ko-KR');
     }
   }
   return String(value);
 }
 
 function calcTotalQty(data) {
-  return data.reduce((s, r) => s + (parseFloat(r.quantity) || 0), 0).toLocaleString('ko-KR');
+  return Math.round(data.reduce((s, r) => s + (parseFloat(r.quantity) || 0), 0)).toLocaleString('ko-KR');
 }
 
 function calcTotalPrice(data) {
-  const total = data.reduce((s, r) => s + (parseFloat(r.totalPrice) || 0), 0);
+  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.totalPrice) || 0), 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 
 function calcTotalSupply(data) {
-  const total = data.reduce((s, r) => s + (parseFloat(r.supplyValue) || 0), 0);
+  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.supplyValue) || 0), 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 
 function calcTotalVat(data) {
-  const total = data.reduce((s, r) => s + (parseFloat(r.vat) || 0), 0);
+  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.vat) || 0), 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 

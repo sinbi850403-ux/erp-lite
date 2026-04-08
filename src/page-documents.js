@@ -165,7 +165,7 @@ function renderPurchaseOrder(el, items, lowStockItems, vendors, safetyStock) {
                 <td class="text-right ${currentQty <= minQty ? 'type-out' : ''}">${currentQty.toLocaleString('ko-KR')}</td>
                 <td class="text-right">${minQty || '-'}</td>
                 <td class="text-right"><input type="number" class="form-input po-order-qty" data-idx="${i}" value="${orderQty}" min="1" style="width:80px; padding:4px 6px; text-align:right;" /></td>
-                <td class="text-right">${item.unitPrice ? '₩' + parseFloat(item.unitPrice).toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${item.unitPrice ? '₩' + Math.round(parseFloat(item.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
               </tr>
             `;
           }).join('')}
@@ -253,7 +253,7 @@ function renderQuote(el, items) {
       <div style="display:flex; gap:8px;">
         <select class="form-select" id="qt-item-select" style="flex:1;">
           <option value="">-- 품목 선택 --</option>
-          ${items.map((item, i) => `<option value="${i}">${item.itemName} (${item.itemCode || '-'}) - ₩${parseFloat(item.unitPrice || 0).toLocaleString('ko-KR')}</option>`).join('')}
+          ${items.map((item, i) => `<option value="${i}">${item.itemName} (${item.itemCode || '-'}) - ₩${Math.round(parseFloat(item.unitPrice || 0)).toLocaleString('ko-KR')}</option>`).join('')}
         </select>
         <button class="btn btn-primary" id="btn-qt-add-item">+ 추가</button>
       </div>
@@ -562,8 +562,8 @@ async function generateStatementPDF(transactions, info) {
       tx.itemName,
       tx.itemCode || '-',
       tx.quantity,
-      '₩' + (parseFloat(tx.unitPrice) || 0).toLocaleString(),
-      '₩' + ((parseFloat(tx.unitPrice) || 0) * (parseFloat(tx.quantity) || 0)).toLocaleString(),
+      '₩' + Math.round(parseFloat(tx.unitPrice) || 0).toLocaleString(),
+      '₩' + Math.round((parseFloat(tx.unitPrice) || 0) * (parseFloat(tx.quantity) || 0)).toLocaleString(),
     ]);
 
     doc.autoTable({

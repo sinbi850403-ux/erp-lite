@@ -95,7 +95,7 @@ export function renderHomePage(container, navigateTo) {
       </div>
       <div class="stat-card" style="cursor:pointer;" data-nav="dashboard">
         <div class="stat-label">총 재고 가치</div>
-        <div class="stat-value">${totalValue > 0 ? '₩' + totalValue.toLocaleString('ko-KR') : '-'}</div>
+        <div class="stat-value">${totalValue > 0 ? '₩' + Math.round(totalValue).toLocaleString('ko-KR') : '-'}</div>
       </div>
       <div class="stat-card" style="cursor:pointer;" data-nav="inout">
         <div class="stat-label">오늘 입고</div>
@@ -198,7 +198,7 @@ export function renderHomePage(container, navigateTo) {
               <div style="margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
                   <span style="font-weight:500;"><span style="color:var(--text-muted); margin-right:4px;">${i + 1}</span> ${item.itemName}</span>
-                  <span style="color:var(--accent); font-weight:600;">${val > 0 ? '₩' + val.toLocaleString('ko-KR') : '-'}</span>
+                  <span style="color:var(--accent); font-weight:600;">${val > 0 ? '₩' + Math.round(val).toLocaleString('ko-KR') : '-'}</span>
                 </div>
                 <div style="height:6px; background:var(--border-light); border-radius:3px; overflow:hidden;">
                   <div style="height:100%; width:${pct}%; background:var(--accent); border-radius:3px; transition:width 0.5s;"></div>

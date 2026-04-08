@@ -197,7 +197,7 @@ export function renderScannerPage(container, navigateTo) {
           </div>
           <div class="stat-card" style="padding:10px 14px;">
             <div class="stat-label">단가</div>
-            <div class="stat-value" style="font-size:18px;">${matchedItem.unitPrice ? '₩' + parseFloat(matchedItem.unitPrice).toLocaleString('ko-KR') : '-'}</div>
+            <div class="stat-value" style="font-size:18px;">${matchedItem.unitPrice ? '₩' + Math.round(parseFloat(matchedItem.unitPrice)).toLocaleString('ko-KR') : '-'}</div>
           </div>
           <div class="stat-card" style="padding:10px 14px;">
             <div class="stat-label">거래처</div>

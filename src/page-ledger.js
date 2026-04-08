@@ -115,8 +115,8 @@ export function renderLedgerPage(container, navigateTo) {
                 <td class="text-right type-in">${row.inQty > 0 ? '+' + row.inQty.toLocaleString('ko-KR') : '-'}</td>
                 <td class="text-right type-out">${row.outQty > 0 ? '-' + row.outQty.toLocaleString('ko-KR') : '-'}</td>
                 <td class="text-right" style="font-weight:700;">${row.closingQty.toLocaleString('ko-KR')}</td>
-                <td class="text-right">${row.unitPrice > 0 ? '₩' + row.unitPrice.toLocaleString('ko-KR') : '-'}</td>
-                <td class="text-right">${row.closingValue > 0 ? '₩' + row.closingValue.toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${row.unitPrice > 0 ? '₩' + Math.round(row.unitPrice).toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${row.closingValue > 0 ? '₩' + Math.round(row.closingValue).toLocaleString('ko-KR') : '-'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -128,7 +128,7 @@ export function renderLedgerPage(container, navigateTo) {
               <td class="text-right type-out">-${ledgerData.reduce((s, r) => s + r.outQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right">${ledgerData.reduce((s, r) => s + r.closingQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right"></td>
-              <td class="text-right">₩${ledgerData.reduce((s, r) => s + r.closingValue, 0).toLocaleString('ko-KR')}</td>
+              <td class="text-right">₩${Math.round(ledgerData.reduce((s, r) => s + r.closingValue, 0)).toLocaleString('ko-KR')}</td>
             </tr>
           </tfoot>
         </table>
@@ -182,7 +182,7 @@ export function renderLedgerPage(container, navigateTo) {
         i + 1, r.itemName, r.itemCode || '-', r.unit || '-',
         r.openingQty, r.inQty > 0 ? '+' + r.inQty : '-',
         r.outQty > 0 ? '-' + r.outQty : '-', r.closingQty,
-        r.unitPrice > 0 ? '₩' + r.unitPrice.toLocaleString() : '-',
+        r.unitPrice > 0 ? '₩' + Math.round(r.unitPrice).toLocaleString() : '-',
         r.closingValue > 0 ? '₩' + r.closingValue.toLocaleString() : '-',
       ]);
 

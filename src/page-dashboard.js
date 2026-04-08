@@ -62,7 +62,7 @@ export function renderDashboardPage(container, navigateTo) {
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-label">총 재고 가치</div>
-        <div class="stat-value text-accent">${totalValue > 0 ? '₩' + totalValue.toLocaleString('ko-KR') : '-'}</div>
+        <div class="stat-value text-accent">${totalValue > 0 ? '₩' + Math.round(totalValue).toLocaleString('ko-KR') : '-'}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">평균 회전율</div>
@@ -132,7 +132,7 @@ export function renderDashboardPage(container, navigateTo) {
                 <td><strong>${d.itemName}</strong></td>
                 <td style="color:var(--text-muted);">${d.itemCode || '-'}</td>
                 <td class="text-right">${parseFloat(d.quantity || 0).toLocaleString('ko-KR')}</td>
-                <td class="text-right">${d.totalPrice > 0 ? '₩' + d.totalPrice.toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${d.totalPrice > 0 ? '₩' + Math.round(d.totalPrice).toLocaleString('ko-KR') : '-'}</td>
                 <td class="text-right">
                   <div class="ratio-bar">
                     <div class="ratio-bar-track"><div class="ratio-bar-fill" style="width:${d.cumPercent}%;"></div></div>

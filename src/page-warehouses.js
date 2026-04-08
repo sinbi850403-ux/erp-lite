@@ -44,7 +44,7 @@ function getWarehouseIcon(type) {
  * 숫자 포맷 (1000 → 1,000)
  */
 function fmt(n) {
-  return (n || 0).toLocaleString('ko-KR');
+  return Math.round(n || 0).toLocaleString('ko-KR');
 }
 
 export function renderWarehousesPage(container, navigateTo) {

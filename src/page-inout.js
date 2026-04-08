@@ -154,7 +154,7 @@ export function renderInoutPage(container, navigateTo) {
               ${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}
             </span>
           </td>
-          <td class="text-right">${tx.unitPrice ? '₩' + parseFloat(tx.unitPrice).toLocaleString('ko-KR') : '-'}</td>
+          <td class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
           <td>${tx.date || '-'}</td>
           <td style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
           <td class="text-center">
@@ -484,7 +484,7 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
                 <td>${r.vendor || '-'}</td>
                 <td>${r.itemName}</td>
                 <td class="text-right">${r.quantity.toLocaleString('ko-KR')}</td>
-                <td class="text-right">${r.unitPrice ? '₩' + r.unitPrice.toLocaleString('ko-KR') : '-'}</td>
+                <td class="text-right">${r.unitPrice ? '₩' + Math.round(r.unitPrice).toLocaleString('ko-KR') : '-'}</td>
                 <td>${r.date}</td>
                 <td>${r.matched
                   ? '<span style="color:var(--success); font-size:11px;">✅ 매칭</span>'
