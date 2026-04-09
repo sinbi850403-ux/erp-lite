@@ -1191,6 +1191,7 @@ a:hover {
   font: inherit;
   text-align: inherit;
   cursor: pointer;
+  pointer-events: none;
 }
 
 .sortable-header.text-right .sort-hitbox {
