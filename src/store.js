@@ -28,11 +28,11 @@ const DEFAULT_STATE = {
   tableSortPrefs: {},
   // 화면별 필터/정렬 뷰 설정 (사용자 편의 저장)
   inventoryViewPrefs: {
-    filter: { keyword: '', category: '', warehouse: '', stock: '', itemCode: '', vendor: '' },
+    filter: { keyword: '', category: '', warehouse: '', stock: '', itemCode: '', vendor: '', focus: 'all' },
     sort: { key: '', direction: '' },
   },
   inoutViewPrefs: {
-    filter: { keyword: '', type: '', date: '', vendor: '', itemCode: '' },
+    filter: { keyword: '', type: '', date: '', vendor: '', itemCode: '', quick: 'all' },
     sort: { key: 'date', direction: 'desc' },
   },
   // 각 mappedData row에는 expiryDate, lotNumber 필드도 포함 가능

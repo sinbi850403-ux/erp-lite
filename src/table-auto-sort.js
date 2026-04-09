@@ -91,6 +91,13 @@ function ensureSummaryBar(table) {
   if (!summary || !summary.isConnected) {
     summary = document.createElement('div');
     summary.className = 'filter-summary auto-sort-summary';
+    summary.addEventListener('click', event => {
+      const resetButton = event.target.closest('[data-auto-sort-reset]');
+      if (!resetButton) return;
+      table.__autoSortState = { key: '', direction: '', type: 'text' };
+      persistSortState(table);
+      applyTableSort(table);
+    });
     wrapper.parentElement.insertBefore(summary, wrapper);
     table.__autoSortSummary = summary;
   }
@@ -226,6 +233,8 @@ function renderSummaryState(table) {
       <div class="filter-summary-count">표시 ${visibleCount}건 / 전체 ${totalCount}건</div>
       <div class="filter-summary-chips">
         <span class="filter-chip ${state.key ? '' : 'filter-chip-muted'}">정렬: ${escapeHtml(sortLabel)}</span>
+        <span class="filter-chip filter-chip-muted">헤더 전체 클릭으로 정렬</span>
+        ${state.key ? '<button type="button" class="filter-chip filter-chip-action" data-auto-sort-reset="1">정렬 초기화</button>' : ''}
       </div>
     </div>
   `;
