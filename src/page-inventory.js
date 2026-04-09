@@ -111,7 +111,8 @@ export function renderInventoryPage(container, navigateTo) {
   // 안전재고 이하 항목 카운트
   const warningCount = data.filter(d => {
     const min = safetyStock[d.itemName];
-    return min !== undefined && (parseFloat(d.quantity) || 0) <= min;
+    const qtyStr = typeof d.quantity === 'string' ? d.quantity.replace(/,/g, '') : d.quantity;
+    return min !== undefined && (parseFloat(qtyStr) || 0) <= min;
   }).length;
 
   container.innerHTML = `
@@ -261,7 +262,8 @@ export function renderInventoryPage(container, navigateTo) {
       if (currentFilter.vendor && row.vendor !== currentFilter.vendor) return false;
       if (currentFilter.stock === 'low') {
         const min = safetyStock[row.itemName];
-        if (min === undefined || (parseFloat(row.quantity) || 0) > min) return false;
+        const qtyStr = typeof row.quantity === 'string' ? row.quantity.replace(/,/g, '') : row.quantity;
+        if (min === undefined || (parseFloat(qtyStr) || 0) > min) return false;
       }
       return true;
     });
@@ -285,7 +287,8 @@ export function renderInventoryPage(container, navigateTo) {
       tbody.innerHTML = pageData.map((row, i) => {
         const realIdx = data.indexOf(row);
         const min = safetyStock[row.itemName];
-        const qty = parseFloat(row.quantity) || 0;
+        const qtyStr = typeof row.quantity === 'string' ? row.quantity.replace(/,/g, '') : row.quantity;
+        const qty = parseFloat(qtyStr) || 0;
         const isLow = min !== undefined && qty <= min;
         const isDanger = min !== undefined && qty === 0;
 
@@ -464,7 +467,8 @@ export function renderInventoryPage(container, navigateTo) {
     container.querySelector('#stat-price').textContent = calcTotalPrice(d);
     const wc = d.filter(r => {
       const min = ss[r.itemName];
-      return min !== undefined && (parseFloat(r.quantity) || 0) <= min;
+      const qtyStr = typeof r.quantity === 'string' ? r.quantity.replace(/,/g, '') : r.quantity;
+      return min !== undefined && (parseFloat(qtyStr) || 0) <= min;
     }).length;
     // warningCount 엘리먼트는 위에서 제가 display:none 하거나 아예 뺐는데... (어이쿠 뺐네요)
     // 다시 생각해 보니 재고 부족 경고 카드는 중요합니다.
@@ -791,7 +795,8 @@ function openItemModal(container, navigateTo, editIdx = null) {
 function formatCell(key, value) {
   if (value === '' || value === null || value === undefined) return '';
   if (['quantity', 'unitPrice', 'salePrice', 'supplyValue', 'vat', 'totalPrice'].includes(key)) {
-    const num = parseFloat(value);
+    const valStr = typeof value === 'string' ? value.replace(/,/g, '') : value;
+    const num = parseFloat(valStr);
     if (!isNaN(num)) {
       // 왜 Math.round? → 원단위 반올림 (한국 원화는 소수점 없음)
       if (key === 'unitPrice' || key === 'salePrice' || key === 'supplyValue' || key === 'vat' || key === 'totalPrice') {
@@ -804,21 +809,33 @@ function formatCell(key, value) {
 }
 
 function calcTotalQty(data) {
-  return Math.round(data.reduce((s, r) => s + (parseFloat(r.quantity) || 0), 0)).toLocaleString('ko-KR');
+  return Math.round(data.reduce((s, r) => {
+    const v = typeof r.quantity === 'string' ? r.quantity.replace(/,/g, '') : r.quantity;
+    return s + (parseFloat(v) || 0);
+  }, 0)).toLocaleString('ko-KR');
 }
 
 function calcTotalPrice(data) {
-  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.totalPrice) || 0), 0));
+  const total = Math.round(data.reduce((s, r) => {
+    const v = typeof r.totalPrice === 'string' ? r.totalPrice.replace(/,/g, '') : r.totalPrice;
+    return s + (parseFloat(v) || 0);
+  }, 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 
 function calcTotalSupply(data) {
-  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.supplyValue) || 0), 0));
+  const total = Math.round(data.reduce((s, r) => {
+    const v = typeof r.supplyValue === 'string' ? r.supplyValue.replace(/,/g, '') : r.supplyValue;
+    return s + (parseFloat(v) || 0);
+  }, 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 
 function calcTotalVat(data) {
-  const total = Math.round(data.reduce((s, r) => s + (parseFloat(r.vat) || 0), 0));
+  const total = Math.round(data.reduce((s, r) => {
+    const v = typeof r.vat === 'string' ? r.vat.replace(/,/g, '') : r.vat;
+    return s + (parseFloat(v) || 0);
+  }, 0));
   return total > 0 ? '₩' + total.toLocaleString('ko-KR') : '-';
 }
 

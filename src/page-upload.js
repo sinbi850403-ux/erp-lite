@@ -22,6 +22,7 @@ const ERP_FIELDS = [
   { key: 'totalPrice', label: '합계금액' },
   { key: 'warehouse',  label: '창고/위치' },
   { key: 'note',       label: '비고' },
+  { key: 'safetyStock',label: '안전재고' },
 ];
 
 // 자동 매핑용 키워드 사전
@@ -37,6 +38,7 @@ const MAPPING_KEYWORDS = {
   totalPrice: ['합계', 'total', '합계금액', '총액', '총금액'],
   warehouse:  ['창고', '위치', 'warehouse', 'location', '보관', '저장위치'],
   note:       ['비고', 'note', 'memo', '메모', '참고', '특이사항'],
+  safetyStock:['안전재고', '최소재고', '최소수량', 'safetystock'],
 };
 
 export function renderUploadPage(container, navigateTo) {
@@ -184,6 +186,14 @@ async function handleFile(file, navigateTo) {
       ERP_FIELDS.find(f => f.key === key)?.label || key
     );
 
+    const uploadSafetyStock = { ...getState().safetyStock };
+    mappedData.forEach(row => {
+      if (row.safetyStock !== '' && row.safetyStock !== undefined && row.safetyStock !== null) {
+        let val = parseFloat(row.safetyStock);
+        if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
+      }
+    });
+
     resetState();
     setState({
       rawData,
@@ -194,6 +204,7 @@ async function handleFile(file, navigateTo) {
       allSheets: result.sheets,
       columnMapping: mapping,
       mappedData,
+      safetyStock: uploadSafetyStock,
     });
 
     showToast(
@@ -213,11 +224,11 @@ async function handleFile(file, navigateTo) {
  */
 function loadSampleData(navigateTo) {
   const sampleData = [
-    ['품목명', '품목코드', '분류', '수량', '단위', '단가', '공급가액', '부가세', '합계금액', '창고', '비고'],
-    ['A4용지', 'P-001', '사무용품', 500, 'EA', 5000, 2500000, 250000, 2750000, '본사 1층', ''],
-    ['볼펜(청)', 'P-002', '사무용품', 200, 'EA', 800, 160000, 16000, 176000, '본사 1층', ''],
-    ['복사기 토너', 'P-003', '소모품', 10, 'EA', 45000, 450000, 45000, 495000, '본사 2층', '정기교체'],
-    ['모니터 24인치', 'E-001', '전자기기', 15, 'EA', 250000, 3750000, 375000, 4125000, '본사 2층', '신규 입고'],
+    ['품목명', '품목코드', '분류', '수량', '단위', '단가', '공급가액', '부가세', '합계금액', '창고', '비고', '안전재고'],
+    ['A4용지', 'P-001', '사무용품', 500, 'EA', 5000, 2500000, 250000, 2750000, '본사 1층', '', 100],
+    ['볼펜(청)', 'P-002', '사무용품', 200, 'EA', 800, 160000, 16000, 176000, '본사 1층', '', 50],
+    ['복사기 토너', 'P-003', '소모품', 10, 'EA', 45000, 450000, 45000, 495000, '본사 2층', '정기교체', 5],
+    ['모니터 24인치', 'E-001', '전자기기', 15, 'EA', 250000, 3750000, 375000, 4125000, '본사 2층', '신규 입고', 5],
     ['키보드(무선)', 'E-002', '전자기기', 30, 'EA', 35000, 1050000, 105000, 1155000, '본사 2층', ''],
     ['커피원두 1kg', 'F-001', '식음료', 20, 'KG', 15000, 300000, 30000, 330000, '휴게실', ''],
     ['정수기 필터', 'F-002', '소모품', 5, 'EA', 25000, 125000, 12500, 137500, '휴게실', '6개월 교체'],
@@ -235,6 +246,14 @@ function loadSampleData(navigateTo) {
   const mapping = autoMap(headers);
   const mappedData = buildMappedData(dataRows, mapping);
 
+  const uploadSafetyStock = { ...getState().safetyStock };
+  mappedData.forEach(row => {
+    if (row.safetyStock !== '' && row.safetyStock !== undefined && row.safetyStock !== null) {
+      let val = parseFloat(row.safetyStock);
+      if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
+    }
+  });
+
   resetState();
   setState({
     rawData: sampleData,
@@ -245,6 +264,7 @@ function loadSampleData(navigateTo) {
     allSheets: { '샘플데이터': sampleData },
     columnMapping: mapping,
     mappedData,
+    safetyStock: uploadSafetyStock,
   });
 
   showToast(`샘플 데이터 ${mappedData.length}건 자동 등록 완료`, 'success');
@@ -282,7 +302,16 @@ function buildMappedData(dataRows, mapping) {
       const obj = {};
       ERP_FIELDS.forEach(field => {
         const ci = mapping[field.key];
-        obj[field.key] = ci !== undefined ? (row[ci] ?? '') : '';
+        let val = ci !== undefined ? (row[ci] ?? '') : '';
+        if (['quantity', 'unitPrice', 'supplyValue', 'vat', 'totalPrice', 'safetyStock'].includes(field.key)) {
+          if (typeof val === 'string') {
+            const clean = val.replace(/,/g, '').trim();
+            if (clean !== '' && !isNaN(clean)) {
+              val = parseFloat(clean);
+            }
+          }
+        }
+        obj[field.key] = val;
       });
       return obj;
     });

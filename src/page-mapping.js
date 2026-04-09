@@ -24,6 +24,7 @@ const ERP_FIELDS = [
   { key: 'expiryDate', label: '유통기한', required: false },
   { key: 'lotNumber', label: 'LOT번호', required: false },
   { key: 'note', label: '비고', required: false },
+  { key: 'safetyStock', label: '안전재고', required: false },
 ];
 
 export function renderMappingPage(container, navigateTo) {
@@ -155,7 +156,17 @@ export function renderMappingPage(container, navigateTo) {
     }
 
     const mappedData = buildMappedData(dataRows, cur);
-    setState({ mappedData, currentStep: 3 });
+    
+    // 안전재고 전역 상태 반영
+    const uploadSafetyStock = { ...getState().safetyStock };
+    mappedData.forEach(row => {
+      if (row.safetyStock !== '' && row.safetyStock !== undefined && row.safetyStock !== null) {
+        let val = parseFloat(row.safetyStock);
+        if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
+      }
+    });
+
+    setState({ mappedData, currentStep: 3, safetyStock: uploadSafetyStock });
     showToast(`${mappedData.length}건 저장 완료`, 'success');
     navigateTo('inventory');
   });
@@ -205,6 +216,7 @@ function autoMap(headers, mapping) {
     expiryDate: ['유통기한', '유효기한', '만료일', 'expiry', 'exp', '사용기한'],
     lotNumber: ['lot', 'LOT', '로트', '로트번호', 'batch', '배치'],
     note: ['비고', 'note', 'memo', '메모', '참고', '특이사항'],
+    safetyStock: ['안전재고', '최소재고', '최소수량', 'safetystock'],
   };
 
   ERP_FIELDS.forEach(field => {
@@ -239,7 +251,16 @@ function buildMappedData(dataRows, mapping) {
       const obj = {};
       ERP_FIELDS.forEach(field => {
         const ci = mapping[field.key];
-        obj[field.key] = ci !== undefined ? (row[ci] ?? '') : '';
+        let val = ci !== undefined ? (row[ci] ?? '') : '';
+        if (['quantity', 'unitPrice', 'supplyValue', 'vat', 'totalPrice', 'safetyStock'].includes(field.key)) {
+          if (typeof val === 'string') {
+            const clean = val.replace(/,/g, '').trim();
+            if (clean !== '' && !isNaN(clean)) {
+              val = parseFloat(clean);
+            }
+          }
+        }
+        obj[field.key] = val;
       });
 
       // 왜 재계산? → 원본 엑셀의 공급가액/부가세/합계 값이 부정확할 수 있으므로
