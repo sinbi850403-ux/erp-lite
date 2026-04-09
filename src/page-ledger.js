@@ -1,7 +1,7 @@
-/**
- * page-ledger.js - 수불부 (재고 수불대장)
- * 역할: 기간별 품목의 입고/출고/잔량을 장부 형식으로 자동 생성
- * 왜 필요? → 한국 기업 세무/회계 보고의 필수 장부. 세무사에게 제출해야 함.
+﻿/**
+ * page-ledger.js - ?섎텋遺 (?ш퀬 ?섎텋???
+ * ??븷: 湲곌컙蹂??덈ぉ???낃퀬/異쒓퀬/?붾웾???λ? ?뺤떇?쇰줈 ?먮룞 ?앹꽦
+ * ???꾩슂? ???쒓뎅 湲곗뾽 ?몃Т/?뚭퀎 蹂닿퀬???꾩닔 ?λ?. ?몃Т?ъ뿉寃??쒖텧?댁빞 ??
  */
 
 import { getState } from './store.js';
@@ -9,8 +9,9 @@ import { showToast } from './toast.js';
 import { downloadExcel } from './excel.js';
 import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
+import { renderInsightHero } from './ux-toolkit.js';
 
-// jsPDF에 autoTable 플러그인 연결 (ESM 환경에서 필수)
+// jsPDF??autoTable ?뚮윭洹몄씤 ?곌껐 (ESM ?섍꼍?먯꽌 ?꾩닔)
 applyPlugin(jsPDF);
 import { applyKoreanFont, getKoreanFontStyle } from './pdf-font.js';
 
@@ -19,7 +20,7 @@ export function renderLedgerPage(container, navigateTo) {
   const items = state.mappedData || [];
   const transactions = state.transactions || [];
 
-  // 기본 기간: 이번 달
+  // 湲곕낯 湲곌컙: ?대쾲 ??
   const now = new Date();
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const lastDay = now.toISOString().split('T')[0];
@@ -27,47 +28,47 @@ export function renderLedgerPage(container, navigateTo) {
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1 class="page-title"><span class="title-icon">📒</span> 수불부 (재고수불대장)</h1>
-        <div class="page-desc">기간별 품목의 입고·출고·잔량을 장부 형식으로 자동 생성합니다.</div>
+        <h1 class="page-title"><span class="title-icon">?뱬</span> ?섎텋遺 (?ш퀬?섎텋???</h1>
+        <div class="page-desc">湲곌컙蹂??덈ぉ???낃퀬쨌異쒓퀬쨌?붾웾???λ? ?뺤떇?쇰줈 ?먮룞 ?앹꽦?⑸땲??</div>
       </div>
       <div class="page-actions">
-        <button class="btn btn-outline" id="btn-ledger-excel">📥 엑셀 다운로드</button>
-        <button class="btn btn-primary" id="btn-ledger-pdf">📄 PDF 다운로드</button>
+        <button class="btn btn-outline" id="btn-ledger-excel">?뱿 ?묒? ?ㅼ슫濡쒕뱶</button>
+        <button class="btn btn-primary" id="btn-ledger-pdf">?뱞 PDF ?ㅼ슫濡쒕뱶</button>
       </div>
     </div>
 
-    <!-- 기간 선택 -->
+    <!-- 湲곌컙 ?좏깮 -->
     <div class="card card-compact" style="margin-bottom:12px;">
       <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
         <div class="form-group" style="margin:0;">
-          <label class="form-label">시작일</label>
+          <label class="form-label">?쒖옉??/label>
           <input class="form-input" type="date" id="ledger-from" value="${firstDay}" />
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label">종료일</label>
+          <label class="form-label">醫낅즺??/label>
           <input class="form-input" type="date" id="ledger-to" value="${lastDay}" />
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label">품목 필터</label>
+          <label class="form-label">?덈ぉ ?꾪꽣</label>
           <select class="form-select" id="ledger-item-filter">
-            <option value="">전체 품목</option>
+            <option value="">?꾩껜 ?덈ぉ</option>
             ${items.map(item => `<option value="${item.itemName}">${item.itemName} (${item.itemCode || '-'})</option>`).join('')}
           </select>
         </div>
-        <button class="btn btn-primary" id="btn-ledger-render" style="margin-top:18px;">조회</button>
+        <button class="btn btn-primary" id="btn-ledger-render" style="margin-top:18px;">議고쉶</button>
       </div>
     </div>
 
-    <!-- 수불부 테이블 -->
+    <!-- ?섎텋遺 ?뚯씠釉?-->
     <div class="card card-flush" id="ledger-table-area">
-      <div style="padding:24px; text-align:center; color:var(--text-muted);">조회 버튼을 눌러주세요</div>
+      <div style="padding:24px; text-align:center; color:var(--text-muted);">議고쉶 踰꾪듉???뚮윭二쇱꽭??/div>
     </div>
   `;
 
-  // 초기 렌더링
+  // 珥덇린 ?뚮뜑留?
   renderLedgerTable();
 
-  // 조회 버튼
+  // 議고쉶 踰꾪듉
   container.querySelector('#btn-ledger-render').addEventListener('click', renderLedgerTable);
 
   function renderLedgerTable() {
@@ -79,29 +80,29 @@ export function renderLedgerPage(container, navigateTo) {
     const tableArea = container.querySelector('#ledger-table-area');
 
     if (ledgerData.length === 0) {
-      tableArea.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);">해당 기간에 데이터가 없습니다.</div>';
+      tableArea.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted);">?대떦 湲곌컙???곗씠?곌? ?놁뒿?덈떎.</div>';
       return;
     }
 
     tableArea.innerHTML = `
       <div style="padding:16px 20px; border-bottom:1px solid var(--border); background:var(--bg-card);">
-        <strong>📒 수불대장</strong>
-        <span style="color:var(--text-muted); font-size:13px; margin-left:8px;">${from} ~ ${to} (${ledgerData.length}개 품목)</span>
+        <strong>?뱬 ?섎텋???/strong>
+        <span style="color:var(--text-muted); font-size:13px; margin-left:8px;">${from} ~ ${to} (${ledgerData.length}媛??덈ぉ)</span>
       </div>
       <div class="table-wrapper" style="border:none; border-radius:0;">
         <table class="data-table" id="ledger-data-table">
           <thead>
             <tr>
               <th style="width:40px;">#</th>
-              <th>품목명</th>
-              <th>코드</th>
-              <th>단위</th>
-              <th class="text-right">기초재고</th>
-              <th class="text-right" style="color:var(--success);">입고</th>
-              <th class="text-right" style="color:var(--danger);">출고</th>
-              <th class="text-right" style="font-weight:700;">기말재고</th>
-              <th class="text-right">단가</th>
-              <th class="text-right">재고금액</th>
+              <th>?덈ぉ紐?/th>
+              <th>肄붾뱶</th>
+              <th>?⑥쐞</th>
+              <th class="text-right">湲곗큹?ш퀬</th>
+              <th class="text-right" style="color:var(--success);">?낃퀬</th>
+              <th class="text-right" style="color:var(--danger);">異쒓퀬</th>
+              <th class="text-right" style="font-weight:700;">湲곕쭚?ш퀬</th>
+              <th class="text-right">?④?</th>
+              <th class="text-right">?ш퀬湲덉븸</th>
             </tr>
           </thead>
           <tbody>
@@ -122,13 +123,13 @@ export function renderLedgerPage(container, navigateTo) {
           </tbody>
           <tfoot>
             <tr style="font-weight:700; background:var(--bg-card);">
-              <td colspan="4" class="text-right">합계</td>
+              <td colspan="4" class="text-right">?⑷퀎</td>
               <td class="text-right">${ledgerData.reduce((s, r) => s + r.openingQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right type-in">+${ledgerData.reduce((s, r) => s + r.inQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right type-out">-${ledgerData.reduce((s, r) => s + r.outQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right">${ledgerData.reduce((s, r) => s + r.closingQty, 0).toLocaleString('ko-KR')}</td>
               <td class="text-right"></td>
-              <td class="text-right">₩${Math.round(ledgerData.reduce((s, r) => s + r.closingValue, 0)).toLocaleString('ko-KR')}</td>
+              <td class="text-right">??{Math.round(ledgerData.reduce((s, r) => s + r.closingValue, 0)).toLocaleString('ko-KR')}</td>
             </tr>
           </tfoot>
         </table>
@@ -136,7 +137,7 @@ export function renderLedgerPage(container, navigateTo) {
     `;
   }
 
-  // 엑셀 다운로드
+  // ?묒? ?ㅼ슫濡쒕뱶
   container.querySelector('#btn-ledger-excel').addEventListener('click', () => {
     const from = container.querySelector('#ledger-from').value;
     const to = container.querySelector('#ledger-to').value;
@@ -149,8 +150,8 @@ export function renderLedgerPage(container, navigateTo) {
       '품목코드': r.itemCode || '',
       '단위': r.unit || '',
       '기초재고': r.openingQty,
-      '입고수량': r.inQty,
-      '출고수량': r.outQty,
+      '입고': r.inQty,
+      '출고': r.outQty,
       '기말재고': r.closingQty,
       '단가': r.unitPrice,
       '재고금액': r.closingValue,
@@ -159,24 +160,24 @@ export function renderLedgerPage(container, navigateTo) {
     showToast('수불부를 엑셀로 다운로드했습니다.', 'success');
   });
 
-  // PDF 다운로드
+  // PDF ?ㅼ슫濡쒕뱶
   container.querySelector('#btn-ledger-pdf').addEventListener('click', async () => {
     const from = container.querySelector('#ledger-from').value;
     const to = container.querySelector('#ledger-to').value;
     const itemFilter = container.querySelector('#ledger-item-filter').value;
     const data = buildLedger(items, transactions, from, to, itemFilter);
-    if (data.length === 0) { showToast('내보낼 데이터가 없습니다.', 'warning'); return; }
+    if (data.length === 0) { showToast('?대낫???곗씠?곌? ?놁뒿?덈떎.', 'warning'); return; }
 
     try {
-      showToast('PDF 생성 중... (폰트 로딩)', 'info', 2000);
+      showToast('PDF ?앹꽦 以?.. (?고듃 濡쒕뵫)', 'info', 2000);
       const doc = new jsPDF('landscape');
       const fontStyle = getKoreanFontStyle();
       await applyKoreanFont(doc);
 
       doc.setFontSize(16);
-      doc.text('재고 수불대장', 148, 15, { align: 'center' });
+      doc.text('?ш퀬 ?섎텋???, 148, 15, { align: 'center' });
       doc.setFontSize(10);
-      doc.text(`기간: ${from} ~ ${to}`, 14, 25);
+      doc.text(`湲곌컙: ${from} ~ ${to}`, 14, 25);
 
       const tableData = data.map((r, i) => [
         i + 1, r.itemName, r.itemCode || '-', r.unit || '-',
@@ -188,7 +189,7 @@ export function renderLedgerPage(container, navigateTo) {
 
       doc.autoTable({
         startY: 32,
-        head: [['No', '품목명', '코드', '단위', '기초재고', '입고', '출고', '기말재고', '단가', '재고금액']],
+        head: [['No', '?덈ぉ紐?, '肄붾뱶', '?⑥쐞', '湲곗큹?ш퀬', '?낃퀬', '異쒓퀬', '湲곕쭚?ш퀬', '?④?', '?ш퀬湲덉븸']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [37, 99, 235], ...fontStyle },
@@ -196,24 +197,24 @@ export function renderLedgerPage(container, navigateTo) {
         styles: { fontSize: 8, ...fontStyle },
       });
 
-      doc.save(`수불대장_${from}_${to}.pdf`);
-      showToast('수불부 PDF를 다운로드했습니다.', 'success');
+      doc.save(`?섎텋???${from}_${to}.pdf`);
+      showToast('?섎텋遺 PDF瑜??ㅼ슫濡쒕뱶?덉뒿?덈떎.', 'success');
     } catch (err) {
-      showToast('PDF 생성 실패: ' + err.message, 'error');
+      showToast('PDF ?앹꽦 ?ㅽ뙣: ' + err.message, 'error');
     }
   });
 }
 
 /**
- * 수불부 데이터 생성
- * 로직: 기초재고 = 현재재고 - 기간입고 + 기간출고
- * (거래 이력을 역산해서 기초재고를 추정)
+ * ?섎텋遺 ?곗씠???앹꽦
+ * 濡쒖쭅: 湲곗큹?ш퀬 = ?꾩옱?ш퀬 - 湲곌컙?낃퀬 + 湲곌컙異쒓퀬
+ * (嫄곕옒 ?대젰????궛?댁꽌 湲곗큹?ш퀬瑜?異붿젙)
  */
 function buildLedger(items, transactions, from, to, itemFilter) {
-  // 해당 기간 거래만 필터
+  // ?대떦 湲곌컙 嫄곕옒留??꾪꽣
   const periodTx = transactions.filter(tx => tx.date >= from && tx.date <= to);
 
-  // 품목별 입출고 집계
+  // ?덈ぉ蹂??낆텧怨?吏묎퀎
   const txMap = {};
   periodTx.forEach(tx => {
     const key = tx.itemName;
@@ -223,7 +224,7 @@ function buildLedger(items, transactions, from, to, itemFilter) {
     else txMap[key].outQty += qty;
   });
 
-  // 수불부 행 생성
+  // ?섎텋遺 ???앹꽦
   let targetItems = items;
   if (itemFilter) {
     targetItems = items.filter(i => i.itemName === itemFilter);
@@ -234,7 +235,7 @@ function buildLedger(items, transactions, from, to, itemFilter) {
     const unitPrice = parseFloat(item.unitPrice) || 0;
     const tx = txMap[item.itemName] || { inQty: 0, outQty: 0 };
 
-    // 기초재고 역산: 현재재고 - 기간입고 + 기간출고
+    // 湲곗큹?ш퀬 ??궛: ?꾩옱?ш퀬 - 湲곌컙?낃퀬 + 湲곌컙異쒓퀬
     const openingQty = currentQty - tx.inQty + tx.outQty;
     const closingQty = currentQty;
     const closingValue = closingQty * unitPrice;
@@ -252,3 +253,4 @@ function buildLedger(items, transactions, from, to, itemFilter) {
     };
   }).filter(r => r.openingQty > 0 || r.inQty > 0 || r.outQty > 0 || r.closingQty > 0);
 }
+
