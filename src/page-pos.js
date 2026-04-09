@@ -11,7 +11,7 @@
 import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 import { readExcelFile, downloadExcel } from './excel.js';
-import { isAdmin } from './page-admin.js';
+import { isAdmin } from './admin-auth.js';
 import * as XLSX from 'xlsx';
 
 // POS 필드 정의 — POS 시스템에서 내보내는 일반적인 컬럼들

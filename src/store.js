@@ -22,6 +22,10 @@ const DEFAULT_STATE = {
   visibleColumns: null, // ['itemName','quantity','unitPrice'] 형태
   // 초보자 도움 모드
   beginnerMode: true,
+  // 대시보드 보기 모드
+  dashboardMode: 'executive',
+  // 자동 컬럼정렬 상태
+  tableSortPrefs: {},
   // 화면별 필터/정렬 뷰 설정 (사용자 편의 저장)
   inventoryViewPrefs: {
     filter: { keyword: '', category: '', warehouse: '', stock: '', itemCode: '', vendor: '' },
@@ -126,6 +130,8 @@ async function saveToDB() {
         fileName: state.fileName,
         currentStep: state.currentStep,
         beginnerMode: state.beginnerMode,
+        dashboardMode: state.dashboardMode,
+        tableSortPrefs: state.tableSortPrefs,
         inventoryViewPrefs: state.inventoryViewPrefs,
         inoutViewPrefs: state.inoutViewPrefs,
       };
