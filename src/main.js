@@ -1,52 +1,17 @@
-/**
- * main.js - INVEX 앱 진입점
- * 역할: 페이지 라우팅, 네비게이션 관리, 모바일 지원, 데이터 백업/복원
+﻿/**
+ * main.js - INVEX ??吏꾩엯??
+ * ??븷: ?섏씠吏 ?쇱슦?? ?ㅻ퉬寃뚯씠??愿由? 紐⑤컮??吏?? ?곗씠??諛깆뾽/蹂듭썝
  */
 
 import './style.css';
 import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-monitor.js';
 
-// 에러 모니터링 초기화 (가능한 한 빨리 실행)
-// 왜 여기서? → 앱 초기화 과정의 에러도 잡기 위함
+// ?먮윭 紐⑤땲?곕쭅 珥덇린??(媛?ν븳 ??鍮⑤━ ?ㅽ뻾)
+// ???ш린?? ????珥덇린??怨쇱젙???먮윭???↔린 ?꾪븿
 initErrorMonitor();
 import { restoreState, getState, setState } from './store.js';
-import { renderUploadPage } from './page-upload.js';
-import { renderMappingPage } from './page-mapping.js';
-import { renderInventoryPage } from './page-inventory.js';
-import { renderInoutPage } from './page-inout.js';
-import { renderSummaryPage } from './page-summary.js';
-import { renderScannerPage } from './page-scanner.js';
-import { renderDocumentsPage } from './page-documents.js';
-import { renderDashboardPage } from './page-dashboard.js';
-import { renderHomePage } from './page-home.js';
-import { renderTransferPage } from './page-transfer.js';
-import { renderLedgerPage } from './page-ledger.js';
-import { renderSettingsPage } from './page-settings.js';
-import { renderVendorsPage } from './page-vendors.js';
-import { renderStocktakePage } from './page-stocktake.js';
-import { renderBulkPage } from './page-bulk.js';
 import { renderAuditLogPage } from './audit-log.js';
-import { renderCostingPage } from './page-costing.js';
-import { renderLabelsPage } from './page-labels.js';
-import { renderAccountsPage } from './page-accounts.js';
-import { renderWarehousesPage } from './page-warehouses.js';
-import { renderRolesPage } from './page-roles.js';
-import { renderApiPage } from './page-api.js';
-import { renderBillingPage } from './page-billing.js';
-import { renderAdminPage, isAdmin } from './page-admin.js';
-import { renderMyPage } from './page-mypage.js';
-import { renderGuidePage } from './page-guide.js';
-import { renderSupportPage } from './page-support.js';
-import { renderTeamPage } from './page-team.js';
-import { renderTaxReportsPage } from './page-tax-reports.js';
-import { renderAutoOrderPage } from './page-auto-order.js';
-import { renderProfitPage } from './page-profit.js';
-import { renderBackupPage } from './page-backup.js';
-import { renderOrdersPage } from './page-orders.js';
-import { renderForecastPage } from './page-forecast.js';
-import { renderReferralPage } from './page-referral.js';
-import { renderWeeklyReportPage } from './page-weekly-report.js';
-import { renderPosPage } from './page-pos.js';
+import { isAdmin } from './admin-auth.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
@@ -57,19 +22,20 @@ import { setSyncCallback } from './store.js';
 import { renderNotificationPanel, getNotificationCount } from './notifications.js';
 import { showToast } from './toast.js';
 import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser, injectGetUserProfile } from './plan.js';
+import { mountAutoTableSort } from './table-auto-sort.js';
 
-// 다크 모드 초기화
+// ?ㅽ겕 紐⑤뱶 珥덇린??
 initTheme();
 
-// 총관리자 기능 해제를 위해 getCurrentUser를 plan.js에 주입
+// 珥앷?由ъ옄 湲곕뒫 ?댁젣瑜??꾪빐 getCurrentUser瑜?plan.js??二쇱엯
 injectGetCurrentUser(getCurrentUser);
 injectGetUserProfile(getUserProfileData);
 
-// Firebase 인증 초기화 — 로그인 상태에 따라 앱 접근 제어
+// Firebase ?몄쬆 珥덇린????濡쒓렇???곹깭???곕씪 ???묎렐 ?쒖뼱
 let isAuthReady = false;
 
-// === 랜딩 페이지 이벤트 ===
-// 왜? → 랜딩에서 "무료로 시작하기" 클릭 → 랜딩 숨기고 로그인 게이트 표시
+// === ?쒕뵫 ?섏씠吏 ?대깽??===
+// ?? ???쒕뵫?먯꽌 "臾대즺濡??쒖옉?섍린" ?대┃ ???쒕뵫 ?④린怨?濡쒓렇??寃뚯씠???쒖떆
 function showAuthGate() {
   const landing = document.getElementById('landing-page');
   const gate = document.getElementById('auth-gate');
@@ -81,16 +47,16 @@ function showAuthGate() {
   document.getElementById(id)?.addEventListener('click', showAuthGate);
 });
 
-// "기능 둘러보기" → #features로 스크롤
+// "湲곕뒫 ?섎윭蹂닿린" ??#features濡??ㅽ겕濡?
 document.getElementById('landing-cta-demo')?.addEventListener('click', () => {
   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
 });
 
-// === 로그인 게이트 이벤트 ===
+// === 濡쒓렇??寃뚯씠???대깽??===
 
-// 탭 전환 (로그인 ↔ 회원가입)
-// 탭 전환 (로그인 ↔ 회원가입) — CSS 클래스 기반으로 변경
-// 왜? → 인라인 style은 CSS 파일보다 우선순위가 높아 auth.css를 무시함
+// ???꾪솚 (濡쒓렇?????뚯썝媛??
+// ???꾪솚 (濡쒓렇?????뚯썝媛?? ??CSS ?대옒??湲곕컲?쇰줈 蹂寃?
+// ?? ???몃씪??style? CSS ?뚯씪蹂대떎 ?곗꽑?쒖쐞媛 ?믪븘 auth.css瑜?臾댁떆??
 document.getElementById('tab-login')?.addEventListener('click', () => {
   document.getElementById('form-login').style.display = 'block';
   document.getElementById('form-signup').style.display = 'none';
@@ -110,64 +76,64 @@ document.getElementById('tab-signup')?.addEventListener('click', () => {
   tabLogin.classList.remove('active', 'active-signup');
 });
 
-// 이메일 로그인
+// ?대찓??濡쒓렇??
 document.getElementById('gate-email-login')?.addEventListener('click', async () => {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  if (!email || !password) { showToast('이메일과 비밀번호를 입력하세요.', 'warning'); return; }
+  if (!email || !password) { showToast('?대찓?쇨낵 鍮꾨?踰덊샇瑜??낅젰?섏꽭??', 'warning'); return; }
   await loginWithEmail(email, password);
 });
 
-// Enter 키로 로그인
+// Enter ?ㅻ줈 濡쒓렇??
 document.getElementById('login-password')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('gate-email-login')?.click();
 });
 
-// 이메일 회원가입
+// ?대찓???뚯썝媛??
 document.getElementById('gate-email-signup')?.addEventListener('click', async () => {
   const name = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const pw = document.getElementById('signup-password').value;
   const pw2 = document.getElementById('signup-password2').value;
   const agreed = document.getElementById('signup-agree')?.checked;
-  if (!name) { showToast('이름을 입력하세요.', 'warning'); return; }
-  if (!email) { showToast('이메일을 입력하세요.', 'warning'); return; }
-  if (pw.length < 6) { showToast('비밀번호는 6자 이상이어야 합니다.', 'warning'); return; }
-  if (pw !== pw2) { showToast('비밀번호가 일치하지 않습니다.', 'warning'); return; }
-  if (!agreed) { showToast('이용약관 및 개인정보처리방침에 동의해주세요.', 'warning'); return; }
+  if (!name) { showToast('?대쫫???낅젰?섏꽭??', 'warning'); return; }
+  if (!email) { showToast('?대찓?쇱쓣 ?낅젰?섏꽭??', 'warning'); return; }
+  if (pw.length < 6) { showToast('鍮꾨?踰덊샇??6???댁긽?댁뼱???⑸땲??', 'warning'); return; }
+  if (pw !== pw2) { showToast('鍮꾨?踰덊샇媛 ?쇱튂?섏? ?딆뒿?덈떎.', 'warning'); return; }
+  if (!agreed) { showToast('?댁슜?쎄? 諛?媛쒖씤?뺣낫泥섎━諛⑹묠???숈쓽?댁＜?몄슂.', 'warning'); return; }
   await signupWithEmail(email, pw, name);
 });
 
-// Enter 키로 회원가입
+// Enter ?ㅻ줈 ?뚯썝媛??
 document.getElementById('signup-password2')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('gate-email-signup')?.click();
 });
 
-// 이용약관 모달
+// ?댁슜?쎄? 紐⑤떖
 document.getElementById('link-terms')?.addEventListener('click', (e) => {
   e.preventDefault();
-  showLegalModal('서비스 이용약관', getTermsContent());
+  showLegalModal('?쒕퉬???댁슜?쎄?', getTermsContent());
 });
 
-// 개인정보처리방침 모달
+// 媛쒖씤?뺣낫泥섎━諛⑹묠 紐⑤떖
 document.getElementById('link-privacy')?.addEventListener('click', (e) => {
   e.preventDefault();
-  showLegalModal('개인정보처리방침', getPrivacyContent());
+  showLegalModal('媛쒖씤?뺣낫泥섎━諛⑹묠', getPrivacyContent());
 });
 
 /**
- * 법률 문서 모달
+ * 踰뺣쪧 臾몄꽌 紐⑤떖
  */
 function showLegalModal(title, content) {
-  // 왜 CSS 클래스? → 인라인 style에서 CSS 변수를 쓰면 라이트 모드에서
-  // --text-primary가 #1a1a2e(어두움)로 적용되어 글자가 안 보임
+  // ??CSS ?대옒?? ???몃씪??style?먯꽌 CSS 蹂?섎? ?곕㈃ ?쇱씠??紐⑤뱶?먯꽌
+  // --text-primary媛 #1a1a2e(?대몢?)濡??곸슜?섏뼱 湲?먭? ??蹂댁엫
   const modal = document.createElement('div');
   modal.className = 'legal-modal-overlay';
   modal.innerHTML = `
     <div class="legal-modal">
       <div class="legal-modal-header">
-        <h3>📋 ${title}</h3>
-        <button class="legal-modal-close">✕</button>
+        <h3>?뱥 ${title}</h3>
+        <button class="legal-modal-close">??/button>
       </div>
       <div class="legal-modal-body">
         ${content}
@@ -180,104 +146,104 @@ function showLegalModal(title, content) {
 }
 
 function getTermsContent() {
-  // 왜 인라인 style을 제거? → CSS 변수가 라이트 모드에서 어두운 색을 반환하여
-  // 어두운 모달 배경 위에 글자가 안 보이는 문제 발생. auth.css의 .legal-modal-body h4 규칙이 적용됨.
+  // ???몃씪??style???쒓굅? ??CSS 蹂?섍? ?쇱씠??紐⑤뱶?먯꽌 ?대몢???됱쓣 諛섑솚?섏뿬
+  // ?대몢??紐⑤떖 諛곌꼍 ?꾩뿉 湲?먭? ??蹂댁씠??臾몄젣 諛쒖깮. auth.css??.legal-modal-body h4 洹쒖튃???곸슜??
   return `
-    <h4>제1조 (목적)</h4>
-    <p>이 약관은 INVEX(이하 "서비스")가 제공하는 재고·경영 관리 서비스의 이용조건 및 절차, 회사와 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+    <h4>??議?(紐⑹쟻)</h4>
+    <p>???쎄?? INVEX(?댄븯 "?쒕퉬??)媛 ?쒓났?섎뒗 ?ш퀬쨌寃쎌쁺 愿由??쒕퉬?ㅼ쓽 ?댁슜議곌굔 諛??덉감, ?뚯궗? ?댁슜?먯쓽 沅뚮━쨌?섎Т 諛?梨낆엫?ы빆??洹쒖젙?⑥쓣 紐⑹쟻?쇰줈 ?⑸땲??</p>
     
-    <h4>제2조 (정의)</h4>
-    <p>① "서비스"란 INVEX가 제공하는 웹 기반 재고관리, 입출고 처리, 원가분석, 문서생성 등의 기능을 말합니다.<br/>
-    ② "이용자"란 본 약관에 따라 서비스를 이용하는 자를 말합니다.<br/>
-    ③ "계정"이란 이용자의 식별과 서비스 이용을 위해 이용자가 설정하고 회사가 승인하는 이메일 및 비밀번호의 조합을 말합니다.</p>
+    <h4>??議?(?뺤쓽)</h4>
+    <p>??"?쒕퉬??? INVEX媛 ?쒓났?섎뒗 ??湲곕컲 ?ш퀬愿由? ?낆텧怨?泥섎━, ?먭?遺꾩꽍, 臾몄꽌?앹꽦 ?깆쓽 湲곕뒫??留먰빀?덈떎.<br/>
+    ??"?댁슜??? 蹂??쎄????곕씪 ?쒕퉬?ㅻ? ?댁슜?섎뒗 ?먮? 留먰빀?덈떎.<br/>
+    ??"怨꾩젙"?대? ?댁슜?먯쓽 ?앸퀎怨??쒕퉬???댁슜???꾪빐 ?댁슜?먭? ?ㅼ젙?섍퀬 ?뚯궗媛 ?뱀씤?섎뒗 ?대찓??諛?鍮꾨?踰덊샇??議고빀??留먰빀?덈떎.</p>
 
-    <h4>제3조 (약관의 효력 및 변경)</h4>
-    <p>① 본 약관은 서비스 화면에 게시하거나 이메일 등의 방법으로 이용자에게 공지함으로써 효력이 발생합니다.<br/>
-    ② 회사는 관련 법령을 위배하지 않는 범위에서 본 약관을 개정할 수 있습니다.</p>
+    <h4>??議?(?쎄????⑤젰 諛?蹂寃?</h4>
+    <p>??蹂??쎄?? ?쒕퉬???붾㈃??寃뚯떆?섍굅???대찓???깆쓽 諛⑸쾿?쇰줈 ?댁슜?먯뿉寃?怨듭??⑥쑝濡쒖뜥 ?⑤젰??諛쒖깮?⑸땲??<br/>
+    ???뚯궗??愿??踰뺣졊???꾨같?섏? ?딅뒗 踰붿쐞?먯꽌 蹂??쎄???媛쒖젙?????덉뒿?덈떎.</p>
 
-    <h4>제4조 (서비스의 제공)</h4>
-    <p>① 회사는 다음과 같은 서비스를 제공합니다.<br/>
-    - 재고 현황 관리 및 모니터링<br/>
-    - 입출고 처리 및 이력 관리<br/>
-    - 원가 분석 및 보고서 생성<br/>
-    - 바코드 스캔 및 라벨 인쇄<br/>
-    - 거래처 관리<br/>
-    ② 서비스는 Free, Pro, Enterprise 요금제로 구분되며, 각 요금제별 제공 기능이 다릅니다.</p>
+    <h4>??議?(?쒕퉬?ㅼ쓽 ?쒓났)</h4>
+    <p>???뚯궗???ㅼ쓬怨?媛숈? ?쒕퉬?ㅻ? ?쒓났?⑸땲??<br/>
+    - ?ш퀬 ?꾪솴 愿由?諛?紐⑤땲?곕쭅<br/>
+    - ?낆텧怨?泥섎━ 諛??대젰 愿由?br/>
+    - ?먭? 遺꾩꽍 諛?蹂닿퀬???앹꽦<br/>
+    - 諛붿퐫???ㅼ틪 諛??쇰꺼 ?몄뇙<br/>
+    - 嫄곕옒泥?愿由?br/>
+    ???쒕퉬?ㅻ뒗 Free, Pro, Enterprise ?붽툑?쒕줈 援щ텇?섎ŉ, 媛??붽툑?쒕퀎 ?쒓났 湲곕뒫???ㅻ쫭?덈떎.</p>
 
-    <h4>제5조 (이용자의 의무)</h4>
-    <p>① 이용자는 타인의 정보를 도용하여서는 안 됩니다.<br/>
-    ② 이용자는 서비스를 이용하여 불법행위를 하여서는 안 됩니다.<br/>
-    ③ 이용자는 자신의 계정 정보를 안전하게 관리할 책임이 있습니다.</p>
+    <h4>??議?(?댁슜?먯쓽 ?섎Т)</h4>
+    <p>???댁슜?먮뒗 ??몄쓽 ?뺣낫瑜??꾩슜?섏뿬?쒕뒗 ???⑸땲??<br/>
+    ???댁슜?먮뒗 ?쒕퉬?ㅻ? ?댁슜?섏뿬 遺덈쾿?됱쐞瑜??섏뿬?쒕뒗 ???⑸땲??<br/>
+    ???댁슜?먮뒗 ?먯떊??怨꾩젙 ?뺣낫瑜??덉쟾?섍쾶 愿由ы븷 梨낆엫???덉뒿?덈떎.</p>
 
-    <h4>제6조 (서비스 이용 제한)</h4>
-    <p>회사는 이용자가 본 약관을 위반하거나 서비스의 정상적인 운영을 방해한 경우, 서비스 이용을 제한하거나 계정을 삭제할 수 있습니다.</p>
+    <h4>??議?(?쒕퉬???댁슜 ?쒗븳)</h4>
+    <p>?뚯궗???댁슜?먭? 蹂??쎄????꾨컲?섍굅???쒕퉬?ㅼ쓽 ?뺤긽?곸씤 ?댁쁺??諛⑺빐??寃쎌슦, ?쒕퉬???댁슜???쒗븳?섍굅??怨꾩젙????젣?????덉뒿?덈떎.</p>
 
-    <h4>제7조 (면책조항)</h4>
-    <p>① 천재지변, 전쟁 등 불가항력으로 인한 서비스 중단에 대해 회사는 책임을 지지 않습니다.<br/>
-    ② 이용자의 귀책사유로 인한 서비스 이용 장애에 대해 회사는 책임을 지지 않습니다.</p>
+    <h4>??議?(硫댁콉議고빆)</h4>
+    <p>??泥쒖옱吏蹂, ?꾩웳 ??遺덇???젰?쇰줈 ?명븳 ?쒕퉬??以묐떒??????뚯궗??梨낆엫??吏吏 ?딆뒿?덈떎.<br/>
+    ???댁슜?먯쓽 洹梨낆궗?좊줈 ?명븳 ?쒕퉬???댁슜 ?μ븷??????뚯궗??梨낆엫??吏吏 ?딆뒿?덈떎.</p>
 
-    <p class="legal-date">시행일: 2026년 4월 1일</p>
+    <p class="legal-date">?쒗뻾?? 2026??4??1??/p>
   `;
 }
 
 function getPrivacyContent() {
   return `
-    <h4>1. 개인정보의 수집 및 이용 목적</h4>
-    <p>INVEX(이하 "서비스")는 다음의 목적을 위하여 개인정보를 처리합니다.</p>
-    <p>① 회원 가입 및 관리: 회원 가입 의사 확인, 서비스 제공에 따른 본인 식별·인증, 회원자격 유지·관리<br/>
-    ② 서비스 제공: 재고관리, 입출고 처리, 보고서 생성 등 핵심 서비스 제공<br/>
-    ③ 고객 지원: 민원 처리, 공지사항 전달</p>
+    <h4>1. 媛쒖씤?뺣낫???섏쭛 諛??댁슜 紐⑹쟻</h4>
+    <p>INVEX(?댄븯 "?쒕퉬??)???ㅼ쓬??紐⑹쟻???꾪븯??媛쒖씤?뺣낫瑜?泥섎━?⑸땲??</p>
+    <p>???뚯썝 媛??諛?愿由? ?뚯썝 媛???섏궗 ?뺤씤, ?쒕퉬???쒓났???곕Ⅸ 蹂몄씤 ?앸퀎쨌?몄쬆, ?뚯썝?먭꺽 ?좎?쨌愿由?br/>
+    ???쒕퉬???쒓났: ?ш퀬愿由? ?낆텧怨?泥섎━, 蹂닿퀬???앹꽦 ???듭떖 ?쒕퉬???쒓났<br/>
+    ??怨좉컼 吏?? 誘쇱썝 泥섎━, 怨듭??ы빆 ?꾨떖</p>
 
-    <h4>2. 수집하는 개인정보 항목</h4>
+    <h4>2. ?섏쭛?섎뒗 媛쒖씤?뺣낫 ??ぉ</h4>
     <table>
       <tr>
-        <td>필수항목</td>
-        <td>이름(닉네임), 이메일 주소, 비밀번호</td>
+        <td>?꾩닔??ぉ</td>
+        <td>?대쫫(?됰꽕??, ?대찓??二쇱냼, 鍮꾨?踰덊샇</td>
       </tr>
       <tr>
-        <td>자동수집</td>
-        <td>접속 IP, 접속 시간, 브라우저 정보</td>
+        <td>?먮룞?섏쭛</td>
+        <td>?묒냽 IP, ?묒냽 ?쒓컙, 釉뚮씪?곗? ?뺣낫</td>
       </tr>
       <tr>
-        <td>소셜 로그인</td>
-        <td>Google 계정 이름, 이메일, 프로필 사진</td>
+        <td>?뚯뀥 濡쒓렇??/td>
+        <td>Google 怨꾩젙 ?대쫫, ?대찓?? ?꾨줈???ъ쭊</td>
       </tr>
     </table>
 
-    <h4>3. 개인정보의 보유 및 이용 기간</h4>
-    <p>① 회원 탈퇴 시까지 보유하며, 탈퇴 후 지체 없이 파기합니다.<br/>
-    ② 단, 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 보존합니다.</p>
+    <h4>3. 媛쒖씤?뺣낫??蹂댁쑀 諛??댁슜 湲곌컙</h4>
+    <p>???뚯썝 ?덊눜 ?쒓퉴吏 蹂댁쑀?섎ŉ, ?덊눜 ??吏泥??놁씠 ?뚭린?⑸땲??<br/>
+    ???? 愿??踰뺣졊???곕씪 蹂댁〈???꾩슂??寃쎌슦 ?대떦 湲곌컙 ?숈븞 蹂댁〈?⑸땲??</p>
 
-    <h4>4. 개인정보의 제3자 제공</h4>
-    <p>서비스는 이용자의 개인정보를 원칙적으로 제3자에게 제공하지 않습니다. 다만, 다음의 경우에는 예외로 합니다.<br/>
-    ① 이용자가 사전에 동의한 경우<br/>
-    ② 법령의 규정에 의거하거나 수사 목적으로 법령에 정해진 절차에 따라 요청이 있는 경우</p>
+    <h4>4. 媛쒖씤?뺣낫???????쒓났</h4>
+    <p>?쒕퉬?ㅻ뒗 ?댁슜?먯쓽 媛쒖씤?뺣낫瑜??먯튃?곸쑝濡????먯뿉寃??쒓났?섏? ?딆뒿?덈떎. ?ㅻ쭔, ?ㅼ쓬??寃쎌슦?먮뒗 ?덉쇅濡??⑸땲??<br/>
+    ???댁슜?먭? ?ъ쟾???숈쓽??寃쎌슦<br/>
+    ??踰뺣졊??洹쒖젙???섍굅?섍굅???섏궗 紐⑹쟻?쇰줈 踰뺣졊???뺥빐吏??덉감???곕씪 ?붿껌???덈뒗 寃쎌슦</p>
 
-    <h4>5. 개인정보의 안전성 확보 조치</h4>
-    <p>서비스는 개인정보의 안전성 확보를 위해 다음과 같은 조치를 취하고 있습니다.<br/>
-    ① 비밀번호 암호화 저장 (Firebase Authentication)<br/>
-    ② 데이터 전송 시 SSL/TLS 암호화<br/>
-    ③ 접근 권한 관리 및 접근 통제</p>
+    <h4>5. 媛쒖씤?뺣낫???덉쟾???뺣낫 議곗튂</h4>
+    <p>?쒕퉬?ㅻ뒗 媛쒖씤?뺣낫???덉쟾???뺣낫瑜??꾪빐 ?ㅼ쓬怨?媛숈? 議곗튂瑜?痍⑦븯怨??덉뒿?덈떎.<br/>
+    ??鍮꾨?踰덊샇 ?뷀샇?????(Firebase Authentication)<br/>
+    ???곗씠???꾩넚 ??SSL/TLS ?뷀샇??br/>
+    ???묎렐 沅뚰븳 愿由?諛??묎렐 ?듭젣</p>
 
-    <h4>6. 이용자의 권리</h4>
-    <p>이용자는 언제든지 자신의 개인정보를 조회, 수정, 삭제할 수 있으며, 회원 탈퇴를 통해 개인정보 처리의 정지를 요청할 수 있습니다.</p>
+    <h4>6. ?댁슜?먯쓽 沅뚮━</h4>
+    <p>?댁슜?먮뒗 ?몄젣?좎? ?먯떊??媛쒖씤?뺣낫瑜?議고쉶, ?섏젙, ??젣?????덉쑝硫? ?뚯썝 ?덊눜瑜??듯빐 媛쒖씤?뺣낫 泥섎━???뺤?瑜??붿껌?????덉뒿?덈떎.</p>
 
-    <h4>7. 개인정보 보호책임자</h4>
-    <p>이메일: sinbi0214@naver.com</p>
+    <h4>7. 媛쒖씤?뺣낫 蹂댄샇梨낆엫??/h4>
+    <p>?대찓?? sinbi0214@naver.com</p>
 
-    <p class="legal-date">시행일: 2026년 4월 1일</p>
+    <p class="legal-date">?쒗뻾?? 2026??4??1??/p>
   `;
 }
 
-// 비밀번호 찾기
+// 鍮꾨?踰덊샇 李얘린
 document.getElementById('btn-forgot-pw')?.addEventListener('click', async (e) => {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
-  if (!email) { showToast('이메일 주소를 먼저 입력해주세요.', 'warning'); return; }
+  if (!email) { showToast('?대찓??二쇱냼瑜?癒쇱? ?낅젰?댁＜?몄슂.', 'warning'); return; }
   await resetPassword(email);
 });
 
-// Google 소셜 로그인
+// Google ?뚯뀥 濡쒓렇??
 document.getElementById('gate-google-login')?.addEventListener('click', async () => {
   const loadingEl = document.getElementById('gate-loading');
   if (loadingEl) loadingEl.style.display = 'block';
@@ -289,7 +255,7 @@ initAuth((user, profile) => {
   const gate = document.getElementById('auth-gate');
   
   if (user) {
-    // ✅ 로그인 성공 → 랜딩 + 게이트 숨기고 앱 표시
+    // ??濡쒓렇???깃났 ???쒕뵫 + 寃뚯씠???④린怨????쒖떆
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'none';
     if (gate) {
@@ -297,27 +263,27 @@ initAuth((user, profile) => {
       setTimeout(() => { gate.style.display = 'none'; }, 300);
     }
     startSync(user.uid);
-    // 워크스페이스 동기화도 시작 (팀원 간 실시간 공유)
+    // ?뚰겕?ㅽ럹?댁뒪 ?숆린?붾룄 ?쒖옉 (???媛??ㅼ떆媛?怨듭쑀)
     startWorkspaceSync(user.uid);
-    // 데이터 변경 시 자동으로 워크스페이스에 동기화
+    // ?곗씠??蹂寃????먮룞?쇰줈 ?뚰겕?ㅽ럹?댁뒪???숆린??
     setSyncCallback(() => syncWorkspaceToCloud());
     updateUserUI(user, profile);
-    // 에러 모니터링에 사용자 정보 설정 (어떤 사용자에게 에러가 발생했는지 추적)
+    // ?먮윭 紐⑤땲?곕쭅???ъ슜???뺣낫 ?ㅼ젙 (?대뼡 ?ъ슜?먯뿉寃??먮윭媛 諛쒖깮?덈뒗吏 異붿쟻)
     setMonitorUser(user.uid, user.email);
     
-    // 총관리자만 관리자 메뉴 + POS 매출분석 표시
+    // 珥앷?由ъ옄留?愿由ъ옄 硫붾돱 + POS 留ㅼ텧遺꾩꽍 ?쒖떆
     const adminBtn = document.querySelector('[data-page="admin"]');
     const posBtn = document.querySelector('[data-page="pos"]');
     if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
     if (posBtn) posBtn.style.display = isAdmin() ? '' : 'none';
     
-    // 최초 로그인 시에만 앱 초기화 (중복 방지)
+    // 理쒖큹 濡쒓렇???쒖뿉留???珥덇린??(以묐났 諛⑹?)
     if (!isAuthReady) {
       isAuthReady = true;
       initAppAfterAuth();
     }
   } else {
-    // ❌ 미로그인 → 게이트 표시
+    // ??誘몃줈洹몄씤 ??寃뚯씠???쒖떆
     stopSync();
     stopWorkspaceSync();
     setSyncCallback(null);
@@ -326,92 +292,128 @@ initAuth((user, profile) => {
     if (gate) {
       gate.style.display = 'none';
     }
-    // 미로그인 → 랜딩 페이지 표시
+    // 誘몃줈洹몄씤 ???쒕뵫 ?섏씠吏 ?쒖떆
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'block';
     isAuthReady = false;
   }
 });
 
-// 현재 페이지 (홈을 기본으로)
+// ?꾩옱 ?섏씠吏 (?덉쓣 湲곕낯?쇰줈)
 let currentPage = 'home';
+let navigationToken = 0;
 
-// 페이지별 렌더 함수
-const pages = {
-  home: renderHomePage,
-  upload: renderUploadPage,
-  mapping: renderMappingPage,
-  inventory: renderInventoryPage,
-  inout: renderInoutPage,
-  summary: renderSummaryPage,
-  scanner: renderScannerPage,
-  documents: renderDocumentsPage,
-  dashboard: renderDashboardPage,
-  transfer: renderTransferPage,
-  ledger: renderLedgerPage,
-  settings: renderSettingsPage,
-  vendors: renderVendorsPage,
-  stocktake: renderStocktakePage,
-  bulk: renderBulkPage,
-  auditlog: renderAuditLogPage,
-  costing: renderCostingPage,
-  labels: renderLabelsPage,
-  accounts: renderAccountsPage,
-  warehouses: renderWarehousesPage,
-  roles: renderRolesPage,
-  api: renderApiPage,
-  billing: renderBillingPage,
-  admin: renderAdminPage,
-  mypage: renderMyPage,
-  guide: renderGuidePage,
-  support: renderSupportPage,
-  team: renderTeamPage,
-  'tax-reports': renderTaxReportsPage,
-  'auto-order': renderAutoOrderPage,
-  profit: renderProfitPage,
-  backup: renderBackupPage,
-  orders: renderOrdersPage,
-  forecast: renderForecastPage,
-  referral: renderReferralPage,
-  'weekly-report': renderWeeklyReportPage,
-  pos: renderPosPage,
+const pageLoaders = {
+  home: () => import('./page-home.js').then(m => m.renderHomePage),
+  upload: () => import('./page-upload.js').then(m => m.renderUploadPage),
+  mapping: () => import('./page-mapping.js').then(m => m.renderMappingPage),
+  inventory: () => import('./page-inventory.js').then(m => m.renderInventoryPage),
+  inout: () => import('./page-inout.js').then(m => m.renderInoutPage),
+  summary: () => import('./page-summary.js').then(m => m.renderSummaryPage),
+  scanner: () => import('./page-scanner.js').then(m => m.renderScannerPage),
+  documents: () => import('./page-documents.js').then(m => m.renderDocumentsPage),
+  dashboard: () => import('./page-dashboard.js').then(m => m.renderDashboardPage),
+  transfer: () => import('./page-transfer.js').then(m => m.renderTransferPage),
+  ledger: () => import('./page-ledger.js').then(m => m.renderLedgerPage),
+  settings: () => import('./page-settings.js').then(m => m.renderSettingsPage),
+  vendors: () => import('./page-vendors.js').then(m => m.renderVendorsPage),
+  stocktake: () => import('./page-stocktake.js').then(m => m.renderStocktakePage),
+  bulk: () => import('./page-bulk.js').then(m => m.renderBulkPage),
+  auditlog: async () => renderAuditLogPage,
+  costing: () => import('./page-costing.js').then(m => m.renderCostingPage),
+  labels: () => import('./page-labels.js').then(m => m.renderLabelsPage),
+  accounts: () => import('./page-accounts.js').then(m => m.renderAccountsPage),
+  warehouses: () => import('./page-warehouses.js').then(m => m.renderWarehousesPage),
+  roles: () => import('./page-roles.js').then(m => m.renderRolesPage),
+  api: () => import('./page-api.js').then(m => m.renderApiPage),
+  billing: () => import('./page-billing.js').then(m => m.renderBillingPage),
+  admin: () => import('./page-admin.js').then(m => m.renderAdminPage),
+  mypage: () => import('./page-mypage.js').then(m => m.renderMyPage),
+  guide: () => import('./page-guide.js').then(m => m.renderGuidePage),
+  support: () => import('./page-support.js').then(m => m.renderSupportPage),
+  team: () => import('./page-team.js').then(m => m.renderTeamPage),
+  'tax-reports': () => import('./page-tax-reports.js').then(m => m.renderTaxReportsPage),
+  'auto-order': () => import('./page-auto-order.js').then(m => m.renderAutoOrderPage),
+  profit: () => import('./page-profit.js').then(m => m.renderProfitPage),
+  backup: () => import('./page-backup.js').then(m => m.renderBackupPage),
+  orders: () => import('./page-orders.js').then(m => m.renderOrdersPage),
+  forecast: () => import('./page-forecast.js').then(m => m.renderForecastPage),
+  referral: () => import('./page-referral.js').then(m => m.renderReferralPage),
+  'weekly-report': () => import('./page-weekly-report.js').then(m => m.renderWeeklyReportPage),
+  pos: () => import('./page-pos.js').then(m => m.renderPosPage),
 };
 
-/**
- * 페이지 전환
- * 요금제 체크 → 접근 불가 시 업그레이드 모달 표시
- */
-function navigateTo(pageName) {
-  if (!pages[pageName]) return;
+const pageRendererCache = {};
 
-  // 요금제 접근 제어
+/**
+ * ?섏씠吏 ?꾪솚
+ * ?붽툑??泥댄겕 ???묎렐 遺덇? ???낃렇?덉씠??紐⑤떖 ?쒖떆
+ */
+async function navigateTo(pageName) {
+  if (!pageLoaders[pageName]) return;
+
+  // ?붽툑???묎렐 ?쒖뼱
   if (!canAccessPage(pageName)) {
     showUpgradeModal(pageName);
     return;
   }
 
   currentPage = pageName;
+  const token = ++navigationToken;
 
-  // 모든 nav 영역의 버튼 활성 상태 업데이트
+  // 紐⑤뱺 nav ?곸뿭??踰꾪듉 ?쒖꽦 ?곹깭 ?낅뜲?댄듃
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.page === pageName);
   });
 
   const mainContent = document.getElementById('main-content');
-  mainContent.innerHTML = '';
+  mainContent.dataset.page = pageName;
+  mainContent.innerHTML = `
+    <div class="card">
+      <div class="empty-state" style="padding:32px 20px;">
+        <div class="msg">?섏씠吏瑜?遺덈윭?ㅻ뒗 以묒엯?덈떎.</div>
+      </div>
+    </div>
+  `;
   mainContent.scrollTop = 0;
-  pages[pageName](mainContent, navigateTo);
 
-  // 모바일에서 사이드바 닫기
+  try {
+    const renderPage = await resolvePageRenderer(pageName);
+    if (token !== navigationToken || currentPage !== pageName) return;
+    mainContent.innerHTML = '';
+    renderPage(mainContent, navigateTo);
+    mountAutoTableSort(mainContent);
+  } catch (error) {
+    console.error('Failed to load page:', pageName, error);
+    mainContent.innerHTML = `
+      <div class="card">
+        <div class="empty-state" style="padding:32px 20px;">
+          <div class="msg">?섏씠吏瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??</div>
+          <div class="sub">?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??</div>
+        </div>
+      </div>
+    `;
+    showToast('?섏씠吏瑜?遺덈윭?ㅼ? 紐삵뻽?듬땲??', 'warning');
+    return;
+  }
+
+  // 紐⑤컮?쇱뿉???ъ씠?쒕컮 ?リ린
   closeSidebar();
 
-  // 알림 뱃지 업데이트
+  // ?뚮┝ 諭껋? ?낅뜲?댄듃
   updateNotifBadge();
 }
 
+async function resolvePageRenderer(pageName) {
+  if (!pageRendererCache[pageName]) {
+    pageRendererCache[pageName] = pageLoaders[pageName]();
+  }
+  return pageRendererCache[pageName];
+}
+
 /**
- * 알림 뱃지 업데이트
- * 왜 페이지 전환 시마다? → 입출고 등록 후 재고 상태가 바뀔 수 있으므로
+ * ?뚮┝ 諭껋? ?낅뜲?댄듃
+ * ???섏씠吏 ?꾪솚 ?쒕쭏?? ???낆텧怨??깅줉 ???ш퀬 ?곹깭媛 諛붾????덉쑝誘濡?
  */
 function updateNotifBadge() {
   const badge = document.getElementById('notif-badge');
@@ -426,21 +428,21 @@ function updateNotifBadge() {
   }
 }
 
-// 사이드바 메뉴에 요금제 배지 적용 + 이벤트 연결
+// ?ъ씠?쒕컮 硫붾돱???붽툑??諛곗? ?곸슜 + ?대깽???곌껐
 function updateSidebarBadges() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const pageId = btn.dataset.page;
     if (!pageId) return;
 
-    // 이벤트 연결
+    // ?대깽???곌껐
     btn.addEventListener('click', () => navigateTo(pageId));
 
-    // 기존 배지 제거
+    // 湲곗〈 諛곗? ?쒓굅
     btn.querySelectorAll('.plan-badge').forEach(b => b.remove());
 
     const badge = getPageBadge(pageId);
     if (badge) {
-      // 잠금 스타일 적용
+      // ?좉툑 ?ㅽ????곸슜
       btn.style.opacity = '0.55';
       const badgeEl = document.createElement('span');
       badgeEl.className = 'plan-badge';
@@ -454,7 +456,7 @@ function updateSidebarBadges() {
 }
 updateSidebarBadges();
 
-// 사이드바 하단 요금제 표시 업데이트
+// ?ъ씠?쒕컮 ?섎떒 ?붽툑???쒖떆 ?낅뜲?댄듃
 function updatePlanDisplay() {
   const planId = getCurrentPlan();
   const plan = PLANS[planId];
@@ -466,7 +468,7 @@ function updatePlanDisplay() {
 }
 updatePlanDisplay();
 
-// 요금제 클릭 → 변경 팝업
+// ?붽툑???대┃ ??蹂寃??앹뾽
 document.getElementById('plan-display')?.addEventListener('click', () => {
   const current = getCurrentPlan();
   const existing = document.getElementById('plan-picker-modal');
@@ -479,8 +481,8 @@ document.getElementById('plan-display')?.addEventListener('click', () => {
   modal.innerHTML = `
     <div class="modal" style="max-width:600px;">
       <div class="modal-header">
-        <h3>📋 요금제 선택</h3>
-        <button class="btn btn-ghost btn-sm" id="plan-pick-close">✕</button>
+        <h3>?뱥 ?붽툑???좏깮</h3>
+        <button class="btn btn-ghost btn-sm" id="plan-pick-close">??/button>
       </div>
       <div class="modal-body">
         <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
@@ -496,12 +498,12 @@ document.getElementById('plan-display')?.addEventListener('click', () => {
               <div style="font-size:20px; font-weight:800; color:${p.color};">${p.price}</div>
               <div style="font-size:11px; color:var(--text-muted);">${p.period}</div>
               <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${p.description}</div>
-              ${current === p.id ? '<div style="margin-top:8px; font-size:11px; color:var(--success); font-weight:600;">✓ 현재 요금제</div>' : ''}
+              ${current === p.id ? '<div style="margin-top:8px; font-size:11px; color:var(--success); font-weight:600;">???꾩옱 ?붽툑??/div>' : ''}
             </div>
           `).join('')}
         </div>
         <div style="margin-top:12px; font-size:11px; color:var(--text-muted); text-align:center;">
-          * 무료 체험: 모든 기능을 즉시 활성화합니다
+          * 臾대즺 泥댄뿕: 紐⑤뱺 湲곕뒫??利됱떆 ?쒖꽦?뷀빀?덈떎
         </div>
       </div>
     </div>
@@ -516,35 +518,35 @@ document.getElementById('plan-display')?.addEventListener('click', () => {
       const planId = card.dataset.plan;
       setPlan(planId);
       modal.remove();
-      showToast(`${PLANS[planId].icon} ${PLANS[planId].name} 요금제로 변경되었습니다.`, 'success');
-      // 사이드바 배지 + 표시 갱신
+      showToast(`${PLANS[planId].icon} ${PLANS[planId].name} ?붽툑?쒕줈 蹂寃쎈릺?덉뒿?덈떎.`, 'success');
+      // ?ъ씠?쒕컮 諛곗? + ?쒖떆 媛깆떊
       updateSidebarBadges();
       updatePlanDisplay();
     });
   });
 });
 
-// 알림 버튼 이벤트
+// ?뚮┝ 踰꾪듉 ?대깽??
 document.getElementById('btn-notifications')?.addEventListener('click', (e) => {
   e.stopPropagation();
   renderNotificationPanel();
 });
 
-// 글로벌 검색 초기화 & 버튼
+// 湲濡쒕쾶 寃??珥덇린??& 踰꾪듉
 initGlobalSearch(navigateTo);
 document.getElementById('btn-global-search')?.addEventListener('click', () => {
   toggleGlobalSearch();
 });
 
-// 다크모드 토글 버튼
+// ?ㅽ겕紐⑤뱶 ?좉? 踰꾪듉
 document.getElementById('btn-theme-toggle')?.addEventListener('click', () => {
   toggleTheme();
   const isDark = document.documentElement.classList.contains('dark-mode');
   const btn = document.getElementById('btn-theme-toggle');
-  if (btn) btn.textContent = isDark ? '☀️ 라이트' : '🌙 다크';
+  if (btn) btn.textContent = isDark ? '라이트 모드' : '다크 모드';
 });
 
-// === 모바일 토글 ===
+// === 紐⑤컮???좉? ===
 
 const sidebar = document.getElementById('sidebar');
 const toggleBtn = document.getElementById('mobile-toggle');
@@ -570,30 +572,30 @@ toggleBtn?.addEventListener('click', () => {
 
 overlay?.addEventListener('click', closeSidebar);
 
-// === 데이터 백업 / 복원 ===
+// === ?곗씠??諛깆뾽 / 蹂듭썝 ===
 
 /**
- * 왜 JSON 백업? → IndexedDB는 브라우저별로 격리되어 있어서
- * 다른 기기로 데이터를 이동하거나, 만약의 삭제에 대비하기 위해
+ * ??JSON 諛깆뾽? ??IndexedDB??釉뚮씪?곗?蹂꾨줈 寃⑸━?섏뼱 ?덉뼱??
+ * ?ㅻⅨ 湲곌린濡??곗씠?곕? ?대룞?섍굅?? 留뚯빟????젣???鍮꾪븯湲??꾪빐
  */
 
-// 백업/복원은 전용 페이지(page-backup.js)로 이동됨
+// 諛깆뾽/蹂듭썝? ?꾩슜 ?섏씠吏(page-backup.js)濡??대룞??
 
-// 앱 초기화 (로그인 완료 후 호출)
-// 왜 분리? → 인증 확인 전에 IndexedDB 복원하면 빈 데이터가 로드될 수 있음
+// ??珥덇린??(濡쒓렇???꾨즺 ???몄텧)
+// ??遺꾨━? ???몄쬆 ?뺤씤 ?꾩뿉 IndexedDB 蹂듭썝?섎㈃ 鍮??곗씠?곌? 濡쒕뱶?????덉쓬
 async function initAppAfterAuth() {
   await restoreState();
-  // 요금제 배지 & 표시 최신화
+  // ?붽툑??諛곗? & ?쒖떆 理쒖떊??
   updateSidebarBadges();
   updatePlanDisplay();
-  navigateTo(currentPage);
-  // 첫 로그인 사용자에게 온보딩 마법사 표시
+  await navigateTo(currentPage);
+  // 泥?濡쒓렇???ъ슜?먯뿉寃??⑤낫??留덈쾿???쒖떆
   checkAndShowOnboarding(navigateTo);
 }
 
-// Firebase 미설정(로컬 개발) 시에는 게이트 자동 해제
-// isConfigured가 false면 initAuth에서 user=null로 콜백 → 게이트가 뜨지만, 
-// 로컬 개발을 위해 자동 해제
+// Firebase 誘몄꽕??濡쒖뺄 媛쒕컻) ?쒖뿉??寃뚯씠???먮룞 ?댁젣
+// isConfigured媛 false硫?initAuth?먯꽌 user=null濡?肄쒕갚 ??寃뚯씠?멸? ?⑥?留? 
+// 濡쒖뺄 媛쒕컻???꾪빐 ?먮룞 ?댁젣
 import { isConfigured } from './firebase-config.js';
 if (!isConfigured) {
   const gate = document.getElementById('auth-gate');
@@ -601,7 +603,7 @@ if (!isConfigured) {
   initAppAfterAuth();
 }
 
-// 사용자 UI 업데이트 (로그인/로그아웃 시 호출)
+// ?ъ슜??UI ?낅뜲?댄듃 (濡쒓렇??濡쒓렇?꾩썐 ???몄텧)
 function updateUserUI(user, profile) {
   const userArea = document.getElementById('user-info-area');
   if (!userArea) return;
@@ -616,23 +618,23 @@ function updateUserUI(user, profile) {
         ${photo ? `<img src="${photo}" style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.2);" />` : ''}
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div>
-          <div style="font-size:10px; color:rgba(255,255,255,0.5);">${plan} ${syncStatus.isConnected ? '☁️' : ''}</div>
+          <div style="font-size:10px; color:rgba(255,255,255,0.5);">${plan} ${syncStatus.isConnected ? '동기화' : ''}</div>
         </div>
-        <button class="btn-icon" id="btn-logout" title="로그아웃" style="font-size:11px; color:rgba(255,255,255,0.5);">↗</button>
+        <button class="btn-icon" id="btn-logout" title="로그아웃" style="font-size:11px; color:rgba(255,255,255,0.5);">로그아웃</button>
       </div>
     `;
     document.getElementById('btn-logout')?.addEventListener('click', () => { logout(); });
   } else {
     userArea.innerHTML = `
       <button class="btn btn-ghost btn-sm" id="btn-login" style="color:rgba(255,255,255,0.7); font-size:12px; width:100%;">
-        🔐 로그인
+        Google 로그인
       </button>
     `;
     document.getElementById('btn-login')?.addEventListener('click', () => { loginWithGoogle(); });
   }
 }
 
-// PWA Service Worker 등록
+// PWA Service Worker ?깅줉
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -640,3 +642,6 @@ if ('serviceWorker' in navigator) {
       .catch((err) => console.log('SW failed:', err));
   });
 }
+
+
+

@@ -1,15 +1,13 @@
-/**
- * page-home.js - 대시보드 홈 (경영 현황판)
- * 역할: 앱 진입 시 한눈에 경영 현황을 파악할 수 있는 메인 대시보드
- * 왜 필요? → 매일 아침 열면 "오늘 뭘 해야 하는지" 바로 알 수 있어야 진짜 ERP
- */
-
-import { getState } from './store.js';
+﻿import { getState, setState } from './store.js';
 import { getNotifications } from './notifications.js';
-import { renderWeeklyTrendChart, renderCategoryChart, renderMonthlyChart, destroyAllCharts } from './charts.js';
+import {
+  renderWeeklyTrendChart,
+  renderCategoryChart,
+  renderMonthlyChart,
+  destroyAllCharts,
+} from './charts.js';
 
 export function renderHomePage(container, navigateTo) {
-  // 페이지 전환 시 이전 차트 제거 (메모리 관리)
   destroyAllCharts();
 
   const state = getState();
@@ -17,237 +15,254 @@ export function renderHomePage(container, navigateTo) {
   const transactions = state.transactions || [];
   const safetyStock = state.safetyStock || {};
   const notifications = getNotifications();
+  const dashboardMode = state.dashboardMode === 'operator' ? 'operator' : 'executive';
 
-  // === KPI 계산 ===
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  const thirtyDayCutoff = toDateKey(addDays(today, -30));
+
   const totalItems = items.length;
-  const totalQty = items.reduce((s, r) => s + (parseFloat(r.quantity) || 0), 0);
-  const totalValue = items.reduce((s, r) => s + (parseFloat(r.totalPrice) || (parseFloat(r.quantity) || 0) * (parseFloat(r.unitPrice) || 0)), 0);
+  const totalQty = sumBy(items, item => toNumber(item.quantity));
+  const totalValue = sumBy(items, item => getItemValue(item));
+  const totalVendors = new Set([
+    ...(state.vendorMaster || []).map(vendor => vendor.name).filter(Boolean),
+    ...items.map(item => item.vendor).filter(Boolean),
+  ]).size;
 
-  // 안전재고 부족 품목
-  const lowStockItems = items.filter(d => {
-    const min = safetyStock[d.itemName];
-    return min !== undefined && (parseFloat(d.quantity) || 0) <= min;
+  const lowStockItems = items.filter(item => {
+    const minimum = toNumber(safetyStock[item.itemName]);
+    if (!minimum) return false;
+    return toNumber(item.quantity) <= minimum;
+  }).map(item => ({
+    ...item,
+    minimum: toNumber(safetyStock[item.itemName]),
+  }));
+
+  const deadStockItems = items.filter(item => {
+    if (toNumber(item.quantity) <= 0) return false;
+    return !transactions.some(tx =>
+      tx.type === 'out' &&
+      tx.itemName === item.itemName &&
+      String(tx.date || '') >= thirtyDayCutoff
+    );
   });
 
-  // 오늘 거래
-  const today = new Date().toISOString().split('T')[0];
-  const todayTx = transactions.filter(tx => tx.date === today);
-  const todayIn = todayTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0);
-  const todayOut = todayTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0);
+  const expiringSoonItems = items
+    .filter(item => item.expiryDate)
+    .map(item => ({
+      ...item,
+      daysLeft: Math.ceil((new Date(item.expiryDate) - today) / (1000 * 60 * 60 * 24)),
+    }))
+    .filter(item => item.daysLeft >= 0 && item.daysLeft <= 30)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
 
-  // 최근 7일 추이
+  const recentTransactions = [...transactions]
+    .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
+    .slice(0, 6);
+
+  const topItems = [...items]
+    .sort((a, b) => getItemValue(b) - getItemValue(a))
+    .slice(0, 5);
+
+  const categoryMap = new Map();
+  items.forEach(item => {
+    const category = item.category || '미분류';
+    categoryMap.set(category, (categoryMap.get(category) || 0) + toNumber(item.quantity));
+  });
+  const categories = [...categoryMap.entries()].sort((a, b) => b[1] - a[1]);
+  const topCategory = categories[0] || null;
+
+  const todayTransactions = transactions.filter(tx => String(tx.date || '') === todayKey);
+  const todayInQty = sumBy(todayTransactions.filter(tx => tx.type === 'in'), tx => toNumber(tx.quantity));
+  const todayOutQty = sumBy(todayTransactions.filter(tx => tx.type === 'out'), tx => toNumber(tx.quantity));
+  const todayTxCount = todayTransactions.length;
+
+  const last30Transactions = transactions.filter(tx => String(tx.date || '') >= thirtyDayCutoff);
+  const last30InQty = sumBy(last30Transactions.filter(tx => tx.type === 'in'), tx => toNumber(tx.quantity));
+  const last30OutQty = sumBy(last30Transactions.filter(tx => tx.type === 'out'), tx => toNumber(tx.quantity));
+  const avgDailyOutQty = last30OutQty > 0 ? last30OutQty / 30 : 0;
+  const coverageDays = avgDailyOutQty > 0 ? Math.floor(totalQty / avgDailyOutQty) : null;
+  const turnoverRate = totalQty > 0 ? ((last30OutQty / totalQty) * 12).toFixed(1) : '0.0';
+  const topValueItem = topItems[0] || null;
+
+  const riskLevel = getRiskLevel(lowStockItems.length, expiringSoonItems.length, deadStockItems.length);
+  const executiveSummary = [
+    `총 재고자산은 ${formatCurrency(totalValue)}입니다.`,
+    `안전재고 부족 ${lowStockItems.length}건, 30일 이상 정체 ${deadStockItems.length}건, 유통기한 임박 ${expiringSoonItems.length}건입니다.`,
+    `최근 30일 기준 입고 ${formatNumber(last30InQty)}개, 출고 ${formatNumber(last30OutQty)}개가 기록되었습니다.`,
+  ].join(' ');
+  const operatorSummary = [
+    `오늘 처리할 이슈는 부족 품목 ${lowStockItems.length}건, 임박 품목 ${expiringSoonItems.length}건입니다.`,
+    `오늘 입고 ${formatNumber(todayInQty)}개, 출고 ${formatNumber(todayOutQty)}개가 기록되었습니다.`,
+    notifications.length > 0 ? `실시간 알림 ${notifications.length}건이 남아 있습니다.` : '현재 미확인 알림은 없습니다.',
+  ].join(' ');
+
+  const executiveDecisions = buildExecutiveDecisions({
+    lowStockItems,
+    deadStockItems,
+    expiringSoonItems,
+    notifications,
+    topCategory,
+    coverageDays,
+  });
+
+  const operatorTasks = buildOperatorTasks({
+    lowStockItems,
+    expiringSoonItems,
+    notifications,
+    todayTxCount,
+    deadStockItems,
+  });
+
+  const actionCards = dashboardMode === 'executive'
+    ? [
+        { title: '자산 집중 점검', desc: '금액이 큰 품목과 정체 재고를 빠르게 확인합니다.', meta: '재고 현황으로 이동', nav: 'inventory' },
+        { title: '손익 분석 열기', desc: '원가와 이익 가능성을 보고 의사결정을 내립니다.', meta: '고급 분석으로 이동', nav: 'dashboard' },
+        { title: '주간 보고 확인', desc: '운영 지표와 이상 흐름을 한 페이지로 확인합니다.', meta: '주간 보고서 열기', nav: 'weekly-report' },
+        { title: '거래처 점검', desc: '공급처와 고객 현황을 보고 거래 집중도를 확인합니다.', meta: '거래처 관리로 이동', nav: 'vendors' },
+      ]
+    : [
+        { title: '입출고 등록', desc: '오늘 들어오고 나간 수량을 바로 반영합니다.', meta: '입출고 페이지 열기', nav: 'inout' },
+        { title: '재고 부족 확인', desc: '부족 품목부터 채워서 현장 리스크를 줄입니다.', meta: '재고 현황 열기', nav: 'inventory' },
+        { title: '수불부 보기', desc: '기초재고, 입고, 출고, 기말재고를 바로 확인합니다.', meta: '수불부 열기', nav: 'ledger' },
+        { title: '문서 생성', desc: '필요한 보고서나 증빙 문서를 빠르게 만듭니다.', meta: '문서 페이지 열기', nav: 'documents' },
+      ];
+
   const weekData = getLast7Days(transactions);
-
-  // 최근 6개월 추이
   const monthData = getLast6Months(transactions);
-
-  // 카테고리별 비율
-  const catMap = {};
-  items.forEach(item => {
-    const cat = item.category || '미분류';
-    catMap[cat] = (catMap[cat] || 0) + (parseFloat(item.quantity) || 0);
-  });
-  const categories = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-
-  // 최근 입출고 5건
-  const recentTx = [...transactions].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5);
-
-  // 상위 품목 5개
-  const topItems = [...items].sort((a, b) => (parseFloat(b.totalPrice) || 0) - (parseFloat(a.totalPrice) || 0)).slice(0, 5);
-
-  // 거래처별 통계
-  const vendorMap = {};
-  items.forEach(item => {
-    const v = item.vendor || '';
-    if (!v) return;
-    vendorMap[v] = (vendorMap[v] || 0) + 1;
-  });
-  const vendorCount = Object.keys(vendorMap).length;
-
-  // 재고 회전율 계산
-  // 왜? → 재고가 얼마나 빠르게 소진되는지 보여주는 핵심 지표
-  const last30Out = transactions.filter(tx => {
-    if (tx.type !== 'out') return false;
-    const txDate = new Date(tx.date);
-    const ago30 = new Date(); ago30.setDate(ago30.getDate() - 30);
-    return txDate >= ago30;
-  }).reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0);
-  const avgInventory = totalQty || 1;
-  const turnoverRate = (last30Out / avgInventory * 12).toFixed(1); // 연간 환산
 
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1 class="page-title"><span class="title-icon">🏠</span> 대시보드</h1>
-        <div class="page-desc">${new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} 현황</div>
+        <h1 class="page-title"><span class="title-icon">📊</span> 대시보드</h1>
+        <div class="page-desc">${today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} 운영 요약</div>
       </div>
       <div class="page-actions">
-        ${notifications.length > 0 ? `<span class="badge badge-danger" style="font-size:12px; padding:4px 10px;">🔔 알림 ${notifications.length}건</span>` : ''}
+        ${notifications.length > 0 ? `<span class="badge badge-danger">실시간 알림 ${notifications.length}건</span>` : '<span class="badge badge-success">알림 안정</span>'}
       </div>
     </div>
 
-    <!-- 핵심 KPI -->
-    <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
-      <div class="stat-card" style="cursor:pointer;" data-nav="inventory">
-        <div class="stat-label">등록 품목</div>
-        <div class="stat-value text-accent">${totalItems.toLocaleString('ko-KR')}</div>
-        <div class="stat-change">총 ${totalQty.toLocaleString('ko-KR')}개</div>
-      </div>
-      <div class="stat-card" style="cursor:pointer;" data-nav="dashboard">
-        <div class="stat-label">총 재고 가치</div>
-        <div class="stat-value">${totalValue > 0 ? '₩' + Math.round(totalValue).toLocaleString('ko-KR') : '-'}</div>
-      </div>
-      <div class="stat-card" style="cursor:pointer;" data-nav="inout">
-        <div class="stat-label">오늘 입고</div>
-        <div class="stat-value text-success">+${todayIn.toLocaleString('ko-KR')}</div>
-      </div>
-      <div class="stat-card" style="cursor:pointer;" data-nav="inout">
-        <div class="stat-label">오늘 출고</div>
-        <div class="stat-value text-danger">-${todayOut.toLocaleString('ko-KR')}</div>
-      </div>
-      <div class="stat-card" style="cursor:pointer;" data-nav="inventory">
-        <div class="stat-label">재고 부족</div>
-        <div class="stat-value ${lowStockItems.length > 0 ? 'text-danger' : 'text-success'}">${lowStockItems.length > 0 ? lowStockItems.length + '건' : '없음'}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">재고 회전율</div>
-        <div class="stat-value" style="font-size:22px;">${turnoverRate}회/년</div>
-        <div class="stat-change" style="font-size:10px;">최근 30일 기준</div>
+    <div class="card dashboard-mode-shell">
+      <div class="dashboard-mode-top">
+        <div>
+          <div class="dashboard-eyebrow">대시보드 모드</div>
+          <div class="dashboard-mode-title">${dashboardMode === 'executive' ? '경영자 관점으로 한눈에 보고 있습니다.' : '실무자 관점으로 바로 처리할 항목을 보고 있습니다.'}</div>
+          <div class="dashboard-mode-desc">
+            ${dashboardMode === 'executive'
+              ? '경영자용은 자산 규모, 위험도, 의사결정 포인트를 중심으로 보여줍니다.'
+              : '실무자용은 오늘 해야 할 일, 빠른 실행, 현장 확인 순서를 중심으로 보여줍니다.'}
+          </div>
+        </div>
+        <div class="dashboard-mode-toggle">
+          <button class="dashboard-mode-btn ${dashboardMode === 'executive' ? 'is-active' : ''}" data-dashboard-mode="executive">경영자용</button>
+          <button class="dashboard-mode-btn ${dashboardMode === 'operator' ? 'is-active' : ''}" data-dashboard-mode="operator">실무자용</button>
+        </div>
       </div>
     </div>
 
-    <!-- 차트 영역 -->
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
-      <!-- 주간 입출고 라인 차트 -->
+    ${dashboardMode === 'executive'
+      ? renderExecutiveView({
+          riskLevel,
+          executiveSummary,
+          totalValue,
+          lowStockItems,
+          deadStockItems,
+          expiringSoonItems,
+          topValueItem,
+          topCategory,
+          coverageDays,
+          turnoverRate,
+          actionCards,
+          executiveDecisions,
+          topItems,
+          totalVendors,
+          last30OutQty,
+        })
+      : renderOperatorView({
+          riskLevel,
+          operatorSummary,
+          todayInQty,
+          todayOutQty,
+          lowStockItems,
+          expiringSoonItems,
+          notifications,
+          turnoverRate,
+          deadStockItems,
+          actionCards,
+          operatorTasks,
+          topItems,
+        })}
+
+    <div class="dashboard-chart-grid">
       <div class="card">
-        <div class="card-title">📈 최근 7일 입출고 추이</div>
+        <div class="card-title">최근 7일 입출고 흐름</div>
         <div style="height:240px; position:relative;">
           <canvas id="chart-weekly"></canvas>
         </div>
       </div>
-
-      <!-- 월별 입출고 바 차트 -->
       <div class="card">
-        <div class="card-title">📊 월별 입출고 현황</div>
+        <div class="card-title">최근 6개월 입출고 비교</div>
         <div style="height:240px; position:relative;">
           <canvas id="chart-monthly"></canvas>
         </div>
       </div>
     </div>
 
-    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px;">
-      <!-- 좌측: 최근 거래 + 재고 부족 경고 -->
-      <div>
-        <!-- 최근 거래 -->
-        <div class="card">
-          <div class="card-title">🕐 최근 거래 <span class="card-subtitle">최근 5건</span></div>
-          ${recentTx.length > 0 ? `
-            <div style="display:flex; flex-direction:column; gap:2px;">
-              ${recentTx.map(tx => `
-                <div style="display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--border-light);">
-                  <span style="font-size:18px;">${tx.type === 'in' ? '📥' : '📤'}</span>
-                  <div style="flex:1;">
-                    <div style="font-weight:500; font-size:13px;">${tx.itemName}</div>
-                    <div style="font-size:11px; color:var(--text-muted);">${tx.date}${tx.vendor ? ' · ' + tx.vendor : ''}</div>
-                  </div>
-                  <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}" style="font-size:14px; font-weight:600;">
-                    ${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity).toLocaleString('ko-KR')}
-                  </span>
-                </div>
-              `).join('')}
-            </div>
-          ` : '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">아직 거래 기록이 없습니다</div>'}
-        </div>
-
-        <!-- 재고 부족 경고 -->
-        ${lowStockItems.length > 0 ? `
-        <div class="card" style="border-left:3px solid var(--danger);">
-          <div class="card-title">⚠️ 재고 부족 품목 <span class="badge badge-danger">${lowStockItems.length}건</span></div>
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            ${lowStockItems.slice(0, 5).map(item => {
-              const current = parseFloat(item.quantity) || 0;
-              const min = safetyStock[item.itemName] || 0;
-              const pct = min > 0 ? Math.round((current / min) * 100) : 0;
-              return `
-                <div style="display:flex; align-items:center; gap:10px; padding:6px 4px; border-bottom:1px solid var(--border-light);">
-                  <span style="font-size:14px;">🔴</span>
-                  <div style="flex:1;">
-                    <div style="font-size:13px; font-weight:500;">${item.itemName}</div>
-                    <div style="font-size:11px; color:var(--text-muted);">현재 ${current}개 / 최소 ${min}개</div>
-                  </div>
-                  <div style="width:60px; height:6px; background:var(--border-light); border-radius:3px; overflow:hidden;">
-                    <div style="height:100%; width:${pct}%; background:var(--danger); border-radius:3px;"></div>
+    <div class="dashboard-side-grid">
+      <div class="card">
+        <div class="card-title">${dashboardMode === 'executive' ? '최근 거래와 흐름' : '최근 작업 기록'}</div>
+        <div class="dashboard-recent-list">
+          ${recentTransactions.length > 0
+            ? recentTransactions.map(tx => `
+                <div class="dashboard-recent-item">
+                  <span class="badge ${tx.type === 'in' ? 'badge-success' : 'badge-danger'}">${tx.type === 'in' ? '입고' : '출고'}</span>
+                  <div class="dashboard-recent-main">
+                    <div class="dashboard-recent-title">${escapeHtml(tx.itemName || '-')}</div>
+                    <div class="dashboard-recent-meta">${escapeHtml(tx.date || '-')} · ${escapeHtml(tx.vendor || '거래처 없음')} · ${formatNumber(tx.quantity)}개</div>
                   </div>
                 </div>
-              `;
-            }).join('')}
-          </div>
-          ${lowStockItems.length > 5 ? `<div style="text-align:center; margin-top:8px; font-size:12px; color:var(--text-muted);">외 ${lowStockItems.length - 5}건 더...</div>` : ''}
+              `).join('')
+            : '<div class="dashboard-empty-note">아직 기록된 거래가 없습니다.</div>'}
         </div>
-        ` : ''}
-
-        <!-- TOP 5 금액 품목 -->
-        ${topItems.length > 0 ? `
-        <div class="card">
-          <div class="card-title">💎 금액 상위 품목</div>
-          ${topItems.map((item, i) => {
-            const val = parseFloat(item.totalPrice) || (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
-            const maxVal = parseFloat(topItems[0].totalPrice) || (parseFloat(topItems[0].quantity) || 0) * (parseFloat(topItems[0].unitPrice) || 0) || 1;
-            const pct = Math.round((val / maxVal) * 100);
-            return `
-              <div style="margin-bottom:8px;">
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
-                  <span style="font-weight:500;"><span style="color:var(--text-muted); margin-right:4px;">${i + 1}</span> ${item.itemName}</span>
-                  <span style="color:var(--accent); font-weight:600;">${val > 0 ? '₩' + Math.round(val).toLocaleString('ko-KR') : '-'}</span>
-                </div>
-                <div style="height:6px; background:var(--border-light); border-radius:3px; overflow:hidden;">
-                  <div style="height:100%; width:${pct}%; background:var(--accent); border-radius:3px; transition:width 0.5s;"></div>
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-        ` : ''}
       </div>
 
-      <!-- 우측: 카테고리 도넛 + 빠른 실행 + 거래처 -->
       <div>
-        <!-- 분류별 도넛 차트 -->
         <div class="card">
-          <div class="card-title">📦 분류별 재고 비율</div>
-          ${categories.length > 0 ? `
-            <div style="height:220px; position:relative;">
-              <canvas id="chart-category"></canvas>
-            </div>
-          ` : '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">분류 데이터가 없습니다</div>'}
+          <div class="card-title">분류별 재고 비중</div>
+          ${categories.length > 0
+            ? `
+              <div style="height:220px; position:relative;">
+                <canvas id="chart-category"></canvas>
+              </div>
+            `
+            : '<div class="dashboard-empty-note">분류 데이터가 아직 없습니다.</div>'}
         </div>
-
-        <!-- 빠른 실행 -->
         <div class="card">
-          <div class="card-title">⚡ 빠른 실행</div>
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-            <button class="btn btn-primary btn-lg" style="width:100%;" data-nav="inout">🔄 입출고 등록</button>
-            <button class="btn btn-outline" style="width:100%;" data-nav="documents">📄 문서 생성</button>
-            <button class="btn btn-outline" style="width:100%;" data-nav="ledger">📒 수불부</button>
-            <button class="btn btn-outline" style="width:100%;" data-nav="vendors">🤝 거래처 관리</button>
-          </div>
-        </div>
-
-        <!-- 거래처 요약 -->
-        <div class="card">
-          <div class="card-title">🤝 거래처 현황</div>
-          <div style="display:flex; justify-content:center; gap:24px; padding:8px;">
-            <div style="text-align:center;">
-              <div style="font-size:24px; font-weight:700; color:var(--accent);">${vendorCount}</div>
-              <div style="font-size:11px; color:var(--text-muted);">전체</div>
+          <div class="card-title">${dashboardMode === 'executive' ? '핵심 숫자' : '현장 체크 숫자'}</div>
+          <div class="dashboard-priority-list">
+            <div class="dashboard-priority-item">
+              <div class="dashboard-priority-rank">1</div>
+              <div class="dashboard-priority-main">
+                <div class="dashboard-priority-title">총 등록 품목</div>
+                <div class="dashboard-priority-meta">현재 시스템에 등록된 전체 품목 수입니다.</div>
+              </div>
+              <strong>${formatNumber(totalItems)}건</strong>
             </div>
-            <div style="text-align:center;">
-              <div style="font-size:24px; font-weight:700; color:var(--success);">${(state.vendorMaster || []).filter(v => v.type === 'supplier').length}</div>
-              <div style="font-size:11px; color:var(--text-muted);">매입처</div>
+            <div class="dashboard-priority-item">
+              <div class="dashboard-priority-rank">2</div>
+              <div class="dashboard-priority-main">
+                <div class="dashboard-priority-title">총 보유 수량</div>
+                <div class="dashboard-priority-meta">모든 품목의 현재 수량 합계입니다.</div>
+              </div>
+              <strong>${formatNumber(totalQty)}개</strong>
             </div>
-            <div style="text-align:center;">
-              <div style="font-size:24px; font-weight:700; color:var(--info, #58a6ff);">${(state.vendorMaster || []).filter(v => v.type === 'customer').length}</div>
-              <div style="font-size:11px; color:var(--text-muted);">매출처</div>
+            <div class="dashboard-priority-item">
+              <div class="dashboard-priority-rank">3</div>
+              <div class="dashboard-priority-main">
+                <div class="dashboard-priority-title">거래처 수</div>
+                <div class="dashboard-priority-meta">등록 또는 사용 중인 공급처와 고객 수입니다.</div>
+              </div>
+              <strong>${formatNumber(totalVendors)}곳</strong>
             </div>
           </div>
         </div>
@@ -255,13 +270,19 @@ export function renderHomePage(container, navigateTo) {
     </div>
   `;
 
-  // KPI 카드 & 버튼 클릭 → 페이지 이동
-  container.querySelectorAll('[data-nav]').forEach(el => {
-    el.addEventListener('click', () => navigateTo(el.dataset.nav));
+  container.querySelectorAll('[data-nav]').forEach(element => {
+    element.addEventListener('click', () => navigateTo(element.dataset.nav));
   });
 
-  // === 차트 렌더링 (DOM이 그려진 후) ===
-  // setTimeout: innerHTML로 DOM을 넣은 직후 canvas가 확보될 때까지 대기
+  container.querySelectorAll('[data-dashboard-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      const nextMode = button.dataset.dashboardMode === 'operator' ? 'operator' : 'executive';
+      if (nextMode === dashboardMode) return;
+      setState({ dashboardMode: nextMode });
+      renderHomePage(container, navigateTo);
+    });
+  });
+
   setTimeout(() => {
     renderWeeklyTrendChart('chart-weekly', weekData);
     renderMonthlyChart('chart-monthly', monthData);
@@ -271,48 +292,534 @@ export function renderHomePage(container, navigateTo) {
   }, 50);
 }
 
-/**
- * 최근 7일 입출고 데이터 계산
- */
+function renderExecutiveView(context) {
+  return `
+    <div class="card dashboard-hero">
+      <div class="dashboard-hero-grid">
+        <div>
+          <div class="dashboard-eyebrow">경영자 한눈 요약</div>
+          <div class="dashboard-hero-title">현재 재고 운영 상태는 ${context.riskLevel} 단계입니다.</div>
+          <div class="dashboard-hero-desc">${context.executiveSummary}</div>
+
+          <div class="dashboard-highlight-grid">
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">총 재고자산</div>
+              <div class="dashboard-highlight-value">${formatCurrency(context.totalValue)}</div>
+              <div class="dashboard-highlight-note">현재 보유 중인 재고 자산 총액입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">가장 먼저 볼 리스크</div>
+              <div class="dashboard-highlight-value ${context.lowStockItems.length > 0 ? 'text-danger' : 'text-success'}">
+                ${context.lowStockItems.length > 0 ? `${formatNumber(context.lowStockItems.length)}건 부족` : '부족 없음'}
+              </div>
+              <div class="dashboard-highlight-note">안전재고 기준 아래로 내려간 품목 수입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">장기 정체 재고</div>
+              <div class="dashboard-highlight-value">${formatNumber(context.deadStockItems.length)}건</div>
+              <div class="dashboard-highlight-note">최근 30일 동안 출고가 없었던 품목입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">출고 기준 커버일</div>
+              <div class="dashboard-highlight-value">${context.coverageDays === null ? '계산 불가' : `${formatNumber(context.coverageDays)}일`}</div>
+              <div class="dashboard-highlight-note">최근 30일 평균 출고 속도로 본 재고 커버 기간입니다.</div>
+            </div>
+          </div>
+
+          <div class="dashboard-action-grid">
+            ${renderActionCards(context.actionCards)}
+          </div>
+        </div>
+
+        <div class="dashboard-signal-board">
+          <div class="dashboard-signal-title">지금 바로 볼 경영 신호</div>
+          <div class="dashboard-signal-list">
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">⚠️</div>
+              <div>
+                <div class="dashboard-signal-head">재고 부족</div>
+                <div class="dashboard-signal-desc">
+                  ${context.lowStockItems.length > 0
+                    ? `${formatNumber(context.lowStockItems.length)}개 품목이 안전재고 이하입니다. 발주 승인 또는 보충 일정 확인이 필요합니다.`
+                    : '지금은 안전재고 이하 품목이 없습니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">📦</div>
+              <div>
+                <div class="dashboard-signal-head">자산 집중 품목</div>
+                <div class="dashboard-signal-desc">
+                  ${context.topValueItem
+                    ? `${escapeHtml(context.topValueItem.itemName)}가 가장 큰 금액 품목이며 현재 가치 ${formatCurrency(getItemValue(context.topValueItem))}입니다.`
+                    : '아직 금액 데이터를 계산할 품목이 없습니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">🏷️</div>
+              <div>
+                <div class="dashboard-signal-head">집중 분류</div>
+                <div class="dashboard-signal-desc">
+                  ${context.topCategory
+                    ? `${escapeHtml(context.topCategory[0])} 분류가 ${formatNumber(context.topCategory[1])}개로 가장 큰 비중을 차지합니다.`
+                    : '분류 데이터가 아직 없습니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">📅</div>
+              <div>
+                <div class="dashboard-signal-head">기한 임박</div>
+                <div class="dashboard-signal-desc">
+                  ${context.expiringSoonItems.length > 0
+                    ? `${formatNumber(context.expiringSoonItems.length)}개 품목이 30일 이내 만료 예정입니다. 할인 판매 또는 우선 소진 여부를 검토해 보세요.`
+                    : '30일 이내 만료 예정 품목은 없습니다.'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section-grid">
+      <div class="card">
+        <div class="card-title">경영 의사결정 포인트</div>
+        <div class="dashboard-worklist">
+          ${renderWorkItems(context.executiveDecisions)}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">자산 집중도 상위 품목</div>
+        <div class="dashboard-priority-list">
+          ${context.topItems.length > 0
+            ? context.topItems.map((item, index) => `
+                <div class="dashboard-priority-item">
+                  <div class="dashboard-priority-rank">${index + 1}</div>
+                  <div class="dashboard-priority-main">
+                    <div class="dashboard-priority-title">${escapeHtml(item.itemName || '-')}</div>
+                    <div class="dashboard-priority-meta">${escapeHtml(item.category || '미분류')} · ${formatNumber(item.quantity)}개 보유</div>
+                  </div>
+                  <strong>${formatCurrency(getItemValue(item))}</strong>
+                </div>
+              `).join('')
+            : '<div class="dashboard-empty-note">표시할 품목 데이터가 없습니다.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderOperatorView(context) {
+  return `
+    <div class="card dashboard-hero">
+      <div class="dashboard-hero-grid">
+        <div>
+          <div class="dashboard-eyebrow">실무자 바로 실행</div>
+          <div class="dashboard-hero-title">오늘 바로 처리할 작업을 우선순위대로 정리했습니다.</div>
+          <div class="dashboard-hero-desc">${context.operatorSummary}</div>
+
+          <div class="dashboard-highlight-grid">
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">오늘 입고</div>
+              <div class="dashboard-highlight-value text-success">+${formatNumber(context.todayInQty)}</div>
+              <div class="dashboard-highlight-note">오늘 등록된 입고 수량 합계입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">오늘 출고</div>
+              <div class="dashboard-highlight-value text-danger">-${formatNumber(context.todayOutQty)}</div>
+              <div class="dashboard-highlight-note">오늘 등록된 출고 수량 합계입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">부족 품목</div>
+              <div class="dashboard-highlight-value ${context.lowStockItems.length > 0 ? 'text-danger' : 'text-success'}">
+                ${context.lowStockItems.length > 0 ? `${formatNumber(context.lowStockItems.length)}건` : '없음'}
+              </div>
+              <div class="dashboard-highlight-note">지금 바로 보충 여부를 판단해야 하는 품목입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">임박 품목</div>
+              <div class="dashboard-highlight-value">${formatNumber(context.expiringSoonItems.length)}건</div>
+              <div class="dashboard-highlight-note">30일 이내 유통기한 도래 품목입니다.</div>
+            </div>
+          </div>
+
+          <div class="dashboard-action-grid">
+            ${renderActionCards(context.actionCards)}
+          </div>
+        </div>
+
+        <div class="dashboard-signal-board">
+          <div class="dashboard-signal-title">실무 체크 신호</div>
+          <div class="dashboard-signal-list">
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">🧾</div>
+              <div>
+                <div class="dashboard-signal-head">기록 누락 방지</div>
+                <div class="dashboard-signal-desc">
+                  ${context.notifications.length > 0
+                    ? `미확인 알림 ${formatNumber(context.notifications.length)}건이 있습니다. 먼저 내용을 확인해 주세요.`
+                    : '현재 특별한 경보는 없습니다. 오늘 작업 기록만 놓치지 않으면 됩니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">📉</div>
+              <div>
+                <div class="dashboard-signal-head">재고 회전</div>
+                <div class="dashboard-signal-desc">
+                  평균 회전율은 ${context.turnoverRate}회/년입니다. ${Number.parseFloat(context.turnoverRate) < 1 ? '느린 품목을 우선 정리해 보세요.' : '현재 순환 흐름은 비교적 안정적입니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">🧊</div>
+              <div>
+                <div class="dashboard-signal-head">정체 재고</div>
+                <div class="dashboard-signal-desc">
+                  ${context.deadStockItems.length > 0
+                    ? `${formatNumber(context.deadStockItems.length)}건이 최근 30일 동안 움직이지 않았습니다. 진열, 프로모션, 폐기 여부를 판단해 보세요.`
+                    : '최근 30일 무출고 품목은 없습니다.'}
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-signal-item">
+              <div class="dashboard-signal-icon">🚦</div>
+              <div>
+                <div class="dashboard-signal-head">운영 상태</div>
+                <div class="dashboard-signal-desc">
+                  현재 운영 상태는 ${context.riskLevel} 단계입니다. 부족 품목과 임박 품목부터 처리하면 됩니다.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-section-grid">
+      <div class="card">
+        <div class="card-title">오늘 처리 순서</div>
+        <div class="dashboard-worklist">
+          ${renderWorkItems(context.operatorTasks)}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">현장 우선 확인 품목</div>
+        <div class="dashboard-priority-list">
+          ${context.lowStockItems.length > 0
+            ? context.lowStockItems.slice(0, 5).map((item, index) => `
+                <div class="dashboard-priority-item">
+                  <div class="dashboard-priority-rank">${index + 1}</div>
+                  <div class="dashboard-priority-main">
+                    <div class="dashboard-priority-title">${escapeHtml(item.itemName || '-')}</div>
+                    <div class="dashboard-priority-meta">현재 ${formatNumber(item.quantity)}개 / 안전재고 ${formatNumber(item.minimum)}개</div>
+                  </div>
+                  <span class="badge badge-danger">부족</span>
+                </div>
+              `).join('')
+            : context.topItems.length > 0
+              ? context.topItems.map((item, index) => `
+                  <div class="dashboard-priority-item">
+                    <div class="dashboard-priority-rank">${index + 1}</div>
+                    <div class="dashboard-priority-main">
+                      <div class="dashboard-priority-title">${escapeHtml(item.itemName || '-')}</div>
+                      <div class="dashboard-priority-meta">${escapeHtml(item.category || '미분류')} · ${formatNumber(item.quantity)}개 보유</div>
+                    </div>
+                    <strong>${formatCurrency(getItemValue(item))}</strong>
+                  </div>
+                `).join('')
+              : '<div class="dashboard-empty-note">표시할 우선 품목 데이터가 없습니다.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderActionCards(cards) {
+  return cards.map(card => `
+    <button class="dashboard-action-card" data-nav="${card.nav}">
+      <div class="dashboard-action-title">${card.title}</div>
+      <div class="dashboard-action-desc">${card.desc}</div>
+      <div class="dashboard-action-meta">${card.meta}</div>
+    </button>
+  `).join('');
+}
+
+function renderWorkItems(items) {
+  return items.map(item => `
+    <div class="dashboard-work-item">
+      <div class="dashboard-work-kicker">${item.kicker}</div>
+      <div class="dashboard-work-main">
+        <div class="dashboard-work-title">${item.title}</div>
+        <div class="dashboard-work-desc">${item.desc}</div>
+      </div>
+      <button class="btn btn-outline btn-sm dashboard-work-cta" data-nav="${item.nav}">${item.action}</button>
+    </div>
+  `).join('');
+}
+
+function buildExecutiveDecisions(context) {
+  const decisions = [];
+
+  decisions.push(
+    context.lowStockItems.length > 0
+      ? {
+          kicker: '긴급',
+          title: `안전재고 이하 품목 ${formatNumber(context.lowStockItems.length)}건`,
+          desc: `${escapeHtml(context.lowStockItems[0]?.itemName || '부족 품목')}부터 보충 일정과 발주량을 검토하는 것이 좋습니다.`,
+          nav: 'inventory',
+          action: '부족 품목 보기',
+        }
+      : {
+          kicker: '안정',
+          title: '안전재고 부족 품목 없음',
+          desc: '현재 기준으로 즉시 보충이 필요한 품목은 없습니다.',
+          nav: 'inventory',
+          action: '재고 현황 보기',
+        }
+  );
+
+  decisions.push(
+    context.deadStockItems.length > 0
+      ? {
+          kicker: '정체',
+          title: `장기 미출고 품목 ${formatNumber(context.deadStockItems.length)}건`,
+          desc: `${escapeHtml(context.deadStockItems[0]?.itemName || '정체 재고')} 같은 묶인 자산은 할인, 폐기, 재배치 판단이 필요합니다.`,
+          nav: 'dashboard',
+          action: '고급 분석 보기',
+        }
+      : {
+          kicker: '흐름',
+          title: '장기 정체 재고가 거의 없습니다',
+          desc: '최근 30일 동안 재고 흐름이 비교적 건강하게 유지되고 있습니다.',
+          nav: 'summary',
+          action: '요약 보고 보기',
+        }
+  );
+
+  decisions.push(
+    context.expiringSoonItems.length > 0
+      ? {
+          kicker: '기한',
+          title: `유통기한 임박 품목 ${formatNumber(context.expiringSoonItems.length)}건`,
+          desc: `${escapeHtml(context.expiringSoonItems[0]?.itemName || '임박 품목')}은 우선 소진이나 판매 정책 조정이 필요합니다.`,
+          nav: 'inventory',
+          action: '해당 품목 보기',
+        }
+      : {
+          kicker: '안정',
+          title: '기한 임박 품목 없음',
+          desc: '30일 이내 만료 예정 품목이 없어 폐기 리스크가 낮습니다.',
+          nav: 'inventory',
+          action: '재고 현황 보기',
+        }
+  );
+
+  decisions.push(
+    context.notifications.length > 0
+      ? {
+          kicker: '알림',
+          title: `실시간 알림 ${formatNumber(context.notifications.length)}건`,
+          desc: '현장 이슈 또는 운영 알림이 남아 있으니 의사결정 전에 먼저 확인해 주세요.',
+          nav: 'summary',
+          action: '요약 보고 열기',
+        }
+      : {
+          kicker: '분류',
+          title: context.topCategory ? `${escapeHtml(context.topCategory[0])} 분류가 가장 큽니다` : '분류 데이터 확인 필요',
+          desc: context.topCategory
+            ? `현재 상위 분류는 ${formatNumber(context.topCategory[1])}개를 보유하고 있습니다.`
+            : '품목 분류가 비어 있으면 분석 정확도가 떨어질 수 있습니다.',
+          nav: 'inventory',
+          action: '재고 데이터 보기',
+        }
+  );
+
+  if (context.coverageDays !== null) {
+    decisions.push({
+      kicker: '커버',
+      title: `현 재고는 약 ${formatNumber(context.coverageDays)}일을 버팁니다`,
+      desc: '최근 30일 평균 출고 속도를 기준으로 한 재고 커버일입니다.',
+      nav: 'summary',
+      action: '상세 수치 보기',
+    });
+  }
+
+  return decisions.slice(0, 4);
+}
+
+function buildOperatorTasks(context) {
+  const tasks = [];
+
+  tasks.push(
+    context.lowStockItems.length > 0
+      ? {
+          kicker: '1순위',
+          title: `부족 품목 ${formatNumber(context.lowStockItems.length)}건 확인`,
+          desc: `${escapeHtml(context.lowStockItems[0]?.itemName || '부족 품목')}부터 현재 수량과 보충 계획을 확인하세요.`,
+          nav: 'inventory',
+          action: '재고 보기',
+        }
+      : {
+          kicker: '1순위',
+          title: '재고 부족 품목 없음',
+          desc: '오늘은 부족 재고보다 입출고 기록 누락 여부를 먼저 보면 됩니다.',
+          nav: 'inout',
+          action: '입출고 열기',
+        }
+  );
+
+  tasks.push(
+    context.expiringSoonItems.length > 0
+      ? {
+          kicker: '2순위',
+          title: `임박 품목 ${formatNumber(context.expiringSoonItems.length)}건 처리`,
+          desc: `${escapeHtml(context.expiringSoonItems[0]?.itemName || '임박 품목')}의 우선 출고 또는 진열 계획을 잡아 주세요.`,
+          nav: 'inventory',
+          action: '품목 보기',
+        }
+      : {
+          kicker: '2순위',
+          title: '유통기한 임박 품목 없음',
+          desc: '기한 이슈는 없으니 오늘 처리량과 부족 품목에 집중하면 됩니다.',
+          nav: 'summary',
+          action: '요약 보기',
+        }
+  );
+
+  tasks.push(
+    context.todayTxCount > 0
+      ? {
+          kicker: '3순위',
+          title: `오늘 거래 ${formatNumber(context.todayTxCount)}건 점검`,
+          desc: '입고/출고 수량이 실제 현장 기록과 맞는지 확인해 주세요.',
+          nav: 'ledger',
+          action: '수불부 보기',
+        }
+      : {
+          kicker: '3순위',
+          title: '오늘 거래 기록이 아직 없습니다',
+          desc: '입고나 출고가 있었다면 지금 바로 기록해 두는 것이 좋습니다.',
+          nav: 'inout',
+          action: '거래 등록',
+        }
+  );
+
+  tasks.push(
+    context.notifications.length > 0
+      ? {
+          kicker: '점검',
+          title: `실시간 알림 ${formatNumber(context.notifications.length)}건 확인`,
+          desc: '경고를 먼저 확인하면 누락되는 현장 이슈를 줄일 수 있습니다.',
+          nav: 'summary',
+          action: '알림 확인',
+        }
+      : {
+          kicker: '점검',
+          title: `정체 재고 ${formatNumber(context.deadStockItems.length)}건 점검`,
+          desc: context.deadStockItems.length > 0
+            ? '움직이지 않는 재고가 쌓이지 않도록 진열과 프로모션을 조정해 보세요.'
+            : '현재는 장기 정체 재고도 많지 않아 안정적인 편입니다.',
+          nav: 'dashboard',
+          action: '분석 보기',
+        }
+  );
+
+  return tasks;
+}
+
+function getRiskLevel(lowStockCount, expiringCount, deadStockCount) {
+  if (lowStockCount > 0 || expiringCount > 0) return '주의';
+  if (deadStockCount > 0) return '점검 필요';
+  return '안정';
+}
+
+function getItemValue(item) {
+  const totalPrice = toNumber(item.totalPrice);
+  if (totalPrice > 0) return totalPrice;
+  return toNumber(item.quantity) * toNumber(item.unitPrice || item.salePrice);
+}
+
 function getLast7Days(transactions) {
   const result = [];
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const label = `${d.getMonth() + 1}/${d.getDate()} (${dayNames[d.getDay()]})`;
-    const dayTx = transactions.filter(tx => tx.date === dateStr);
+
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const date = addDays(new Date(), -offset);
+    const dateKey = toDateKey(date);
+    const dayTransactions = transactions.filter(tx => String(tx.date || '') === dateKey);
+
     result.push({
-      date: dateStr,
-      label,
-      inQty: dayTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0),
-      outQty: dayTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0),
+      date: dateKey,
+      label: `${date.getMonth() + 1}/${date.getDate()} (${dayNames[date.getDay()]})`,
+      inQty: sumBy(dayTransactions.filter(tx => tx.type === 'in'), tx => toNumber(tx.quantity)),
+      outQty: sumBy(dayTransactions.filter(tx => tx.type === 'out'), tx => toNumber(tx.quantity)),
     });
   }
+
   return result;
 }
 
-/**
- * 최근 6개월 입출고 데이터 계산
- * 왜 6개월? → 월별 추이를 보려면 최소 6개월은 있어야 패턴을 파악할 수 있음
- */
 function getLast6Months(transactions) {
   const result = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const year = d.getFullYear();
-    const month = d.getMonth();
-    const label = `${month + 1}월`;
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-    const monthTx = transactions.filter(tx => (tx.date || '').startsWith(prefix));
+  for (let offset = 5; offset >= 0; offset -= 1) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - offset);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const prefix = `${year}-${String(month).padStart(2, '0')}`;
+    const monthTransactions = transactions.filter(tx => String(tx.date || '').startsWith(prefix));
+
     result.push({
-      label,
-      inQty: monthTx.filter(tx => tx.type === 'in').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0),
-      outQty: monthTx.filter(tx => tx.type === 'out').reduce((s, tx) => s + (parseFloat(tx.quantity) || 0), 0),
+      label: `${month}월`,
+      inQty: sumBy(monthTransactions.filter(tx => tx.type === 'in'), tx => toNumber(tx.quantity)),
+      outQty: sumBy(monthTransactions.filter(tx => tx.type === 'out'), tx => toNumber(tx.quantity)),
     });
   }
+
   return result;
+}
+
+function addDays(baseDate, delta) {
+  const copy = new Date(baseDate);
+  copy.setDate(copy.getDate() + delta);
+  return copy;
+}
+
+function toDateKey(value) {
+  return new Date(value).toISOString().split('T')[0];
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const numeric = Number.parseFloat(String(value).replace(/,/g, ''));
+  return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function sumBy(rows, iteratee) {
+  return rows.reduce((sum, row) => sum + iteratee(row), 0);
+}
+
+function formatNumber(value) {
+  return Math.round(toNumber(value)).toLocaleString('ko-KR');
+}
+
+function formatCurrency(value) {
+  const numeric = toNumber(value);
+  if (numeric <= 0) return '-';
+  return `₩${Math.round(numeric).toLocaleString('ko-KR')}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
