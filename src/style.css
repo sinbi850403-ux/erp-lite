@@ -2014,6 +2014,32 @@ html.dark-mode .report-spotlight-card {
   margin-bottom: 0;
 }
 
+.home-collapse-strip {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.home-collapse-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.home-collapse-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.home-collapse-strip.is-collapsed {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
 .dashboard-quick-card {
   margin-bottom: 16px;
 }

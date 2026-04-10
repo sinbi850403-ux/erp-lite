@@ -8,6 +8,8 @@ import {
 } from './charts.js';
 import { renderGuidedPanel } from './ux-toolkit.js';
 
+const HOME_COLLAPSE_STORAGE_KEY = 'invex:home:collapsed-sections:v1';
+
 export function renderHomePage(container, navigateTo) {
   destroyAllCharts();
 
@@ -444,11 +446,83 @@ export function renderHomePage(container, navigateTo) {
     renderDashboardCharts();
   }, 50);
 
+  initHomeSectionCollapse();
+
   function renderDashboardCharts() {
     renderWeeklyTrendChart('chart-weekly', sortTimeSeriesData(weekData, chartSort.weekly));
     renderMonthlyChart('chart-monthly', sortTimeSeriesData(monthData, chartSort.monthly));
     if (categories.length > 0) {
       renderCategoryChart('chart-category', sortCategorySeries(categories, chartSort.category));
+    }
+  }
+
+  function initHomeSectionCollapse() {
+    const collapsedState = loadHomeCollapsedState();
+    const sectionConfigs = [
+      { id: 'mode', selector: '.dashboard-mode-shell', label: '대시보드 모드' },
+      { id: 'quick', selector: '.dashboard-quick-card', label: '빠른 실행' },
+      { id: 'guide', selector: '.mission-panel', label: '대시보드 가이드' },
+      { id: 'hero', selector: '.dashboard-hero', label: dashboardMode === 'executive' ? '핵심 요약' : '실무 요약' },
+      { id: 'work', selector: '.dashboard-section-grid', label: dashboardMode === 'executive' ? '의사결정과 우선 품목' : '처리 순서와 우선 품목' },
+      { id: 'chart', selector: '.dashboard-chart-grid', label: '차트 분석' },
+      { id: 'side', selector: '.dashboard-side-grid', label: '거래와 분류 현황' },
+    ];
+
+    sectionConfigs.forEach(config => {
+      const sectionEl = container.querySelector(config.selector);
+      if (!sectionEl) return;
+
+      const strip = document.createElement('div');
+      strip.className = 'home-collapse-strip';
+      strip.dataset.homeCollapseId = config.id;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-ghost btn-sm home-collapse-toggle';
+      strip.appendChild(button);
+      sectionEl.before(strip);
+
+      const applyState = () => {
+        const collapsed = !!collapsedState[config.id];
+        sectionEl.style.display = collapsed ? 'none' : '';
+        strip.classList.toggle('is-collapsed', collapsed);
+        button.textContent = `${config.label} ${collapsed ? '펼치기' : '접기'}`;
+        button.setAttribute('aria-expanded', String(!collapsed));
+        button.setAttribute('aria-label', `${config.label} ${collapsed ? '펼치기' : '접기'}`);
+      };
+
+      button.addEventListener('click', () => {
+        const isCollapsed = !!collapsedState[config.id];
+        if (isCollapsed) delete collapsedState[config.id];
+        else collapsedState[config.id] = true;
+        saveHomeCollapsedState(collapsedState);
+        applyState();
+
+        if (isCollapsed && (config.id === 'chart' || config.id === 'side')) {
+          setTimeout(() => renderDashboardCharts(), 0);
+        }
+      });
+
+      applyState();
+    });
+  }
+
+  function loadHomeCollapsedState() {
+    try {
+      const raw = localStorage.getItem(HOME_COLLAPSE_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveHomeCollapsedState(nextState) {
+    try {
+      localStorage.setItem(HOME_COLLAPSE_STORAGE_KEY, JSON.stringify(nextState));
+    } catch {
+      // Ignore storage errors to keep the dashboard functional.
     }
   }
 }
