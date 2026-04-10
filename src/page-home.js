@@ -25,7 +25,8 @@ export function renderHomePage(container, navigateTo) {
 
   const totalItems = items.length;
   const totalQty = sumBy(items, item => toNumber(item.quantity));
-  const totalValue = sumBy(items, item => getItemValue(item));
+  const totalSaleValue = sumBy(items, item => getItemSaleValue(item));
+  const totalSupplyValue = sumBy(items, item => getItemSupplyValue(item));
   const totalVendors = new Set([
     ...(state.vendorMaster || []).map(vendor => vendor.name).filter(Boolean),
     ...items.map(item => item.vendor).filter(Boolean),
@@ -89,7 +90,7 @@ export function renderHomePage(container, navigateTo) {
 
   const riskLevel = getRiskLevel(lowStockItems.length, expiringSoonItems.length, deadStockItems.length);
   const executiveSummary = [
-    `총 재고자산은 ${formatCurrency(totalValue)}입니다.`,
+    `총 재고자산은 소가 기준 ${formatCurrency(totalSaleValue)}, 공급가 기준 ${formatCurrency(totalSupplyValue)}입니다.`,
     `안전재고 부족 ${lowStockItems.length}건, 30일 이상 정체 ${deadStockItems.length}건, 유통기한 임박 ${expiringSoonItems.length}건입니다.`,
     `최근 30일 기준 입고 ${formatNumber(last30InQty)}개, 출고 ${formatNumber(last30OutQty)}개가 기록되었습니다.`,
   ].join(' ');
@@ -201,7 +202,8 @@ export function renderHomePage(container, navigateTo) {
       ? renderExecutiveView({
           riskLevel,
           executiveSummary,
-          totalValue,
+          totalSaleValue,
+          totalSupplyValue,
           lowStockItems,
           deadStockItems,
           expiringSoonItems,
@@ -396,9 +398,14 @@ function renderExecutiveView(context) {
 
           <div class="dashboard-highlight-grid">
             <div class="dashboard-highlight">
-              <div class="dashboard-highlight-label">총 재고자산</div>
-              <div class="dashboard-highlight-value">${formatCurrency(context.totalValue)}</div>
-              <div class="dashboard-highlight-note">현재 보유 중인 재고 자산 총액입니다.</div>
+              <div class="dashboard-highlight-label">총 재고자산(소가)</div>
+              <div class="dashboard-highlight-value">${formatCurrency(context.totalSaleValue)}</div>
+              <div class="dashboard-highlight-note">판매가가 입력된 품목 기준 재고 자산입니다.</div>
+            </div>
+            <div class="dashboard-highlight">
+              <div class="dashboard-highlight-label">총 재고자산(공급가)</div>
+              <div class="dashboard-highlight-value">${formatCurrency(context.totalSupplyValue)}</div>
+              <div class="dashboard-highlight-note">원가 기준 공급가액 합계입니다.</div>
             </div>
             <div class="dashboard-highlight">
               <div class="dashboard-highlight-label">가장 먼저 볼 리스크</div>
@@ -444,7 +451,7 @@ function renderExecutiveView(context) {
                 <div class="dashboard-signal-head">자산 집중 품목</div>
                 <div class="dashboard-signal-desc">
                   ${context.topValueItem
-                    ? `${escapeHtml(context.topValueItem.itemName)}가 가장 큰 금액 품목이며 현재 가치 ${formatCurrency(getItemValue(context.topValueItem))}입니다.`
+                    ? `${escapeHtml(context.topValueItem.itemName)}가 자산 비중이 가장 큰 품목이며 소가 ${formatCurrency(getItemSaleValue(context.topValueItem))}, 공급가 ${formatCurrency(getItemSupplyValue(context.topValueItem))}입니다.`
                     : '아직 금액 데이터를 계산할 품목이 없습니다.'}
                 </div>
               </div>
@@ -832,9 +839,21 @@ function getRiskLevel(lowStockCount, expiringCount, deadStockCount) {
 }
 
 function getItemValue(item) {
-  const totalPrice = toNumber(item.totalPrice);
-  if (totalPrice > 0) return totalPrice;
-  return toNumber(item.quantity) * toNumber(item.unitPrice || item.salePrice);
+  const saleValue = getItemSaleValue(item);
+  if (saleValue > 0) return saleValue;
+  return getItemSupplyValue(item);
+}
+
+function getItemSaleValue(item) {
+  const salePrice = toNumber(item.salePrice);
+  if (salePrice <= 0) return 0;
+  return toNumber(item.quantity) * salePrice;
+}
+
+function getItemSupplyValue(item) {
+  const supplyValue = toNumber(item.supplyValue);
+  if (supplyValue > 0) return supplyValue;
+  return toNumber(item.quantity) * toNumber(item.unitPrice || item.unitCost);
 }
 
 function getLast7Days(transactions) {
