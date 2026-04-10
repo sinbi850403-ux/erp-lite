@@ -120,7 +120,7 @@ export function renderHomePage(container, navigateTo) {
   const actionCards = dashboardMode === 'executive'
     ? [
         { title: '자산 집중 점검', desc: '금액이 큰 품목과 정체 재고를 빠르게 확인합니다.', meta: '재고 현황으로 이동', nav: 'inventory' },
-        { title: '손익 분석 열기', desc: '원가와 이익 가능성을 보고 의사결정을 내립니다.', meta: '고급 분석으로 이동', nav: 'dashboard' },
+        { title: '손익 분석 열기', desc: '원가와 이익 가능성을 보고 의사결정을 내립니다.', meta: '손익 분석으로 이동', nav: 'profit' },
         { title: '주간 보고 확인', desc: '운영 지표와 이상 흐름을 한 페이지로 확인합니다.', meta: '주간 보고서 열기', nav: 'weekly-report' },
         { title: '거래처 점검', desc: '공급처와 고객 현황을 보고 거래 집중도를 확인합니다.', meta: '거래처 관리로 이동', nav: 'vendors' },
       ]
