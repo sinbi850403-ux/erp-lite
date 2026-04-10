@@ -178,31 +178,33 @@ export function renderInventoryPage(container, navigateTo) {
     </div>
 
     <!-- ?듦퀎 移대뱶 -->
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-label">전체 품목</div>
-        <div class="stat-value text-accent" id="stat-total">${data.length}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">총 수량</div>
-        <div class="stat-value text-accent" id="stat-qty">${calcTotalQty(data)}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">합계 공급가액</div>
-        <div class="stat-value text-accent" id="stat-supply">${calcTotalSupply(data)}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">합계 부가세</div>
-        <div class="stat-value text-accent" id="stat-vat">${calcTotalVat(data)}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">총 합계금액</div>
-        <div class="stat-value text-success" id="stat-price">${calcTotalPrice(data)}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">재고 부족 경고</div>
-        <div class="stat-value ${warningCount > 0 ? 'text-danger' : ''}" id="stat-warn">
-          ${warningCount > 0 ? `${warningCount}건` : '없음'}
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-stats" data-collapsible-label="핵심 지표">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">전체 품목</div>
+          <div class="stat-value text-accent" id="stat-total">${data.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">총 수량</div>
+          <div class="stat-value text-accent" id="stat-qty">${calcTotalQty(data)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">합계 공급가액</div>
+          <div class="stat-value text-accent" id="stat-supply">${calcTotalSupply(data)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">합계 부가세</div>
+          <div class="stat-value text-accent" id="stat-vat">${calcTotalVat(data)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">총 합계금액</div>
+          <div class="stat-value text-success" id="stat-price">${calcTotalPrice(data)}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">재고 부족 경고</div>
+          <div class="stat-value ${warningCount > 0 ? 'text-danger' : ''}" id="stat-warn">
+            ${warningCount > 0 ? `${warningCount}건` : '없음'}
+          </div>
         </div>
       </div>
     </div>
@@ -225,51 +227,56 @@ export function renderInventoryPage(container, navigateTo) {
       </div>
     ` : ''}
 
-    ${renderInsightHero({
-      eyebrow: '재고 운영 상태',
-      title: '누가 봐도 바로 이해되는 재고 상태를 먼저 보여줍니다.',
-      desc: '수량, 금액, 거래처 연결, 위치 입력 상태를 한 번에 묶어 초보자도 무엇부터 정리할지 바로 판단할 수 있게 구성했습니다.',
-      tone: warningCount > 0 ? 'warning' : 'success',
-      metrics: inventoryHealthMetrics,
-      bullets: [
-        warningCount > 0 ? `부족 품목 ${warningCount}건을 먼저 보충할지 여부를 판단해 보세요.` : '부족 품목이 없습니다. 현재 재고 흐름이 안정적입니다.',
-        missingVendorCount > 0 ? `거래처가 비어 있는 품목 ${missingVendorCount}건은 발주와 문서 연결 전에 보완하는 것이 좋습니다.` : '거래처 정보가 충분히 연결되어 있습니다.',
-        missingWarehouseCount > 0 ? `위치가 비어 있으면 현장 조회가 느려집니다. 위치 미입력 품목을 우선 정리해 주세요.` : '위치 정보도 잘 정리되어 있습니다.',
-      ],
-      actions: [
-        { id: 'btn-add-item-inline', label: '품목 바로 추가', variant: 'btn-primary' },
-        { nav: 'dashboard', label: '고급 분석 보기', variant: 'btn-outline' },
-        { nav: 'guide', label: '입력 가이드 보기', variant: 'btn-ghost' },
-      ],
-    })}
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-health" data-collapsible-label="재고 운영 상태">
+      ${renderInsightHero({
+        eyebrow: '재고 운영 상태',
+        title: '누가 봐도 바로 이해되는 재고 상태를 먼저 보여줍니다.',
+        desc: '수량, 금액, 거래처 연결, 위치 입력 상태를 한 번에 묶어 초보자도 무엇부터 정리할지 바로 판단할 수 있게 구성했습니다.',
+        tone: warningCount > 0 ? 'warning' : 'success',
+        metrics: inventoryHealthMetrics,
+        bullets: [
+          warningCount > 0 ? `부족 품목 ${warningCount}건을 먼저 보충할지 여부를 판단해 보세요.` : '부족 품목이 없습니다. 현재 재고 흐름이 안정적입니다.',
+          missingVendorCount > 0 ? `거래처가 비어 있는 품목 ${missingVendorCount}건은 발주와 문서 연결 전에 보완하는 것이 좋습니다.` : '거래처 정보가 충분히 연결되어 있습니다.',
+          missingWarehouseCount > 0 ? `위치가 비어 있으면 현장 조회가 느려집니다. 위치 미입력 품목을 우선 정리해 주세요.` : '위치 정보도 잘 정리되어 있습니다.',
+        ],
+        actions: [
+          { id: 'btn-add-item-inline', label: '품목 바로 추가', variant: 'btn-primary' },
+          { nav: 'dashboard', label: '고급 분석 보기', variant: 'btn-outline' },
+          { nav: 'guide', label: '입력 가이드 보기', variant: 'btn-ghost' },
+        ],
+      })}
+    </div>
 
     ${beginnerMode && !hasTransactions ? `
-    <div class="card quick-start-card">
-      <div class="quick-start-head">
-        <div>
-          <div class="quick-start-title">처음 사용자 추천 흐름</div>
-          <div class="quick-start-desc">3단계만 따라가면 바로 재고 운영이 가능합니다.</div>
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-quick-start" data-collapsible-label="처음 사용자 추천 흐름">
+      <div class="card quick-start-card">
+        <div class="quick-start-head">
+          <div>
+            <div class="quick-start-title">처음 사용자 추천 흐름</div>
+            <div class="quick-start-desc">3단계만 따라가면 바로 재고 운영이 가능합니다.</div>
+          </div>
+          <span class="badge badge-info">초보자 모드</span>
         </div>
-        <span class="badge badge-info">초보자 모드</span>
-      </div>
-      <div class="quick-start-steps">
-        <div class="quick-start-step is-done">1) 재고 품목 확인 완료</div>
-        <div class="quick-start-step">2) 첫 입출고 등록</div>
-        <div class="quick-start-step">3) 대시보드에서 현황 확인</div>
-      </div>
-      <div class="quick-start-actions">
-        <button class="btn btn-primary btn-sm" id="btn-quick-inout">첫 입출고 등록</button>
-        <button class="btn btn-outline btn-sm" id="btn-quick-guide">사용 가이드</button>
-        <button class="btn btn-ghost btn-sm" id="btn-quick-dashboard">대시보드 이동</button>
+        <div class="quick-start-steps">
+          <div class="quick-start-step is-done">1) 재고 품목 확인 완료</div>
+          <div class="quick-start-step">2) 첫 입출고 등록</div>
+          <div class="quick-start-step">3) 대시보드에서 현황 확인</div>
+        </div>
+        <div class="quick-start-actions">
+          <button class="btn btn-primary btn-sm" id="btn-quick-inout">첫 입출고 등록</button>
+          <button class="btn btn-outline btn-sm" id="btn-quick-guide">사용 가이드</button>
+          <button class="btn btn-ghost btn-sm" id="btn-quick-dashboard">대시보드 이동</button>
+        </div>
       </div>
     </div>
     ` : ''}
 
-    ${renderQuickFilterRow({
-      label: '빠른 보기',
-      attr: 'data-inventory-focus',
-      chips: inventoryFocusChips.map(chip => ({ ...chip, active: chip.value === 'all' })),
-    })}
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-filters" data-collapsible-label="검색 · 필터 · 일괄 작업">
+      ${renderQuickFilterRow({
+        label: '빠른 보기',
+        attr: 'data-inventory-focus',
+        chips: inventoryFocusChips.map(chip => ({ ...chip, active: chip.value === 'all' })),
+      })}
 
     <!-- 寃???꾪꽣 + ?뺣젹 + 而щ읆 ?ㅼ젙 -->
     <div class="toolbar">
@@ -337,39 +344,44 @@ export function renderInventoryPage(container, navigateTo) {
     </div>
     <div class="filter-summary" id="inventory-filter-summary"></div>
 
-    <div class="card inventory-bulk-bar" id="inventory-bulk-bar">
-      <div class="inventory-bulk-count" id="inventory-selected-count">선택 0개</div>
-      <div class="inventory-bulk-actions">
-        <button class="btn btn-outline btn-sm" id="btn-bulk-category" disabled>선택 분류 변경</button>
-        <button class="btn btn-outline btn-sm" id="btn-bulk-export" disabled>선택 엑셀 내보내기</button>
-        <button class="btn btn-danger btn-sm" id="btn-bulk-delete" disabled>선택 삭제</button>
+      <div class="card inventory-bulk-bar" id="inventory-bulk-bar">
+        <div class="inventory-bulk-count" id="inventory-selected-count">선택 0개</div>
+        <div class="inventory-bulk-actions">
+          <button class="btn btn-outline btn-sm" id="btn-bulk-category" disabled>선택 분류 변경</button>
+          <button class="btn btn-outline btn-sm" id="btn-bulk-export" disabled>선택 엑셀 내보내기</button>
+          <button class="btn btn-danger btn-sm" id="btn-bulk-delete" disabled>선택 삭제</button>
+        </div>
       </div>
     </div>
 
     <!-- ?곗씠???뚯씠釉?-->
-    <div class="card card-flush">
-      <div class="table-wrapper" style="border:none;">
-        <table class="data-table" id="inventory-table">
-          <thead id="inventory-thead"></thead>
-          <tbody id="inventory-body"></tbody>
-        </table>
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-table" data-collapsible-label="재고 테이블">
+      <div class="card card-flush">
+        <div class="table-wrapper" style="border:none;">
+          <table class="data-table" id="inventory-table">
+            <thead id="inventory-thead"></thead>
+            <tbody id="inventory-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
       </div>
-      <div class="pagination" id="pagination"></div>
     </div>
 
-    <div class="card inventory-timeline-card">
-      <div class="inventory-timeline-head">
-        <div>
-          <div class="card-title" id="item-timeline-title">품목 이력 타임라인</div>
-          <div class="chart-help-text" id="item-timeline-meta">테이블에서 품목을 선택하면 입출고 흐름과 최근 이력을 바로 확인할 수 있습니다.</div>
+    <div class="inventory-collapsible-section" data-collapsible-section="inventory-timeline" data-collapsible-label="품목 이력 타임라인">
+      <div class="card inventory-timeline-card">
+        <div class="inventory-timeline-head">
+          <div>
+            <div class="card-title" id="item-timeline-title">품목 이력 타임라인</div>
+            <div class="chart-help-text" id="item-timeline-meta">테이블에서 품목을 선택하면 입출고 흐름과 최근 이력을 바로 확인할 수 있습니다.</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-item-history-inout">입출고 기록 열기</button>
         </div>
-        <button class="btn btn-ghost btn-sm" id="btn-item-history-inout">입출고 기록 열기</button>
-      </div>
-      <div class="inventory-timeline-grid">
-        <div class="inventory-timeline-chart">
-          <canvas id="chart-item-timeline"></canvas>
+        <div class="inventory-timeline-grid">
+          <div class="inventory-timeline-chart">
+            <canvas id="chart-item-timeline"></canvas>
+          </div>
+          <div class="inventory-timeline-list" id="item-timeline-list"></div>
         </div>
-        <div class="inventory-timeline-list" id="item-timeline-list"></div>
       </div>
     </div>
 
@@ -388,6 +400,86 @@ export function renderInventoryPage(container, navigateTo) {
   let persistTimer = null;
   let selectedIndexes = new Set();
   let focusedItemKey = data[0] ? getItemKey(data[0]) : '';
+  const COLLAPSE_STORAGE_KEY = 'invex:inventory:collapsed-sections:v1';
+  const collapsedSections = loadCollapsedSections();
+
+  function loadCollapsedSections() {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function persistCollapsedSections() {
+    try {
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(collapsedSections));
+    } catch (error) {
+      // Ignore storage errors and keep UI usable.
+    }
+  }
+
+  function updateCollapsibleSection(sectionEl) {
+    if (!sectionEl) return;
+    const sectionId = sectionEl.dataset.collapsibleSection;
+    if (!sectionId) return;
+
+    const label = sectionEl.dataset.collapsibleLabel || '섹션';
+    const collapsed = !!collapsedSections[sectionId];
+    sectionEl.classList.toggle('is-collapsed', collapsed);
+
+    const toggleBtn = sectionEl.querySelector('.inventory-collapse-toggle');
+    if (!toggleBtn) return;
+    toggleBtn.textContent = `${label} ${collapsed ? '펼치기' : '접기'}`;
+    toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+    toggleBtn.setAttribute('aria-label', `${label} ${collapsed ? '펼치기' : '접기'}`);
+  }
+
+  function initCollapsibleSections() {
+    container.querySelectorAll('[data-collapsible-section]').forEach((sectionEl, index) => {
+      if (!sectionEl.dataset.collapsibleSection) {
+        sectionEl.dataset.collapsibleSection = `inventory-section-${index + 1}`;
+      }
+
+      if (sectionEl.dataset.collapseReady !== '1') {
+        const sectionId = sectionEl.dataset.collapsibleSection;
+
+        const body = document.createElement('div');
+        body.className = 'inventory-collapsible-body';
+        while (sectionEl.firstChild) {
+          body.appendChild(sectionEl.firstChild);
+        }
+
+        const header = document.createElement('div');
+        header.className = 'inventory-collapse-header';
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'btn btn-ghost btn-sm inventory-collapse-toggle';
+        header.appendChild(toggleBtn);
+
+        sectionEl.appendChild(header);
+        sectionEl.appendChild(body);
+        sectionEl.dataset.collapseReady = '1';
+
+        toggleBtn.addEventListener('click', () => {
+          const nextCollapsed = !collapsedSections[sectionId];
+          if (nextCollapsed) {
+            collapsedSections[sectionId] = true;
+          } else {
+            delete collapsedSections[sectionId];
+          }
+          persistCollapsedSections();
+          updateCollapsibleSection(sectionEl);
+        });
+      }
+
+      updateCollapsibleSection(sectionEl);
+    });
+  }
 
   function sanitizeInventoryFilter(raw) {
     const candidate = raw || {};
@@ -1257,6 +1349,8 @@ export function renderInventoryPage(container, navigateTo) {
       warnEl.className = `stat-value ${wc > 0 ? 'text-danger' : ''}`;
     }
   }
+
+  initCollapsibleSections();
 
   // === 而щ읆 ?ㅼ젙 ?⑤꼸 ?대깽??===
 

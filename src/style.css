@@ -1259,6 +1259,43 @@ a:hover {
   background: rgba(37, 99, 235, 0.16);
 }
 
+.inventory-collapsible-section {
+  margin-bottom: 12px;
+}
+
+.inventory-collapse-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.inventory-collapse-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.inventory-collapse-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.inventory-collapsible-section.is-collapsed {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--bg-card);
+}
+
+.inventory-collapsible-section.is-collapsed .inventory-collapse-header {
+  margin-bottom: 0;
+}
+
+.inventory-collapsible-section.is-collapsed .inventory-collapsible-body {
+  display: none;
+}
+
 .upload-diff-card {
   margin-bottom: 16px;
 }
