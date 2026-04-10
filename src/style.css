@@ -1296,6 +1296,47 @@ a:hover {
   display: none;
 }
 
+.auto-collapsible-section {
+  margin-bottom: 12px;
+}
+
+.auto-collapsible-section > .auto-collapsible-body > * {
+  margin-bottom: 0;
+}
+
+.auto-collapse-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.auto-collapse-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.auto-collapse-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.auto-collapsible-section.is-collapsed {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--bg-card);
+}
+
+.auto-collapsible-section.is-collapsed .auto-collapse-header {
+  margin-bottom: 0;
+}
+
+.auto-collapsible-section.is-collapsed .auto-collapsible-body {
+  display: none;
+}
+
 .upload-diff-card {
   margin-bottom: 16px;
 }

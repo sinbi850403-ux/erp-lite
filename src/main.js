@@ -23,6 +23,7 @@ import { renderNotificationPanel, getNotificationCount } from './notifications.j
 import { showToast } from './toast.js';
 import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser, injectGetUserProfile } from './plan.js';
 import { mountAutoTableSort } from './table-auto-sort.js';
+import { applyPageCollapsibleSections } from './page-collapsible.js';
 
 // ?ㅽ겕 紐⑤뱶 珥덇린??
 initTheme();
@@ -505,6 +506,7 @@ async function navigateTo(pageName) {
     if (token !== navigationToken || currentPage !== pageName) return;
     mainContent.innerHTML = '';
     renderPage(mainContent, navigateTo);
+    applyPageCollapsibleSections(mainContent, pageName);
     mountAutoTableSort(mainContent);
   } catch (error) {
     console.error('Failed to load page:', pageName, error);
