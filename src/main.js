@@ -433,6 +433,7 @@ async function navigateTo(pageName) {
     if (token !== navigationToken || currentPage !== pageName) return;
     mainContent.innerHTML = '';
     renderPage(mainContent, navigateTo);
+    initCardCollapsibles(mainContent, pageName);
     mountAutoTableSort(mainContent);
   } catch (error) {
     console.error('Failed to load page:', pageName, error);
@@ -482,6 +483,55 @@ function updateNotifBadge() {
 window.addEventListener('notifications-updated', () => {
   updateNotifBadge();
 });
+
+function initCardCollapsibles(container, pageName) {
+  const collapsiblePages = new Set([
+    'inventory', 'inout', 'bulk', 'warehouses', 'transfer', 'stocktake', 'vendors', 'auto-order', 'orders', 'forecast',
+    'summary', 'weekly-report', 'profit', 'accounts', 'costing', 'dashboard', 'tax-reports', 'documents',
+  ]);
+  if (!collapsiblePages.has(pageName)) return;
+
+  const cards = Array.from(container.querySelectorAll('.card'));
+  cards.forEach((card, index) => {
+    if (card.classList.contains('fold-card') || card.classList.contains('mission-panel')) return;
+    if (card.closest('.stat-grid')) return;
+    if (card.querySelector('.card-collapse-toggle')) return;
+
+    const titleEl = card.querySelector('.card-title') || card.querySelector('.chart-control-row .card-title');
+    if (!titleEl) return;
+
+    card.classList.add('card-collapsible');
+    const head = document.createElement('div');
+    head.className = 'card-collapse-head';
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'card-collapse-title';
+    titleWrap.appendChild(titleEl);
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'card-collapse-toggle';
+    toggle.textContent = '접기 ▲';
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.addEventListener('click', () => {
+      const isCollapsed = card.classList.toggle('is-collapsed');
+      toggle.textContent = isCollapsed ? '열기 ▼' : '접기 ▲';
+      toggle.setAttribute('aria-expanded', String(!isCollapsed));
+    });
+
+    head.appendChild(titleWrap);
+    head.appendChild(toggle);
+
+    const body = document.createElement('div');
+    body.className = 'card-collapse-body';
+    while (card.firstChild) {
+      body.appendChild(card.firstChild);
+    }
+
+    card.appendChild(head);
+    card.appendChild(body);
+  });
+}
 
 // ?ъ씠?쒕컮 硫붾돱???붽툑??諛곗? ?곸슜 + ?대깽???곌껐
 function updateSidebarBadges() {

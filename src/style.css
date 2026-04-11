@@ -878,6 +878,54 @@ a:hover {
   color: var(--text-muted);
 }
 
+.card-collapsible {
+  padding: 0;
+}
+
+.card-collapse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.card-collapse-title .card-title {
+  margin: 0;
+}
+
+.card-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.22);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.card-collapse-toggle:hover {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.34);
+}
+
+.card-collapse-body {
+  padding: var(--space-lg);
+}
+
+.card-collapsible.is-collapsed .card-collapse-body {
+  display: none;
+}
+
 /* --- 버튼 --- */
 .btn {
   display: inline-flex;
