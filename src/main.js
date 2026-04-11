@@ -484,12 +484,45 @@ window.addEventListener('notifications-updated', () => {
   updateNotifBadge();
 });
 
+const CARD_STATE_KEY = 'invex_card_state_v1';
+const CARD_PIN_KEY = 'invex_card_pins_v1';
+const DETAILS_STATE_KEY = 'invex_details_state_v1';
+const SUMMARY_MODE_KEY = 'invex_summary_mode_v1';
+
+function readStorageMap(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStorageMap(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function normalizeTitle(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 function initCardCollapsibles(container, pageName) {
   const collapsiblePages = new Set([
     'inventory', 'inout', 'bulk', 'warehouses', 'transfer', 'stocktake', 'vendors', 'auto-order', 'orders', 'forecast',
     'summary', 'weekly-report', 'profit', 'accounts', 'costing', 'dashboard', 'tax-reports', 'documents',
   ]);
   if (!collapsiblePages.has(pageName)) return;
+
+  const summaryMap = readStorageMap(SUMMARY_MODE_KEY);
+  const summaryMode = summaryMap[pageName] === true;
+  container.classList.toggle('summary-mode', summaryMode);
+  mountSummaryToggle(container, pageName, summaryMode);
+
+  const collapsedMap = readStorageMap(CARD_STATE_KEY);
+  const pinnedMap = readStorageMap(CARD_PIN_KEY);
+  const pinnedList = Array.isArray(pinnedMap[pageName]) ? pinnedMap[pageName] : [];
 
   const cards = Array.from(container.querySelectorAll('.card'));
   cards.forEach((card, index) => {
@@ -500,6 +533,10 @@ function initCardCollapsibles(container, pageName) {
     const titleEl = card.querySelector('.card-title') || card.querySelector('.chart-control-row .card-title');
     if (!titleEl) return;
 
+    const titleText = normalizeTitle(titleEl.textContent);
+    const cardId = `${pageName}::${titleText || 'card'}::${index}`;
+    card.dataset.cardId = cardId;
+
     card.classList.add('card-collapsible');
     const head = document.createElement('div');
     head.className = 'card-collapse-head';
@@ -507,6 +544,26 @@ function initCardCollapsibles(container, pageName) {
     const titleWrap = document.createElement('div');
     titleWrap.className = 'card-collapse-title';
     titleWrap.appendChild(titleEl);
+
+    const pin = document.createElement('button');
+    pin.type = 'button';
+    pin.className = 'card-collapse-pin';
+    pin.textContent = pinnedList.includes(cardId) ? '고정됨' : '고정';
+    pin.addEventListener('click', () => {
+      const nextPinned = new Set(pinnedList);
+      if (nextPinned.has(cardId)) {
+        nextPinned.delete(cardId);
+        card.classList.remove('is-pinned');
+      } else {
+        nextPinned.add(cardId);
+        card.classList.add('is-pinned');
+      }
+      const nextList = Array.from(nextPinned);
+      pinnedMap[pageName] = nextList;
+      writeStorageMap(CARD_PIN_KEY, pinnedMap);
+      pin.textContent = nextPinned.has(cardId) ? '고정됨' : '고정';
+      applyPinnedOrder(container, cards, nextList);
+    });
 
     const toggle = document.createElement('button');
     toggle.type = 'button';
@@ -517,9 +574,12 @@ function initCardCollapsibles(container, pageName) {
       const isCollapsed = card.classList.toggle('is-collapsed');
       toggle.textContent = isCollapsed ? '열기 ▼' : '접기 ▲';
       toggle.setAttribute('aria-expanded', String(!isCollapsed));
+      collapsedMap[cardId] = isCollapsed;
+      writeStorageMap(CARD_STATE_KEY, collapsedMap);
     });
 
     head.appendChild(titleWrap);
+    head.appendChild(pin);
     head.appendChild(toggle);
 
     const body = document.createElement('div');
@@ -530,7 +590,85 @@ function initCardCollapsibles(container, pageName) {
 
     card.appendChild(head);
     card.appendChild(body);
+
+    if (pinnedList.includes(cardId)) {
+      card.classList.add('is-pinned');
+    }
+
+    if (typeof collapsedMap[cardId] === 'boolean') {
+      const isCollapsed = collapsedMap[cardId];
+      card.classList.toggle('is-collapsed', isCollapsed);
+      toggle.textContent = isCollapsed ? '열기 ▼' : '접기 ▲';
+      toggle.setAttribute('aria-expanded', String(!isCollapsed));
+    } else {
+      const shouldCollapse = summaryMode || /가이드|안내|설명|도움|팁|FAQ/i.test(titleText) || card.classList.contains('quick-start-card');
+      if (shouldCollapse) {
+        card.classList.add('is-collapsed');
+        toggle.textContent = '열기 ▼';
+        toggle.setAttribute('aria-expanded', 'false');
+      }
+    }
   });
+
+  applyPinnedOrder(container, cards, pinnedList);
+  initDetailsPersistence(container, pageName, summaryMode);
+}
+
+function applyPinnedOrder(container, cards, pinnedList) {
+  if (!pinnedList?.length) return;
+  const byParent = new Map();
+  cards.forEach(card => {
+    if (!card.dataset.cardId || !pinnedList.includes(card.dataset.cardId)) return;
+    const parent = card.parentElement;
+    if (!parent) return;
+    if (!byParent.has(parent)) byParent.set(parent, []);
+    byParent.get(parent).push(card);
+  });
+  byParent.forEach((pinnedCards, parent) => {
+    pinnedCards
+      .sort((a, b) => pinnedList.indexOf(a.dataset.cardId) - pinnedList.indexOf(b.dataset.cardId))
+      .forEach(card => parent.insertBefore(card, parent.firstChild));
+  });
+}
+
+function initDetailsPersistence(container, pageName, summaryMode) {
+  const detailsMap = readStorageMap(DETAILS_STATE_KEY);
+  const detailsList = Array.from(container.querySelectorAll('details.fold-card, details.smart-details'));
+  detailsList.forEach((details, index) => {
+    const summary = details.querySelector('summary');
+    const summaryText = normalizeTitle(summary?.textContent);
+    const detailsId = details.dataset.foldId || summaryText || `details-${index}`;
+    const key = `${pageName}::details::${detailsId}`;
+    if (typeof detailsMap[key] === 'boolean') {
+      details.open = detailsMap[key];
+    } else if (summaryMode) {
+      details.open = false;
+    }
+    details.addEventListener('toggle', () => {
+      detailsMap[key] = details.open;
+      writeStorageMap(DETAILS_STATE_KEY, detailsMap);
+    });
+  });
+}
+
+function mountSummaryToggle(container, pageName, summaryMode) {
+  const actionSlot = container.querySelector('.page-header .page-actions');
+  if (!actionSlot) return;
+  if (actionSlot.querySelector('[data-summary-toggle]')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-outline';
+  btn.dataset.summaryToggle = 'true';
+  btn.textContent = summaryMode ? '설명 펼치기' : '요약만 보기';
+  btn.addEventListener('click', () => {
+    const map = readStorageMap(SUMMARY_MODE_KEY);
+    const nextMode = !container.classList.contains('summary-mode');
+    container.classList.toggle('summary-mode', nextMode);
+    map[pageName] = nextMode;
+    writeStorageMap(SUMMARY_MODE_KEY, map);
+    btn.textContent = nextMode ? '설명 펼치기' : '요약만 보기';
+  });
+  actionSlot.prepend(btn);
 }
 
 // ?ъ씠?쒕컮 硫붾돱???붽툑??諛곗? ?곸슜 + ?대깽???곌껐

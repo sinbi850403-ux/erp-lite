@@ -14,11 +14,11 @@ function renderAction(action) {
   if (action.nav) attrs.push(`data-nav="${action.nav}"`);
   if (action.value) attrs.push(`data-value="${escapeHtml(action.value)}"`);
   if (action.extraAttrs) attrs.push(action.extraAttrs);
-  return `<button class="btn ${variant} btn-sm" ${attrs.join(' ')}>${escapeHtml(action.label || '?�행')}</button>`;
+  return `<button class="btn ${variant} btn-sm" ${attrs.join(' ')}>${escapeHtml(action.label || '실행')}</button>`;
 }
 
 export function renderGuidedPanel({
-  eyebrow = '빠른 ?�름',
+  eyebrow = '빠른 흐름',
   title,
   desc = '',
   badge = '',
@@ -63,7 +63,7 @@ export function renderGuidedPanel({
   `;
 }
 export function renderInsightHero({
-  eyebrow = '?�심 ?�약',
+  eyebrow = '핵심 요약',
   title,
   desc = '',
   tone = 'default',
