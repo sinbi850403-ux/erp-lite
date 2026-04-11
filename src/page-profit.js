@@ -1,4 +1,4 @@
-import { getState } from './store.js';
+﻿import { getState } from './store.js';
 import { getSalePrice } from './price-utils.js';
 
 export function renderProfitPage(container, navigateTo) {
@@ -7,8 +7,15 @@ export function renderProfitPage(container, navigateTo) {
   const transactions = state.transactions || [];
 
   const periodPrefs = readProfitPeriodPrefs();
-  const periodFrom = periodPrefs.from || toDateKey(addDays(new Date(), -30));
-  const periodTo = periodPrefs.to || toDateKey(new Date());
+  const fallbackFrom = toDateKey(addDays(new Date(), -30));
+  const fallbackTo = toDateKey(new Date());
+  let periodFrom = isValidDateKey(periodPrefs.from) ? periodPrefs.from : fallbackFrom;
+  let periodTo = isValidDateKey(periodPrefs.to) ? periodPrefs.to : fallbackTo;
+  if (periodFrom > periodTo) {
+    const tmp = periodFrom;
+    periodFrom = periodTo;
+    periodTo = tmp;
+  }
 
   const rows = items
     .map((item) => {
@@ -58,9 +65,13 @@ export function renderProfitPage(container, navigateTo) {
   const lossCount = rows.filter((row) => row.profit < 0).length;
 
   const categorySummary = summarizeByCategory(rows).slice(0, 5);
-  const periodTransactions = transactions.filter(tx => tx.date >= periodFrom && tx.date <= periodTo);
+  const periodTransactions = transactions.filter((tx) => {
+    const dateKey = String(tx.date || '');
+    return dateKey >= periodFrom && dateKey <= periodTo;
+  });
   const periodSummary = buildPeriodSummary(periodTransactions, items);
   const monthlySeries = buildMonthlySeries(periodTransactions, items);
+  const monthlySummary = getCurrentMonthSummary(transactions);
 
   container.innerHTML = `
     <div class="page-header">
@@ -97,20 +108,26 @@ export function renderProfitPage(container, navigateTo) {
 
     <div class="card">
       <div class="card-title">기간별 손익 추이</div>
-      ${monthlySeries.length === 0
-        ? '<div class="dashboard-empty-note">선택한 기간에 거래가 없습니다.</div>'
-        : `
+      ${
+        monthlySeries.length === 0
+          ? '<div class="dashboard-empty-note">선택한 기간에 거래가 없습니다.</div>'
+          : `
           <div style="display:grid; gap:8px;">
-            ${monthlySeries.map(row => `
+            ${monthlySeries
+              .map(
+                (row) => `
               <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid var(--border); border-radius:10px;">
                 <div style="font-size:12px; color:var(--text-muted);">${row.label}</div>
                 <div style="font-weight:700; color:${row.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">
                   ${formatSignedMoney(row.profit)}
                 </div>
               </div>
-            `).join('')}
+            `,
+              )
+              .join('')}
           </div>
-        `}
+        `
+      }
     </div>
 
     ${
@@ -162,39 +179,72 @@ export function renderProfitPage(container, navigateTo) {
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:14px;">
         <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">수익 상위 품목 TOP 5</div>
-          ${renderQuickList(topProfit, (row, i) => `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${i === topProfit.length - 1 ? 'none' : '1px solid var(--border-light)'};">
+          ${renderQuickList(
+            topProfit,
+            (row, i) => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${
+              i === topProfit.length - 1 ? 'none' : '1px solid var(--border-light)'
+            }">
               <div style="min-width:0;">
-                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(row.name)}</div>
-                <div style="font-size:11px; color:var(--text-muted);">${formatPercent(row.profitRate)} · ${row.quantity.toLocaleString('ko-KR')}개</div>
+                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(
+                  row.name,
+                )}</div>
+                <div style="font-size:11px; color:var(--text-muted);">${formatPercent(row.profitRate)} · ${row.quantity.toLocaleString(
+              'ko-KR',
+            )}개</div>
               </div>
               <div style="font-size:12px; font-weight:700; color:var(--success);">${formatSignedMoney(row.profit)}</div>
             </div>
-          `)}
+          `,
+          )}
         </div>
         <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">주의 필요 품목 TOP 5</div>
-          ${renderQuickList(riskRows, (row, i) => `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${i === riskRows.length - 1 ? 'none' : '1px solid var(--border-light)'};">
+          ${renderQuickList(
+            riskRows,
+            (row, i) => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${
+              i === riskRows.length - 1 ? 'none' : '1px solid var(--border-light)'
+            }">
               <div style="min-width:0;">
-                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(row.name)}</div>
-                <div style="font-size:11px; color:var(--text-muted);">개당 ${formatSignedMoney(row.salePrice - row.unitCost)}</div>
+                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(
+                  row.name,
+                )}</div>
+                <div style="font-size:11px; color:var(--text-muted);">개당 ${formatSignedMoney(
+                  row.salePrice - row.unitCost,
+                )}</div>
               </div>
-              <div style="font-size:12px; font-weight:700; color:${row.profitRate < 10 ? 'var(--danger)' : 'var(--warning)'};">${formatPercent(row.profitRate)}</div>
+              <div style="font-size:12px; font-weight:700; color:${
+                row.profitRate < 10 ? 'var(--danger)' : 'var(--warning)'
+              }">${formatPercent(row.profitRate)}</div>
             </div>
-          `, '판매가가 입력된 품목이 없습니다.')}
+          `,
+            '판매가가 입력된 품목이 없습니다.',
+          )}
         </div>
         <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">카테고리 수익 TOP 5</div>
-          ${renderQuickList(categorySummary, (category, i) => `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${i === categorySummary.length - 1 ? 'none' : '1px solid var(--border-light)'};">
+          ${renderQuickList(
+            categorySummary,
+            (category, i) => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:${
+              i === categorySummary.length - 1 ? 'none' : '1px solid var(--border-light)'
+            }">
               <div style="min-width:0;">
-                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(category.name)}</div>
-                <div style="font-size:11px; color:var(--text-muted);">${category.count}품목 · 이익률 ${formatPercent(category.rate)}</div>
+                <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(
+                  category.name,
+                )}</div>
+                <div style="font-size:11px; color:var(--text-muted);">${category.count}품목 · 이익률 ${formatPercent(
+              category.rate,
+            )}</div>
               </div>
-              <div style="font-size:12px; font-weight:700; color:${category.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatSignedMoney(category.profit)}</div>
+              <div style="font-size:12px; font-weight:700; color:${
+                category.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+              }">${formatSignedMoney(category.profit)}</div>
             </div>
-          `, '카테고리 데이터가 없습니다.')}
+          `,
+            '카테고리 데이터가 없습니다.',
+          )}
         </div>
       </div>
     </div>
@@ -273,7 +323,9 @@ export function renderProfitPage(container, navigateTo) {
           <div style="margin-top:6px; font-size:13px; line-height:1.7;">
             <div>매입: <strong>${formatMoney(monthlySummary.totalIn)}</strong></div>
             <div>매출: <strong>${formatMoney(monthlySummary.totalOut)}</strong></div>
-            <div>거래 손익: <strong style="color:${monthlySummary.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatSignedMoney(monthlySummary.profit)}</strong></div>
+            <div>거래 손익: <strong style="color:${
+              monthlySummary.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+            }">${formatSignedMoney(monthlySummary.profit)}</strong></div>
           </div>
         </div>
         <div>
@@ -293,15 +345,15 @@ export function renderProfitPage(container, navigateTo) {
   const fromInput = container.querySelector('#profit-from');
   const toInput = container.querySelector('#profit-to');
   const persistAndRefresh = () => {
-    const nextFrom = fromInput.value;
-    const nextTo = toInput.value;
+    const nextFrom = fromInput?.value;
+    const nextTo = toInput?.value;
     saveProfitPeriodPrefs({ from: nextFrom, to: nextTo });
     renderProfitPage(container, navigateTo);
   };
   fromInput?.addEventListener('change', persistAndRefresh);
   toInput?.addEventListener('change', persistAndRefresh);
 
-  container.querySelectorAll('[data-profit-range]').forEach(btn => {
+  container.querySelectorAll('[data-profit-range]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const value = btn.dataset.profitRange;
       const now = new Date();
@@ -342,7 +394,7 @@ function summarizeByCategory(rows) {
 function buildPeriodSummary(transactions, items) {
   let totalIn = 0;
   let totalOut = 0;
-  transactions.forEach(tx => {
+  transactions.forEach((tx) => {
     const amount = getTransactionAmount(tx, items);
     if (tx.type === 'in') totalIn += amount;
     if (tx.type === 'out') totalOut += amount;
@@ -356,7 +408,7 @@ function buildPeriodSummary(transactions, items) {
 
 function buildMonthlySeries(transactions, items) {
   const map = new Map();
-  transactions.forEach(tx => {
+  transactions.forEach((tx) => {
     if (!tx.date) return;
     const key = String(tx.date).slice(0, 7);
     if (!map.has(key)) map.set(key, { totalIn: 0, totalOut: 0 });
@@ -377,11 +429,9 @@ function getTransactionAmount(tx, items) {
   const qty = toNumber(tx.quantity);
   const direct = toNumber(tx.price ?? tx.unitPrice ?? tx.unitCost ?? 0);
   if (direct > 0) return qty * direct;
-  const item = items.find(i => i.itemName === tx.itemName || (i.itemCode && i.itemCode === tx.itemCode));
+  const item = items.find((i) => i.itemName === tx.itemName || (i.itemCode && i.itemCode === tx.itemCode));
   if (!item) return 0;
-  const fallbackPrice = tx.type === 'out'
-    ? toNumber(getSalePrice(item))
-    : toNumber(item.unitPrice || item.unitCost);
+  const fallbackPrice = tx.type === 'out' ? toNumber(getSalePrice(item)) : toNumber(item.unitPrice || item.unitCost);
   return qty * fallbackPrice;
 }
 
@@ -408,6 +458,10 @@ function addDays(baseDate, delta) {
 
 function toDateKey(value) {
   return new Date(value).toISOString().split('T')[0];
+}
+
+function isValidDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function getCurrentMonthSummary(transactions) {
