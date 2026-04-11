@@ -70,38 +70,43 @@ export function renderInsightHero({
   metrics = [],
   bullets = [],
   actions = [],
+  foldId = '',
+  open = true,
 }) {
+  const foldAttr = foldId ? ` data-fold-id="${escapeHtml(foldId)}"` : '';
   return `
-    <div class="card mission-panel mission-panel-${tone}">
-      <div class="mission-panel-head">
+    <details class="card mission-panel mission-panel-${tone} fold-card"${foldAttr} ${open ? 'open' : ''}>
+      <summary class="fold-card-summary mission-panel-head">
         <div>
           <div class="mission-panel-eyebrow">${escapeHtml(eyebrow)}</div>
           <div class="mission-panel-title">${escapeHtml(title)}</div>
-          <div class="mission-panel-desc">${escapeHtml(desc)}</div>
         </div>
+      </summary>
+      <div class="fold-card-body">
+        ${desc ? `<div class="mission-panel-desc">${escapeHtml(desc)}</div>` : ''}
+        ${metrics.length > 0 ? `
+          <div class="mission-highlight-grid">
+            ${metrics.map(metric => `
+              <div class="mission-highlight">
+                <div class="mission-highlight-label">${escapeHtml(metric.label || '')}</div>
+                <div class="mission-highlight-value ${metric.stateClass || ''}">${escapeHtml(metric.value || '-')}</div>
+                ${metric.note ? `<div class="mission-highlight-note">${escapeHtml(metric.note)}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        ${bullets.length > 0 ? `
+          <div class="mission-bullet-list">
+            ${bullets.map(bullet => `<div class="mission-bullet">${escapeHtml(bullet)}</div>`).join('')}
+          </div>
+        ` : ''}
+        ${actions.length > 0 ? `
+          <div class="mission-actions">
+            ${actions.map(renderAction).join('')}
+          </div>
+        ` : ''}
       </div>
-      ${metrics.length > 0 ? `
-        <div class="mission-highlight-grid">
-          ${metrics.map(metric => `
-            <div class="mission-highlight">
-              <div class="mission-highlight-label">${escapeHtml(metric.label || '')}</div>
-              <div class="mission-highlight-value ${metric.stateClass || ''}">${escapeHtml(metric.value || '-')}</div>
-              ${metric.note ? `<div class="mission-highlight-note">${escapeHtml(metric.note)}</div>` : ''}
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      ${bullets.length > 0 ? `
-        <div class="mission-bullet-list">
-          ${bullets.map(bullet => `<div class="mission-bullet">${escapeHtml(bullet)}</div>`).join('')}
-        </div>
-      ` : ''}
-      ${actions.length > 0 ? `
-        <div class="mission-actions">
-          ${actions.map(renderAction).join('')}
-        </div>
-      ` : ''}
-    </div>
+    </details>
   `;
 }
 
