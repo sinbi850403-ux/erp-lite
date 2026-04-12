@@ -233,7 +233,10 @@ export async function signupWithEmail(email, password, name) {
 
 /**
  * 이메일/비밀번호 로그인
- * 왜 UX 강화? → 사용자가 버튼을 눌렀는데 반응이 없다고 느끼는 경우 방지
+ * 왜 UX 강화?
+ * → 회사 메일(네이버, 다음 등)로 로그인하는 사용자가 대부분
+ * → Google OAuth로 가입 후 이메일 로그인 시도 시 비밀번호 미설정 안내 필요
+ * → 버튼 피드백(로딩/에러) + 인라인 해결 액션 제공
  */
 export async function loginWithEmail(email, password) {
   if (!isSupabaseConfigured) {
@@ -265,12 +268,13 @@ export async function loginWithEmail(email, password) {
     showToast(`${data.user?.user_metadata?.full_name || '사용자'}님, 환영합니다! 🎉`, 'success');
     return toCompatUser(data.user);
   } catch (error) {
-    // 에러 메시지를 폼 안에 직접 표시 — 토스트만으로는 놓칠 수 있음
     let errorMsg = '';
+    let showResetAction = false; // 비밀번호 설정/재설정 버튼 표시 여부
+
     if (error.message.includes('Invalid login')) {
       errorMsg = '이메일 또는 비밀번호가 올바르지 않습니다.';
-      // Google 가입 계정 가능성 안내
-      showToast(errorMsg + ' Google 계정으로 가입하셨다면 아래 Google 로그인을 이용해 주세요.', 'error', 5000);
+      showResetAction = true; // 비밀번호 재설정 제안
+      showToast('로그인 정보를 확인해 주세요.', 'error', 3000);
     } else if (error.message.includes('Email not confirmed')) {
       errorMsg = '이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.';
       showToast(errorMsg, 'warning', 5000);
@@ -282,18 +286,59 @@ export async function loginWithEmail(email, password) {
       showToast(errorMsg, 'error');
     }
 
-    // 폼 아래에 인라인 에러 메시지 삽입
-    if (loginBtn && errorMsg) {
-      const errorEl = document.createElement('div');
-      errorEl.id = 'login-error-msg';
-      errorEl.style.cssText = 'color:#ef4444; font-size:13px; text-align:center; margin-top:8px; padding:8px 12px; background:rgba(239,68,68,0.1); border-radius:8px; animation: fadeSlideIn 0.3s ease;';
-      errorEl.textContent = errorMsg;
-      loginBtn.parentNode.insertBefore(errorEl, loginBtn.nextSibling);
+    // 폼 아래에 인라인 에러 + 비밀번호 재설정 액션 삽입
+    if (loginBtn) {
+      const errorContainer = document.createElement('div');
+      errorContainer.id = 'login-error-msg';
+      errorContainer.style.cssText = 'margin-top:10px; animation: fadeSlideIn 0.3s ease;';
+
+      // 에러 메시지
+      const msgEl = document.createElement('div');
+      msgEl.style.cssText = 'color:#ef4444; font-size:13px; text-align:center; padding:10px 14px; background:rgba(239,68,68,0.1); border-radius:8px;';
+      msgEl.textContent = errorMsg;
+      errorContainer.appendChild(msgEl);
+
+      // 비밀번호 설정/재설정 액션 버튼
+      if (showResetAction && email) {
+        const helpBox = document.createElement('div');
+        helpBox.style.cssText = 'margin-top:8px; padding:12px 14px; background:rgba(99,102,241,0.1); border-radius:8px; border:1px solid rgba(99,102,241,0.2);';
+
+        const helpText = document.createElement('div');
+        helpText.style.cssText = 'color:var(--text-muted); font-size:12px; margin-bottom:8px; line-height:1.5;';
+        helpText.textContent = '처음이시거나 비밀번호를 잊으셨나요? 아래 버튼을 누르면 비밀번호를 설정할 수 있는 링크가 이메일로 발송됩니다.';
+        helpBox.appendChild(helpText);
+
+        const resetBtn = document.createElement('button');
+        resetBtn.style.cssText = 'width:100%; padding:10px 16px; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; transition:all 0.2s;';
+        resetBtn.textContent = '📧 비밀번호 설정 이메일 받기';
+        resetBtn.onmouseover = () => { resetBtn.style.opacity = '0.9'; resetBtn.style.transform = 'translateY(-1px)'; };
+        resetBtn.onmouseout = () => { resetBtn.style.opacity = '1'; resetBtn.style.transform = ''; };
+        resetBtn.addEventListener('click', async () => {
+          resetBtn.disabled = true;
+          resetBtn.textContent = '전송 중...';
+          const success = await resetPassword(email);
+          if (success) {
+            // 전송 성공 시 안내 메시지로 교체
+            errorContainer.innerHTML = '';
+            const successEl = document.createElement('div');
+            successEl.style.cssText = 'color:#22c55e; font-size:13px; text-align:center; padding:14px; background:rgba(34,197,94,0.1); border-radius:8px; line-height:1.6;';
+            successEl.innerHTML = `<strong>✅ 이메일이 전송되었습니다!</strong><br><span style="font-size:12px; color:var(--text-muted);">${email}의 메일함을 확인하고 비밀번호를 설정한 뒤 다시 로그인해 주세요.</span>`;
+            errorContainer.appendChild(successEl);
+          } else {
+            resetBtn.disabled = false;
+            resetBtn.textContent = '📧 비밀번호 설정 이메일 받기';
+          }
+        });
+        helpBox.appendChild(resetBtn);
+        errorContainer.appendChild(helpBox);
+      }
+
+      loginBtn.parentNode.insertBefore(errorContainer, loginBtn.nextSibling);
     }
 
     return null;
   } finally {
-    // 버튼 복원 — 성공 시에도 게이트가 사라지니까 문제 없음
+    // 버튼 복원
     if (loginBtn) {
       loginBtn.disabled = false;
       loginBtn.textContent = originalText;
