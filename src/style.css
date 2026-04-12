@@ -2765,6 +2765,25 @@ html.dark-mode .report-spotlight-card {
 .toast.success { background: var(--success); }
 .toast.warning { background: var(--warning); }
 .toast.error   { background: var(--danger); }
+.toast-action-wrap {
+  justify-content: space-between;
+}
+.toast-text {
+  flex: 1;
+}
+.toast-action-btn {
+  border: 1px solid rgba(255,255,255,0.5);
+  background: rgba(0,0,0,0.15);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.toast-action-btn:hover {
+  background: rgba(0,0,0,0.28);
+}
 
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(10px) scale(0.95); }

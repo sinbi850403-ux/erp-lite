@@ -5,11 +5,13 @@
  */
 
 import { getState, setState, addTransaction, deleteTransaction } from './store.js';
-import { showToast } from './toast.js';
+import { showToast, showActionToast } from './toast.js';
 import { downloadExcel, readExcelFile } from './excel.js';
 import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow } from './ux-toolkit.js';
 
 const PAGE_SIZE = 15;
+const LAST_VENDOR_IN_KEY = 'invex_last_vendor_in_v1';
+const LAST_VENDOR_OUT_KEY = 'invex_last_vendor_out_v1';
 
 /**
  * ?낆텧怨?愿由??섏씠吏 ?뚮뜑留?
@@ -915,6 +917,7 @@ function openTxModal(container, navigateTo, type, items) {
   );
   const typeLabel = type === 'in' ? '입고' : '출고';
   const partnerLabel = type === 'in' ? '매입처' : '매출처';
+  const lastVendorKey = type === 'in' ? LAST_VENDOR_IN_KEY : LAST_VENDOR_OUT_KEY;
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -1019,6 +1022,10 @@ function openTxModal(container, navigateTo, type, items) {
         </div>
       </div>
       <div class="modal-footer">
+        <label class="toggle-pill" style="margin-right:auto;">
+          <input type="checkbox" id="tx-keep-open" checked />
+          <span>연속 입력 모드</span>
+        </label>
         <button class="btn btn-outline" id="modal-cancel">취소</button>
         <button class="btn ${type === 'in' ? 'btn-success' : 'btn-danger'}" id="modal-save">${typeLabel} 저장</button>
       </div>
@@ -1036,6 +1043,8 @@ function openTxModal(container, navigateTo, type, items) {
     date: overlay.querySelector('#tx-date'),
     note: overlay.querySelector('#tx-note'),
   };
+  const keepOpenInput = overlay.querySelector('#tx-keep-open');
+  let hasSavedChanges = false;
   const formatMoney = (value) => `₩${Math.round(value || 0).toLocaleString('ko-KR')}`;
 
   const getSelectedItem = () => {
@@ -1088,9 +1097,20 @@ function openTxModal(container, navigateTo, type, items) {
     input?.addEventListener('input', refreshTxSummary);
     input?.addEventListener('change', refreshTxSummary);
   });
+
+  const lastVendor = localStorage.getItem(lastVendorKey);
+  if (lastVendor && inputs.vendor && Array.from(inputs.vendor.options).some(opt => opt.value === lastVendor)) {
+    inputs.vendor.value = lastVendor;
+  }
+  inputs.vendor?.addEventListener('change', () => {
+    if (inputs.vendor.value) localStorage.setItem(lastVendorKey, inputs.vendor.value);
+  });
   refreshTxSummary();
 
-  const close = () => overlay.remove();
+  const close = () => {
+    overlay.remove();
+    if (hasSavedChanges) renderInoutPage(container, navigateTo);
+  };
   overlay.querySelector('#modal-close').addEventListener('click', close);
   overlay.querySelector('#modal-cancel').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
@@ -1147,10 +1167,37 @@ function openTxModal(container, navigateTo, type, items) {
       date,
       note: inputs.note.value.trim(),
     });
+    hasSavedChanges = true;
 
-    showToast(`${typeLabel} 기록: ${itemName} ${qty}개`, type === 'in' ? 'success' : 'info');
-    close();
-    renderInoutPage(container, navigateTo);
+    const latestTxId = getState().transactions?.[0]?.id;
+    showActionToast(
+      `${typeLabel} 기록: ${itemName} ${qty}개`,
+      '실행 취소',
+      () => {
+        if (!latestTxId) return;
+        deleteTransaction(latestTxId);
+        showToast('방금 등록한 기록을 취소했습니다.', 'info');
+      },
+      type === 'in' ? 'success' : 'info',
+      5000,
+    );
+
+    if (inputs.vendor.value) localStorage.setItem(lastVendorKey, inputs.vendor.value);
+
+    const keepOpen = !!keepOpenInput?.checked;
+    if (!keepOpen) {
+      close();
+      return;
+    }
+
+    if (itemSelect) itemSelect.value = '';
+    if (inputs.itemName) inputs.itemName.value = '';
+    inputs.qty.value = '';
+    inputs.price.value = '';
+    inputs.note.value = '';
+    refreshTxSummary();
+    const nextFocus = itemSelect || inputs.itemName || inputs.qty;
+    nextFocus?.focus();
   });
 
   setTimeout(() => {

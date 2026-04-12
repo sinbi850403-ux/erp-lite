@@ -35,3 +35,45 @@ export function showToast(message, type = 'info', duration = 2500) {
     setTimeout(() => toast.remove(), 300);
   }, duration);
 }
+
+/**
+ * 액션 버튼이 있는 토스트
+ * @param {string} message
+ * @param {string} actionLabel
+ * @param {() => void} onAction
+ * @param {'info'|'success'|'warning'|'error'} type
+ * @param {number} duration
+ */
+export function showActionToast(message, actionLabel, onAction, type = 'info', duration = 4500) {
+  const container = ensureContainer();
+  const toast = document.createElement('div');
+  toast.className = `toast ${type} toast-action-wrap`;
+
+  const text = document.createElement('span');
+  text.className = 'toast-text';
+  text.textContent = message;
+
+  const actionBtn = document.createElement('button');
+  actionBtn.type = 'button';
+  actionBtn.className = 'toast-action-btn';
+  actionBtn.textContent = actionLabel;
+  actionBtn.addEventListener('click', () => {
+    try {
+      onAction?.();
+    } finally {
+      toast.remove();
+    }
+  });
+
+  toast.appendChild(text);
+  toast.appendChild(actionBtn);
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (!toast.isConnected) return;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
