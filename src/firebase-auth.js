@@ -161,15 +161,20 @@ export async function resetPassword(email) {
     return false;
   }
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}${window.location.pathname}`,
-  });
+  const redirectTo = `${window.location.origin}/`;
+  let result = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
-  if (error) {
-    showToast('비밀번호 재설정 메일 발송 실패: ' + error.message, 'error');
+  // Supabase Redirect URL 미등록 환경에서도 동작하도록 1회 재시도
+  if (result.error?.message?.toLowerCase?.().includes('redirect')) {
+    result = await supabase.auth.resetPasswordForEmail(email);
+  }
+
+  if (result.error) {
+    showToast('비밀번호 재설정 메일 발송 실패: ' + result.error.message, 'error');
     return false;
   }
-  showToast('비밀번호 재설정 메일을 보냈습니다.', 'success');
+
+  showToast('메일을 보냈습니다. 받은편지함/스팸함을 확인해 주세요.', 'success');
   return true;
 }
 
@@ -286,4 +291,3 @@ export function disposeAuth() {
   authSubscription = null;
   authInitialized = false;
 }
-
