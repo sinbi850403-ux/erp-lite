@@ -184,6 +184,15 @@ export async function signupWithEmail(email, password, name) {
     return null;
   }
 
+  // 로딩 상태 표시
+  const signupBtn = document.getElementById('gate-email-signup');
+  const originalText = signupBtn?.textContent || '회원가입';
+  if (signupBtn) {
+    signupBtn.disabled = true;
+    signupBtn.textContent = '가입 처리 중...';
+    signupBtn.style.opacity = '0.7';
+  }
+
   try {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -213,17 +222,37 @@ export async function signupWithEmail(email, password, name) {
       showToast('회원가입 실패: ' + error.message, 'error');
     }
     return null;
+  } finally {
+    if (signupBtn) {
+      signupBtn.disabled = false;
+      signupBtn.textContent = originalText;
+      signupBtn.style.opacity = '1';
+    }
   }
 }
 
 /**
  * 이메일/비밀번호 로그인
+ * 왜 UX 강화? → 사용자가 버튼을 눌렀는데 반응이 없다고 느끼는 경우 방지
  */
 export async function loginWithEmail(email, password) {
   if (!isSupabaseConfigured) {
     showToast('Supabase 설정이 필요합니다.', 'warning');
     return null;
   }
+
+  // 로딩 상태 표시 — 사용자에게 처리 중임을 알림
+  const loginBtn = document.getElementById('gate-email-login');
+  const originalText = loginBtn?.textContent || '이메일로 로그인';
+  if (loginBtn) {
+    loginBtn.disabled = true;
+    loginBtn.textContent = '로그인 중...';
+    loginBtn.style.opacity = '0.7';
+  }
+
+  // 이전 에러 메시지 제거
+  const existingError = document.getElementById('login-error-msg');
+  if (existingError) existingError.remove();
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -236,12 +265,40 @@ export async function loginWithEmail(email, password) {
     showToast(`${data.user?.user_metadata?.full_name || '사용자'}님, 환영합니다! 🎉`, 'success');
     return toCompatUser(data.user);
   } catch (error) {
+    // 에러 메시지를 폼 안에 직접 표시 — 토스트만으로는 놓칠 수 있음
+    let errorMsg = '';
     if (error.message.includes('Invalid login')) {
-      showToast('이메일 또는 비밀번호가 올바르지 않습니다.', 'error');
+      errorMsg = '이메일 또는 비밀번호가 올바르지 않습니다.';
+      // Google 가입 계정 가능성 안내
+      showToast(errorMsg + ' Google 계정으로 가입하셨다면 아래 Google 로그인을 이용해 주세요.', 'error', 5000);
+    } else if (error.message.includes('Email not confirmed')) {
+      errorMsg = '이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.';
+      showToast(errorMsg, 'warning', 5000);
+    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      errorMsg = '네트워크 연결을 확인해 주세요.';
+      showToast(errorMsg, 'error');
     } else {
-      showToast('로그인 실패: ' + error.message, 'error');
+      errorMsg = '로그인 실패: ' + error.message;
+      showToast(errorMsg, 'error');
     }
+
+    // 폼 아래에 인라인 에러 메시지 삽입
+    if (loginBtn && errorMsg) {
+      const errorEl = document.createElement('div');
+      errorEl.id = 'login-error-msg';
+      errorEl.style.cssText = 'color:#ef4444; font-size:13px; text-align:center; margin-top:8px; padding:8px 12px; background:rgba(239,68,68,0.1); border-radius:8px; animation: fadeSlideIn 0.3s ease;';
+      errorEl.textContent = errorMsg;
+      loginBtn.parentNode.insertBefore(errorEl, loginBtn.nextSibling);
+    }
+
     return null;
+  } finally {
+    // 버튼 복원 — 성공 시에도 게이트가 사라지니까 문제 없음
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = originalText;
+      loginBtn.style.opacity = '1';
+    }
   }
 }
 
