@@ -1,4 +1,4 @@
-/**
+﻿/**
  * page-settings.js - 설정 페이지 (커스텀 필드 + 업종 템플릿)
  * 역할: 사용자 정의 컬럼 추가/관리, 업종별 초기 설정
  * 왜 필요? → 업종마다 필요한 정보가 다름 (의류=사이즈/색상, 식품=유통기한, 건설=규격)
@@ -274,20 +274,19 @@ export function renderSettingsPage(container, navigateTo) {
 
   // 데이터 초기화
   container.querySelector('#btn-clear-tx').addEventListener('click', () => {
-    if (!confirm('입출고 기록을 모두 삭제하시겠습니까?')) return;
+    if (!confirmActionKeyword('입출고 기록 초기화', '입출고초기화')) return;
     setState({ transactions: [] });
     showToast('입출고 기록이 초기화되었습니다.', 'info');
   });
 
   container.querySelector('#btn-clear-transfers').addEventListener('click', () => {
-    if (!confirm('이동 이력을 모두 삭제하시겠습니까?')) return;
+    if (!confirmActionKeyword('이동 이력 초기화', '이동초기화')) return;
     setState({ transfers: [] });
     showToast('이동 이력이 초기화되었습니다.', 'info');
   });
 
   container.querySelector('#btn-clear-all').addEventListener('click', () => {
-    if (!confirm('⚠️ 모든 데이터(품목, 거래, 설정)를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
-    if (!confirm('정말로 전체 초기화하시겠습니까? (최종 확인)')) return;
+    if (!confirmActionKeyword('전체 데이터 초기화', 'INVEX')) return;
     setState({
       rawData: [],
       mappedData: [],
@@ -313,4 +312,18 @@ export function renderSettingsPage(container, navigateTo) {
     showToast('전체 데이터가 초기화되었습니다.', 'info');
     navigateTo('home');
   });
+}
+
+function confirmActionKeyword(actionTitle, keyword) {
+  const firstConfirm = confirm(`[주의] ${actionTitle}\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?`);
+  if (!firstConfirm) return false;
+
+  const entered = prompt(`${actionTitle}를 진행하려면 아래 키워드를 정확히 입력하세요.\n입력 키워드: ${keyword}`);
+  if (entered === null) return false;
+
+  const ok = entered.trim() === keyword;
+  if (!ok) {
+    showToast(`키워드가 일치하지 않아 "${actionTitle}"를 취소했습니다.`, 'warning');
+  }
+  return ok;
 }
