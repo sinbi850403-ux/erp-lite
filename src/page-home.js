@@ -8,6 +8,8 @@ import {
 } from './charts.js';
 import { renderGuidedPanel } from './ux-toolkit.js';
 
+const HOME_COLLAPSE_STORAGE_KEY = 'invex:home:collapsed-sections:v1';
+
 export function renderHomePage(container, navigateTo) {
   destroyAllCharts();
 
@@ -167,6 +169,34 @@ export function renderHomePage(container, navigateTo) {
           <button class="dashboard-mode-btn ${dashboardMode === 'executive' ? 'is-active' : ''}" data-dashboard-mode="executive">경영자용</button>
           <button class="dashboard-mode-btn ${dashboardMode === 'operator' ? 'is-active' : ''}" data-dashboard-mode="operator">실무자용</button>
         </div>
+      </div>
+    </div>
+
+    <div class="card dashboard-quick-card">
+      <div class="dashboard-quick-head">
+        <div>
+          <div class="card-title">홈에서 바로 실행</div>
+          <div class="chart-help-text">자주 쓰는 기능을 바로 열어 입력 단계 없이 즉시 시작할 수 있습니다.</div>
+        </div>
+        <span class="badge badge-info">빠른 액션</span>
+      </div>
+      <div class="dashboard-quick-grid">
+        <button class="dashboard-quick-action is-inbound" id="btn-home-quick-in">
+          <div class="dashboard-quick-title">빠른 입고</div>
+          <div class="dashboard-quick-meta">품목 선택 + 수량 입력 모달 바로 열기</div>
+        </button>
+        <button class="dashboard-quick-action is-outbound" id="btn-home-quick-out">
+          <div class="dashboard-quick-title">빠른 출고</div>
+          <div class="dashboard-quick-meta">출고 모달 즉시 열고 재고 차감 등록</div>
+        </button>
+        <button class="dashboard-quick-action" id="btn-home-quick-item">
+          <div class="dashboard-quick-title">새 품목 등록</div>
+          <div class="dashboard-quick-meta">현재 등록 품목 ${formatNumber(totalItems)}건</div>
+        </button>
+        <button class="dashboard-quick-action" id="btn-home-quick-alert">
+          <div class="dashboard-quick-title">실시간 알림 확인</div>
+          <div class="dashboard-quick-meta">미확인 알림 ${formatNumber(notifications.length)}건</div>
+        </button>
       </div>
     </div>
 
@@ -378,6 +408,25 @@ export function renderHomePage(container, navigateTo) {
     });
   });
 
+  container.querySelector('#btn-home-quick-in')?.addEventListener('click', () => {
+    sessionStorage.setItem('invex:quick-open-inbound', '1');
+    navigateTo('inout');
+  });
+
+  container.querySelector('#btn-home-quick-out')?.addEventListener('click', () => {
+    sessionStorage.setItem('invex:quick-open-outbound', '1');
+    navigateTo('inout');
+  });
+
+  container.querySelector('#btn-home-quick-item')?.addEventListener('click', () => {
+    sessionStorage.setItem('invex:quick-open-item', '1');
+    navigateTo('inventory');
+  });
+
+  container.querySelector('#btn-home-quick-alert')?.addEventListener('click', () => {
+    renderNotificationPanel();
+  });
+
   container.querySelector('#weekly-sort')?.addEventListener('change', event => {
     chartSort.weekly = event.target.value;
     renderDashboardCharts();
@@ -397,11 +446,83 @@ export function renderHomePage(container, navigateTo) {
     renderDashboardCharts();
   }, 50);
 
+  initHomeSectionCollapse();
+
   function renderDashboardCharts() {
     renderWeeklyTrendChart('chart-weekly', sortTimeSeriesData(weekData, chartSort.weekly));
     renderMonthlyChart('chart-monthly', sortTimeSeriesData(monthData, chartSort.monthly));
     if (categories.length > 0) {
       renderCategoryChart('chart-category', sortCategorySeries(categories, chartSort.category));
+    }
+  }
+
+  function initHomeSectionCollapse() {
+    const collapsedState = loadHomeCollapsedState();
+    const sectionConfigs = [
+      { id: 'mode', selector: '.dashboard-mode-shell', label: '대시보드 모드' },
+      { id: 'quick', selector: '.dashboard-quick-card', label: '빠른 실행' },
+      { id: 'guide', selector: '.mission-panel', label: '대시보드 가이드' },
+      { id: 'hero', selector: '.dashboard-hero', label: dashboardMode === 'executive' ? '핵심 요약' : '실무 요약' },
+      { id: 'work', selector: '.dashboard-section-grid', label: dashboardMode === 'executive' ? '의사결정과 우선 품목' : '처리 순서와 우선 품목' },
+      { id: 'chart', selector: '.dashboard-chart-grid', label: '차트 분석' },
+      { id: 'side', selector: '.dashboard-side-grid', label: '거래와 분류 현황' },
+    ];
+
+    sectionConfigs.forEach(config => {
+      const sectionEl = container.querySelector(config.selector);
+      if (!sectionEl) return;
+
+      const strip = document.createElement('div');
+      strip.className = 'home-collapse-strip';
+      strip.dataset.homeCollapseId = config.id;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-ghost btn-sm home-collapse-toggle';
+      strip.appendChild(button);
+      sectionEl.before(strip);
+
+      const applyState = () => {
+        const collapsed = !!collapsedState[config.id];
+        sectionEl.style.display = collapsed ? 'none' : '';
+        strip.classList.toggle('is-collapsed', collapsed);
+        button.textContent = `${config.label} ${collapsed ? '펼치기' : '접기'}`;
+        button.setAttribute('aria-expanded', String(!collapsed));
+        button.setAttribute('aria-label', `${config.label} ${collapsed ? '펼치기' : '접기'}`);
+      };
+
+      button.addEventListener('click', () => {
+        const isCollapsed = !!collapsedState[config.id];
+        if (isCollapsed) delete collapsedState[config.id];
+        else collapsedState[config.id] = true;
+        saveHomeCollapsedState(collapsedState);
+        applyState();
+
+        if (isCollapsed && (config.id === 'chart' || config.id === 'side')) {
+          setTimeout(() => renderDashboardCharts(), 0);
+        }
+      });
+
+      applyState();
+    });
+  }
+
+  function loadHomeCollapsedState() {
+    try {
+      const raw = localStorage.getItem(HOME_COLLAPSE_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveHomeCollapsedState(nextState) {
+    try {
+      localStorage.setItem(HOME_COLLAPSE_STORAGE_KEY, JSON.stringify(nextState));
+    } catch {
+      // Ignore storage errors to keep the dashboard functional.
     }
   }
 }
