@@ -35,6 +35,13 @@ const HAS_VALID_KEY = SUPABASE_ANON_KEY.length > 20;
 // Supabase 프로젝트가 설정되어 있는지 확인
 export const isSupabaseConfigured = HAS_VALID_URL && HAS_VALID_KEY;
 
+export function getSupabaseConfig() {
+  return {
+    url: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+  };
+}
+
 export function getSupabaseDebugInfo() {
   const host = HAS_VALID_URL ? new URL(SUPABASE_URL).host : '(invalid-url)';
   return {
