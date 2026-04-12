@@ -22,6 +22,6 @@
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
-    "papaparse": "^5.4.1"
+    "papaparse": "^5.5.3"
   }
 }

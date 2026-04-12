@@ -335,3 +335,35 @@ export function deleteItem(index) {
   state.mappedData.splice(index, 1);
   saveToDB();
 }
+
+/**
+ * 삭제된 품목 복원 (되돌리기 기능)
+ * @param {object} item - 복원할 품목 데이터
+ * @param {number} index - 원래 위치 (기본값 0)
+ */
+export function restoreItem(item, index = 0) {
+  if (!item) return null;
+  if (!Array.isArray(state.mappedData)) state.mappedData = [];
+  const safeIndex = Number.isInteger(index)
+    ? Math.max(0, Math.min(index, state.mappedData.length))
+    : 0;
+  state.mappedData.splice(safeIndex, 0, item);
+  saveToDB();
+  return item;
+}
+
+/**
+ * 삭제된 입출고 기록 복원 (되돌리기 기능)
+ * @param {object} tx - 복원할 거래 데이터
+ * @param {number} index - 원래 위치 (기본값 0)
+ */
+export function restoreTransaction(tx, index = 0) {
+  if (!tx) return null;
+  if (!Array.isArray(state.transactions)) state.transactions = [];
+  const safeIndex = Number.isInteger(index)
+    ? Math.max(0, Math.min(index, state.transactions.length))
+    : 0;
+  state.transactions.splice(safeIndex, 0, tx);
+  saveToDB();
+  return tx;
+}
