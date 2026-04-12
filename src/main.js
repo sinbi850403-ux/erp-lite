@@ -15,7 +15,7 @@ import { isAdmin } from './admin-auth.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
-import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './firebase-auth.js';
+import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout, isAuthConfigured } from './firebase-auth.js';
 import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
 import { startWorkspaceSync, stopWorkspaceSync, syncWorkspaceToCloud } from './workspace.js';
 import { setSyncCallback } from './store.js';
@@ -981,8 +981,7 @@ async function initAppAfterAuth() {
 // Firebase 誘몄꽕??濡쒖뺄 媛쒕컻) ?쒖뿉??寃뚯씠???먮룞 ?댁젣
 // isConfigured媛 false硫?initAuth?먯꽌 user=null濡?肄쒕갚 ??寃뚯씠?멸? ?⑥?留? 
 // 濡쒖뺄 媛쒕컻???꾪빐 ?먮룞 ?댁젣
-import { isConfigured } from './firebase-config.js';
-if (!isConfigured) {
+if (!isAuthConfigured()) {
   const gate = document.getElementById('auth-gate');
   if (gate) gate.style.display = 'none';
   initAppAfterAuth();
