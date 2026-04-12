@@ -24,6 +24,20 @@ let authInitialized = false;
 // 로그인 진행 중 플래그 — 이중 클릭 방지
 let _isLoggingIn = false;
 
+function withTimeout(promise, ms, label) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${label} timeout`));
+      }, ms);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 // Supabase user → 기존 코드 호환 형태로 변환
 // 왜? → main.js가 user.uid, user.displayName, user.photoURL 을 참조하고 있어서
 function toCompatUser(supabaseUser) {
@@ -219,13 +233,17 @@ export async function signupWithEmail(email, password, name) {
   }
 
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name || '사용자' },
-      },
-    });
+    const { data, error } = await withTimeout(
+      supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name || '사용자' },
+        },
+      }),
+      12000,
+      'signup',
+    );
 
     if (error) throw error;
 
@@ -283,10 +301,14 @@ export async function loginWithEmail(email, password) {
   if (existingError) existingError.remove();
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await withTimeout(
+      supabase.auth.signInWithPassword({
+        email,
+        password,
+      }),
+      12000,
+      'login',
+    );
 
     if (error) throw error;
 
@@ -303,7 +325,11 @@ export async function loginWithEmail(email, password) {
     } else if (error.message.includes('Email not confirmed')) {
       errorMsg = '이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.';
       showToast(errorMsg, 'warning', 5000);
-    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+    } else if (
+      error.message.includes('network') ||
+      error.message.includes('fetch') ||
+      error.message.toLowerCase().includes('timeout')
+    ) {
       errorMsg = '네트워크 연결을 확인해 주세요.';
       showToast(errorMsg, 'error');
     } else {
@@ -382,9 +408,13 @@ export async function resetPassword(email) {
   }
 
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/?type=recovery`,
-    });
+    const { error } = await withTimeout(
+      supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/?type=recovery`,
+      }),
+      12000,
+      'reset-password',
+    );
 
     if (error) throw error;
     showToast('비밀번호 재설정 이메일이 전송되었습니다. 📧', 'success');
@@ -403,7 +433,11 @@ export async function logout() {
 
   let signOutError = null;
   try {
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    const { error } = await withTimeout(
+      supabase.auth.signOut({ scope: 'local' }),
+      8000,
+      'logout',
+    );
     signOutError = error || null;
   } catch (error) {
     signOutError = error;
