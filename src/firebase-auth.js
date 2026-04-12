@@ -18,6 +18,8 @@ let userProfile = null;
 
 // 인증 상태 변화 리스너 콜백
 let authChangeCallbacks = [];
+let authSubscription = null;
+let authInitialized = false;
 
 // 로그인 진행 중 플래그 — 이중 클릭 방지
 let _isLoggingIn = false;
@@ -41,6 +43,10 @@ function toCompatUser(supabaseUser) {
  * main.js에서 initAuth(callback) 형태로 호출됨
  */
 export function initAuth(callback) {
+  if (callback && !authChangeCallbacks.includes(callback)) {
+    authChangeCallbacks.push(callback);
+  }
+
   if (!isSupabaseConfigured) {
     // Supabase 미설정 시 → 로컬 모드로 동작 (개발 편의)
     currentUser = null;
@@ -49,14 +55,20 @@ export function initAuth(callback) {
     return;
   }
 
-  if (callback) authChangeCallbacks.push(callback);
+  if (authInitialized) {
+    if (callback) callback(currentUser, userProfile);
+    return;
+  }
+  authInitialized = true;
 
-  // Supabase 인증 상태 변화 리스너
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  const emitAuthChanged = () => {
+    authChangeCallbacks.forEach(cb => cb(currentUser, userProfile));
+  };
+
+  const applySession = async (session) => {
     if (session?.user) {
       currentUser = toCompatUser(session.user);
 
-      // Supabase profiles 테이블에서 프로필 가져오기
       try {
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -65,7 +77,6 @@ export function initAuth(callback) {
           .single();
 
         if (error && error.code === 'PGRST116') {
-          // 프로필이 없으면 수동 생성 (트리거 실패 대비)
           const newProfile = {
             id: session.user.id,
             name: currentUser.displayName,
@@ -99,6 +110,12 @@ export function initAuth(callback) {
             dashboardMode: profile.dashboard_mode,
             industryTemplate: profile.industry_template,
           };
+        } else {
+          userProfile = {
+            role: 'admin',
+            plan: 'free',
+            name: currentUser.displayName || '사용자',
+          };
         }
       } catch (error) {
         console.warn('[Auth] 프로필 로드 실패:', error.message);
@@ -113,10 +130,18 @@ export function initAuth(callback) {
       userProfile = null;
     }
 
-    // 모든 콜백 호출 (main.js 등)
-    _isLoggingIn = false; // 로그인 플래그 해제
-    authChangeCallbacks.forEach(cb => cb(currentUser, userProfile));
+    _isLoggingIn = false;
+    emitAuthChanged();
+  };
+
+  // 초기 세션 강제 동기화 (브라우저/리다이렉트 타이밍 이슈 보완)
+  supabase.auth.getSession().then(({ data }) => applySession(data?.session || null));
+
+  // Supabase 인증 상태 변화 리스너
+  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    await applySession(session);
   });
+  authSubscription = listener?.subscription || null;
 }
 
 /**
@@ -376,14 +401,31 @@ export async function resetPassword(email) {
 export async function logout() {
   if (!isSupabaseConfigured) return;
 
+  let signOutError = null;
   try {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    signOutError = error || null;
+  } catch (error) {
+    signOutError = error;
+  } finally {
+    // 네트워크 실패여도 클라이언트 세션/UI는 정리해 "로그아웃 안됨" 체감 방지
     currentUser = null;
     userProfile = null;
-    showToast('로그아웃되었습니다.', 'info');
-  } catch (error) {
-    showToast('로그아웃 실패: ' + error.message, 'error');
+    authChangeCallbacks.forEach(cb => cb(currentUser, userProfile));
   }
+
+  if (signOutError) {
+    showToast('로그아웃 처리 중 경고: ' + signOutError.message, 'warning');
+    return false;
+  }
+  showToast('로그아웃되었습니다.', 'info');
+  return true;
+}
+
+export function disposeAuth() {
+  authSubscription?.unsubscribe?.();
+  authSubscription = null;
+  authInitialized = false;
 }
 
 /**

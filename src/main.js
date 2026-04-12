@@ -1083,7 +1083,15 @@ function updateUserUI(user, profile) {
         <button class="btn-icon" id="btn-logout" title="로그아웃" style="font-size:11px; color:rgba(255,255,255,0.5);">로그아웃</button>
       </div>
     `;
-    document.getElementById('btn-logout')?.addEventListener('click', () => { logout(); });
+    document.getElementById('btn-logout')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-logout');
+      if (btn) btn.disabled = true;
+      try {
+        await logout();
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
     // 상단 헤더 사용자 영역 업데이트
     const topUser = document.getElementById('top-header-user');
     if (topUser) {
