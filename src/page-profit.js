@@ -1,9 +1,11 @@
 ﻿import { getState } from './store.js';
 import { getSalePrice } from './price-utils.js';
-import { downloadExcel } from './excel.js';
+import { downloadExcel, downloadExcelSheets } from './excel.js';
 import { generateTransactionPDF } from './pdf-generator.js';
 import { showToast } from './toast.js';
 import { destroyAllCharts, renderProfitTrendChart, renderVendorProfitChart } from './charts.js';
+import { jsPDF } from 'jspdf';
+import { applyKoreanFont } from './pdf-font.js';
 
 export function renderProfitPage(container, navigateTo) {
   destroyAllCharts();
@@ -30,6 +32,7 @@ export function renderProfitPage(container, navigateTo) {
   const vendorLimit = Number(viewPrefs.vendorLimit) || 8;
   const vendorKeyword = String(viewPrefs.vendorKeyword || '').trim();
   const vendorLossOnly = viewPrefs.vendorLossOnly === true;
+  const vendorType = viewPrefs.vendorType || 'all';
 
   const rows = items
     .map((item) => {
@@ -87,7 +90,8 @@ export function renderProfitPage(container, navigateTo) {
   const monthlySeries = buildMonthlySeries(periodTransactions, items);
   const monthlySummary = getCurrentMonthSummary(transactions);
 
-  const vendorSummary = buildVendorSummary(periodTransactions, items);
+  const vendorTransactions = filterTransactionsByType(periodTransactions, vendorType);
+  const vendorSummary = buildVendorSummary(vendorTransactions, items);
   const vendorSummarySorted = sortVendorSummary(vendorSummary, vendorSort);
   const vendorFiltered = filterVendorRows(vendorSummarySorted, vendorKeyword, vendorLossOnly);
   const vendorChartRows = vendorFiltered.slice(0, vendorLimit);
@@ -113,6 +117,8 @@ export function renderProfitPage(container, navigateTo) {
             <button class="btn btn-ghost btn-sm" data-profit-export="items">품목 손익 엑셀</button>
             <button class="btn btn-ghost btn-sm" data-profit-export="vendors">거래처 손익 엑셀</button>
             <button class="btn btn-ghost btn-sm" data-profit-export="transactions">기간 거래 PDF</button>
+            <button class="btn btn-ghost btn-sm" data-profit-export="charts-xlsx">차트 데이터 엑셀</button>
+            <button class="btn btn-ghost btn-sm" data-profit-export="charts-pdf">차트 PDF</button>
           </div>
         </div>
         <button class="btn btn-outline" id="btn-profit-go-inventory">재고 화면으로 이동</button>
@@ -381,6 +387,11 @@ export function renderProfitPage(container, navigateTo) {
       <div class="card card-compact" style="margin-bottom:12px;">
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
           <input class="form-input" id="profit-vendor-keyword" placeholder="거래처 검색" value="${escapeHtmlAttr(vendorKeyword)}" />
+          <select class="filter-select" id="profit-vendor-type">
+            <option value="all" ${vendorType === 'all' ? 'selected' : ''}>전체 거래</option>
+            <option value="in" ${vendorType === 'in' ? 'selected' : ''}>매입만</option>
+            <option value="out" ${vendorType === 'out' ? 'selected' : ''}>매출만</option>
+          </select>
           <label class="toggle-pill">
             <input type="checkbox" id="profit-vendor-loss" ${vendorLossOnly ? 'checked' : ''} />
             손실 거래처만
@@ -532,19 +543,22 @@ export function renderProfitPage(container, navigateTo) {
   });
 
   const vendorKeywordInput = container.querySelector('#profit-vendor-keyword');
+  const vendorTypeSelect = container.querySelector('#profit-vendor-type');
   const vendorLossInput = container.querySelector('#profit-vendor-loss');
   const vendorResetBtn = container.querySelector('#profit-vendor-reset');
   const updateVendorFilter = () => {
     saveProfitViewPrefs({
       vendorKeyword: vendorKeywordInput?.value || '',
+      vendorType: vendorTypeSelect?.value || 'all',
       vendorLossOnly: !!vendorLossInput?.checked,
     });
     renderProfitPage(container, navigateTo);
   };
   vendorKeywordInput?.addEventListener('input', updateVendorFilter);
+  vendorTypeSelect?.addEventListener('change', updateVendorFilter);
   vendorLossInput?.addEventListener('change', updateVendorFilter);
   vendorResetBtn?.addEventListener('click', () => {
-    saveProfitViewPrefs({ vendorKeyword: '', vendorLossOnly: false });
+    saveProfitViewPrefs({ vendorKeyword: '', vendorLossOnly: false, vendorType: 'all' });
     renderProfitPage(container, navigateTo);
   });
 
@@ -585,7 +599,7 @@ export function renderProfitPage(container, navigateTo) {
   exportPanel?.addEventListener('click', (event) => event.stopPropagation());
 
   container.querySelectorAll('[data-profit-export]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const type = btn.dataset.profitExport;
       const periodLabel = `${periodFrom}_${periodTo}`;
       try {
@@ -649,6 +663,31 @@ export function renderProfitPage(container, navigateTo) {
             return;
           }
           generateTransactionPDF(periodTransactions, '손익 분석 거래', `${periodFrom}~${periodTo}`);
+        } else if (type === 'charts-xlsx') {
+          const chartSheets = [
+            {
+              name: '기간손익',
+              rows: monthlySeries.map((row) => ({
+                기간: row.label,
+                매입: row.totalIn,
+                매출: row.totalOut,
+                손익: row.profit,
+              })),
+            },
+            {
+              name: '거래처손익',
+              rows: vendorFiltered.map((row) => ({
+                거래처: row.name,
+                매입: row.totalIn,
+                매출: row.totalOut,
+                손익: row.profit,
+                '이익률(%)': Number(row.profitRate.toFixed(2)),
+              })),
+            },
+          ];
+          await downloadExcelSheets(chartSheets, `손익차트_${periodLabel}`);
+        } else if (type === 'charts-pdf') {
+          await downloadChartsPdf(periodFrom, periodTo);
         }
       } catch (err) {
         showToast(err.message || '내보내기에 실패했습니다.', 'error');
@@ -755,6 +794,13 @@ function sortVendorSummary(rows, sortKey) {
   if (sortKey === 'out') return list.sort((a, b) => b.totalOut - a.totalOut);
   if (sortKey === 'in') return list.sort((a, b) => b.totalIn - a.totalIn);
   return list.sort((a, b) => b.profit - a.profit);
+}
+
+function filterTransactionsByType(transactions, type) {
+  if (type === 'in' || type === 'out') {
+    return transactions.filter((tx) => tx.type === type);
+  }
+  return transactions;
 }
 
 function filterVendorRows(rows, keyword, lossOnly) {
@@ -882,6 +928,47 @@ function formatSignedMoney(value) {
 
 function formatPercent(value) {
   return `${toNumber(value).toFixed(1)}%`;
+}
+
+async function downloadChartsPdf(periodFrom, periodTo) {
+  const trendCanvas = document.getElementById('profit-trend-chart');
+  const vendorCanvas = document.getElementById('profit-vendor-chart');
+  if (!trendCanvas || !vendorCanvas) {
+    showToast('차트를 찾을 수 없습니다.', 'warning');
+    return;
+  }
+
+  const doc = new jsPDF('p', 'pt', 'a4');
+  await applyKoreanFont(doc);
+
+  const margin = 40;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let y = 50;
+
+  doc.setFontSize(14);
+  doc.text(`손익 분석 차트 (${periodFrom}~${periodTo})`, margin, 30);
+
+  const addChart = (canvas, title) => {
+    const img = canvas.toDataURL('image/png', 1.0);
+    const width = pageWidth - margin * 2;
+    const ratio = canvas.height / canvas.width || 0.6;
+    const height = Math.max(160, width * ratio);
+    if (y + height + 40 > pageHeight) {
+      doc.addPage();
+      y = 50;
+    }
+    doc.setFontSize(11);
+    doc.text(title, margin, y);
+    y += 16;
+    doc.addImage(img, 'PNG', margin, y, width, height);
+    y += height + 24;
+  };
+
+  addChart(trendCanvas, '기간 손익 흐름');
+  addChart(vendorCanvas, '거래처 손익 TOP');
+
+  doc.save(`손익차트_${periodFrom}_${periodTo}.pdf`);
 }
 
 function downloadCanvasImage(canvasId, fileName) {
