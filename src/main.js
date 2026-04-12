@@ -16,9 +16,6 @@ import { checkAndShowOnboarding } from './onboarding.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './firebase-auth.js';
-import { startSync, stopSync, syncToCloud, getSyncStatus } from './firebase-sync.js';
-import { startWorkspaceSync, stopWorkspaceSync, syncWorkspaceToCloud } from './workspace.js';
-import { setSyncCallback } from './store.js';
 import { renderNotificationPanel, getNotificationCount, syncExternalNotifications } from './notifications.js';
 import { showToast } from './toast.js';
 import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser, injectGetUserProfile } from './plan.js';
@@ -224,11 +221,6 @@ initAuth((user, profile) => {
       gate.style.opacity = '0';
       setTimeout(() => { gate.style.display = 'none'; }, 300);
     }
-    startSync(user.uid);
-    // ?뚰겕?ㅽ럹?댁뒪 ?숆린?붾룄 ?쒖옉 (???媛??ㅼ떆媛?怨듭쑀)
-    startWorkspaceSync(user.uid);
-    // ?곗씠??蹂寃????먮룞?쇰줈 ?뚰겕?ㅽ럹?댁뒪???숆린??
-    setSyncCallback(() => syncWorkspaceToCloud());
     updateUserUI(user, profile);
     // ?먮윭 紐⑤땲?곕쭅???ъ슜???뺣낫 ?ㅼ젙 (?대뼡 ?ъ슜?먯뿉寃??먮윭媛 諛쒖깮?덈뒗吏 異붿쟻)
     setMonitorUser(user.uid, user.email);
@@ -246,9 +238,6 @@ initAuth((user, profile) => {
     }
   } else {
     // ??誘몃줈洹몄씤 ??寃뚯씠???쒖떆
-    stopSync();
-    stopWorkspaceSync();
-    setSyncCallback(null);
     updateUserUI(null, null);
     clearMonitorUser();
     if (gate) {
@@ -1072,13 +1061,12 @@ function updateUserUI(user, profile) {
     const name = profile?.name || user.displayName || '사용자';
     const photo = user.photoURL;
     const plan = (profile?.plan || 'free').toUpperCase();
-    const syncStatus = getSyncStatus();
     userArea.innerHTML = `
       <div class="sidebar-user">
         ${photo ? `<img src="${photo}" class="sidebar-user-avatar" />` : ''}
         <div class="sidebar-user-info">
           <div class="sidebar-user-name">${name}</div>
-          <div class="sidebar-user-plan">${plan} ${syncStatus.isConnected ? '동기화' : ''}</div>
+          <div class="sidebar-user-plan">${plan}</div>
         </div>
         <button class="btn-icon" id="btn-logout" title="로그아웃" style="font-size:11px; color:rgba(255,255,255,0.5);">로그아웃</button>
       </div>
