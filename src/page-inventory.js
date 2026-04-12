@@ -320,12 +320,13 @@ export function renderInventoryPage(container, navigateTo) {
 
     <!-- ?곗씠???뚯씠釉?-->
     <div class="card card-flush">
-      <div class="table-wrapper" style="border:none;">
+      <div class="table-wrapper mobile-table-hide" style="border:none;">
         <table class="data-table" id="inventory-table">
           <thead id="inventory-thead"></thead>
           <tbody id="inventory-body"></tbody>
         </table>
       </div>
+      <div class="mobile-table-cards" id="inventory-mobile-list"></div>
       <div class="pagination" id="pagination"></div>
     </div>
 
@@ -749,10 +750,14 @@ export function renderInventoryPage(container, navigateTo) {
     const pageData = sorted.slice(start, start + PAGE_SIZE);
 
     const tbody = container.querySelector('#inventory-body');
+    const mobileList = container.querySelector('#inventory-mobile-list');
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="${activeFields.length + 3}" style="text-align:center; padding:32px; color:var(--text-muted);">
         검색 결과가 없습니다.
       </td></tr>`;
+      if (mobileList) {
+        mobileList.innerHTML = '<div class="mobile-data-empty">검색 결과가 없습니다.</div>';
+      }
     } else {
       tbody.innerHTML = pageData.map((row, i) => {
         const realIdx = data.indexOf(row);
@@ -787,6 +792,38 @@ export function renderInventoryPage(container, navigateTo) {
           </tr>
         `;
       }).join('');
+
+      if (mobileList) {
+        mobileList.innerHTML = pageData.map((row) => {
+          const realIdx = data.indexOf(row);
+          const min = safetyStock[row.itemName];
+          const qty = getNumericValue(row.quantity);
+          const isLow = min !== undefined && qty <= min;
+          return `
+            <article class="mobile-data-card ${isLow ? 'is-warning' : ''}">
+              <div class="mobile-data-top">
+                <span class="mobile-data-date">${row.warehouse || '창고 미지정'}</span>
+                ${isLow ? '<span class="badge badge-danger">부족</span>' : ''}
+              </div>
+              <div class="mobile-data-title">${row.itemName || '-'}</div>
+              <div class="mobile-data-sub">${row.itemCode || '-'} · ${row.category || '분류 없음'}</div>
+              <div class="mobile-data-metrics">
+                <div><span>수량</span><strong>${(getNumericValue(row.quantity) || 0).toLocaleString('ko-KR')}</strong></div>
+                <div><span>단가</span><strong>${formatCell('unitPrice', row.unitPrice)}</strong></div>
+                <div><span>공급가</span><strong>${formatCell('supplyValue', row.supplyValue)}</strong></div>
+              </div>
+              <div class="mobile-data-sub">거래처: ${row.vendor || '-'}</div>
+              <div class="mobile-data-actions">
+                <button class="btn-icon btn-safety" data-name="${row.itemName}" data-min="${min ?? ''}" title="안전재고 설정">
+                  ${min !== undefined ? `기준 ${min}` : '안전재고'}
+                </button>
+                <button class="btn-icon btn-edit" data-idx="${realIdx}" title="수정">수정</button>
+                <button class="btn-icon btn-icon-danger btn-del" data-idx="${realIdx}" title="삭제">삭제</button>
+              </div>
+            </article>
+          `;
+        }).join('');
+      }
     }
 
     renderFilterSummary(sorted.length, data.length);

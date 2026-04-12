@@ -177,13 +177,22 @@ export function renderInoutPage(container, navigateTo) {
 
     <!-- ?대젰 ?뚯씠釉?-->
     <div class="card card-flush">
-      <div class="table-wrapper" style="border:none;">
+      <div class="table-wrapper mobile-table-hide" style="border:none;">
         <table class="data-table">
           <thead id="tx-head"></thead>
           <tbody id="tx-body"></tbody>
         </table>
       </div>
+      <div class="mobile-table-cards" id="tx-mobile-list"></div>
       <div class="pagination" id="tx-pagination"></div>
+    </div>
+
+    <div class="mobile-fab-wrap">
+      <button class="mobile-fab-main" id="mobile-tx-fab" type="button">＋</button>
+      <div class="mobile-fab-menu" id="mobile-tx-fab-menu">
+        <button class="mobile-fab-item is-in" id="mobile-fab-in" type="button">입고 등록</button>
+        <button class="mobile-fab-item is-out" id="mobile-fab-out" type="button">출고 등록</button>
+      </div>
     </div>
 
     ${items.length === 0 ? `
@@ -432,10 +441,18 @@ export function renderInoutPage(container, navigateTo) {
     const pageData = sorted.slice(start, start + PAGE_SIZE);
 
     const tbody = container.querySelector('#tx-body');
+    const mobileList = container.querySelector('#tx-mobile-list');
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
       </td></tr>`;
+      if (mobileList) {
+        mobileList.innerHTML = `
+          <div class="mobile-data-empty">
+            ${transactions.length === 0 ? '아직 입출고 기록이 없습니다.' : '검색 결과가 없습니다.'}
+          </div>
+        `;
+      }
     } else {
       tbody.innerHTML = pageData.map((tx, i) => `
         <tr>
@@ -461,6 +478,27 @@ export function renderInoutPage(container, navigateTo) {
           </td>
         </tr>
       `).join('');
+
+      if (mobileList) {
+        mobileList.innerHTML = pageData.map((tx, i) => `
+          <article class="mobile-data-card">
+            <div class="mobile-data-top">
+              <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">${tx.type === 'in' ? '입고' : '출고'}</span>
+              <span class="mobile-data-date">${tx.date || '-'}</span>
+            </div>
+            <div class="mobile-data-title">${tx.itemName || '-'}</div>
+            <div class="mobile-data-sub">${tx.itemCode || '-'} · ${tx.vendor || '거래처 없음'}</div>
+            <div class="mobile-data-metrics">
+              <div><span>수량</span><strong>${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}</strong></div>
+              <div><span>단가</span><strong>${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</strong></div>
+            </div>
+            ${tx.note ? `<div class="mobile-data-note">${tx.note}</div>` : ''}
+            <div class="mobile-data-actions">
+              <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button>
+            </div>
+          </article>
+        `).join('');
+      }
     }
 
     renderFilterSummary(sorted.length);
@@ -480,7 +518,7 @@ export function renderInoutPage(container, navigateTo) {
     // ??젣 ?대깽??
     container.querySelectorAll('.btn-del-tx').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (confirm('이 기록을 삭제하시겠습니까?\n재고 수량은 자동으로 되돌아가지 않습니다.')) {
+        if (confirm('이 기록을 삭제하시겠습니까?\n재고 수량은 자동으로 복원됩니다.')) {
           deleteTransaction(btn.dataset.id);
           showToast('기록을 삭제했습니다.', 'info');
           renderInoutPage(container, navigateTo);
@@ -611,6 +649,19 @@ export function renderInoutPage(container, navigateTo) {
     openTxModal(container, navigateTo, 'in', items);
   });
   container.querySelector('#btn-out').addEventListener('click', () => {
+    openTxModal(container, navigateTo, 'out', items);
+  });
+  const mobileFab = container.querySelector('#mobile-tx-fab');
+  const mobileFabMenu = container.querySelector('#mobile-tx-fab-menu');
+  mobileFab?.addEventListener('click', () => {
+    mobileFabMenu?.classList.toggle('is-open');
+  });
+  container.querySelector('#mobile-fab-in')?.addEventListener('click', () => {
+    mobileFabMenu?.classList.remove('is-open');
+    openTxModal(container, navigateTo, 'in', items);
+  });
+  container.querySelector('#mobile-fab-out')?.addEventListener('click', () => {
+    mobileFabMenu?.classList.remove('is-open');
     openTxModal(container, navigateTo, 'out', items);
   });
 
@@ -970,11 +1021,11 @@ function openTxModal(container, navigateTo, type, items) {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">수량 <span class="required">*</span></label>
-                <input class="form-input" type="number" id="tx-qty" placeholder="0" min="1" />
+                <input class="form-input" type="number" inputmode="numeric" id="tx-qty" placeholder="0" min="1" />
               </div>
               <div class="form-group">
                 <label class="form-label">단가</label>
-                <input class="form-input" type="number" id="tx-price" placeholder="선택 사항" />
+                <input class="form-input" type="number" inputmode="numeric" id="tx-price" placeholder="선택 사항" />
               </div>
             </div>
 
