@@ -74,30 +74,23 @@ document.getElementById('tab-signup')?.addEventListener('click', () => {
   tabLogin.classList.remove('active', 'active-signup');
 });
 
-// ?대찓??濡쒓렇??
+// 이메일 로그인 — auth.js의 finally 블록이 버튼 복구를 담당하므로
+// 별도 watchdog 없이 단순 호출. 이중 복구 경합(race condition) 방지.
 document.getElementById('gate-email-login')?.addEventListener('click', async () => {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   if (!email || !password) { showToast('이메일과 비밀번호를 입력해 주세요.', 'warning'); return; }
-  const loginBtn = document.getElementById('gate-email-login');
-  const watchdog = setTimeout(() => {
-    const btn = document.getElementById('gate-email-login');
-    if (btn && btn.disabled) {
-      btn.disabled = false;
-      btn.textContent = '이메일로 로그인';
-      btn.style.opacity = '1';
-      showToast('로그인이 지연되어 버튼을 복구했습니다. 다시 시도해 주세요.', 'warning');
-    }
-  }, 15000);
-
-  try {
-    await loginWithEmail(email, password);
-  } finally {
-    clearTimeout(watchdog);
-  }
+  await loginWithEmail(email, password);
 });
 
-// Enter ?ㅻ줈 濡쒓렇??
+// 입력 필드 포커스 시 이전 에러 메시지 자동 제거 — 재시도 UX 개선
+['login-email', 'login-password'].forEach(id => {
+  document.getElementById(id)?.addEventListener('focusin', () => {
+    document.getElementById('login-error-msg')?.remove();
+  });
+});
+
+// Enter 키로 로그인
 document.getElementById('login-password')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('gate-email-login')?.click();
 });
@@ -252,15 +245,19 @@ initAuth((user, profile) => {
       initAppAfterAuth();
     }
   } else {
-    // ??誘몃줈洹몄씤 ??寃뚯씠???쒖떆
+    // 미로그인 상태
     updateUserUI(null, null);
     clearMonitorUser();
-    if (gate) {
-      gate.style.display = 'none';
+
+    // 게이트가 열려 있으면(사용자가 로그인/회원가입 입력 중) 닫지 않음
+    // getSession() timeout이나 onAuthStateChange null 이벤트가
+    // 뒤늦게 도착해도 게이트를 유지 → 입력 중 홈화면 복귀 방지
+    const gateIsOpen = gate && gate.style.display === 'flex';
+    if (!gateIsOpen) {
+      if (gate) gate.style.display = 'none';
+      const landing = document.getElementById('landing-page');
+      if (landing) landing.style.display = 'block';
     }
-    // 誘몃줈洹몄씤 ???쒕뵫 ?섏씠吏 ?쒖떆
-    const landing = document.getElementById('landing-page');
-    if (landing) landing.style.display = 'block';
     isAuthReady = false;
   }
 });

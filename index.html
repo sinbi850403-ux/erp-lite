@@ -234,32 +234,33 @@
       </div>
 
       <!-- 로그인 폼 -->
-      <div id="form-login" class="auth-form">
+      <!-- form 태그 사용: 브라우저 패스워드 매니저 + 자동완성 호환 -->
+      <form id="form-login" class="auth-form" autocomplete="on" onsubmit="return false;">
         <div class="auth-field">
-          <input id="login-email" class="auth-input" type="email" placeholder="이메일 주소" />
+          <input id="login-email" class="auth-input" type="email" placeholder="이메일 주소" autocomplete="email" />
         </div>
         <div class="auth-field">
-          <input id="login-password" class="auth-input" type="password" placeholder="비밀번호" />
+          <input id="login-password" class="auth-input" type="password" placeholder="비밀번호" autocomplete="current-password" />
         </div>
         <div class="auth-forgot">
           <a href="#" id="btn-forgot-pw" class="auth-link-small">비밀번호 찾기</a>
         </div>
-        <button id="gate-email-login" class="auth-btn auth-btn-primary">이메일로 로그인</button>
-      </div>
+        <button id="gate-email-login" type="button" class="auth-btn auth-btn-primary">이메일로 로그인</button>
+      </form>
 
       <!-- 회원가입 폼 (숨김) -->
-      <div id="form-signup" class="auth-form" style="display:none;">
+      <form id="form-signup" class="auth-form" style="display:none;" autocomplete="on" onsubmit="return false;">
         <div class="auth-field">
-          <input id="signup-name" class="auth-input" type="text" placeholder="이름 (닉네임)" />
+          <input id="signup-name" class="auth-input" type="text" placeholder="이름 (닉네임)" autocomplete="name" />
         </div>
         <div class="auth-field">
-          <input id="signup-email" class="auth-input" type="email" placeholder="이메일 주소" />
+          <input id="signup-email" class="auth-input" type="email" placeholder="이메일 주소" autocomplete="email" />
         </div>
         <div class="auth-field">
-          <input id="signup-password" class="auth-input" type="password" placeholder="비밀번호 (6자 이상)" />
+          <input id="signup-password" class="auth-input" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password" />
         </div>
         <div class="auth-field">
-          <input id="signup-password2" class="auth-input" type="password" placeholder="비밀번호 확인" />
+          <input id="signup-password2" class="auth-input" type="password" placeholder="비밀번호 확인" autocomplete="new-password" />
         </div>
 
         <!-- 약관 동의 -->
@@ -273,8 +274,8 @@
           </div>
         </div>
 
-        <button id="gate-email-signup" class="auth-btn auth-btn-signup">회원가입</button>
-      </div>
+        <button id="gate-email-signup" type="button" class="auth-btn auth-btn-signup">회원가입</button>
+      </form>
 
       <!-- 구분선 -->
       <div class="auth-divider">

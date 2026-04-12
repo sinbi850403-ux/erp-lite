@@ -161,6 +161,11 @@ async function loadProfile(user) {
 
 async function applySession(session) {
   if (!session?.user) {
+    // 이미 미인증 상태면 중복 콜백 방지 — getSession() timeout과
+    // onAuthStateChange null 이벤트가 둘 다 도착해도 콜백은 1회만 실행
+    if (currentUser === null && !isLoggingIn) {
+      return;
+    }
     currentUser = null;
     userProfile = null;
     isLoggingIn = false;
@@ -288,7 +293,9 @@ export function initAuth(callback) {
   authInitialized = true;
   sanitizeSupabaseStorage();
 
-  withTimeout(supabase.auth.getSession(), 5000, 'initial-session')
+  // 초기 세션 복구 — 느린 네트워크에서도 작동하도록 여유 있는 timeout 설정
+  // 실패해도 applySession(null)로 미인증 상태(랜딩)로 진입하므로 안전
+  withTimeout(supabase.auth.getSession(), 8000, 'initial-session')
     .then(({ data }) => applySession(data?.session || null))
     .catch((error) => {
       console.warn('[Auth] Initial session recovery failed:', error.message);
