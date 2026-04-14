@@ -4,7 +4,7 @@
  * **컬럼 표시 설정**: 사용자가 보고 싶은 컬럼만 선택해서 볼 수 있음
  */
 
-import { getState, setState, addItem, updateItem, deleteItem, restoreItem, setSafetyStock } from './store.js';
+import { getState, setState, addItem, updateItem, deleteItem, restoreItem, setSafetyStock, rebuildInventoryFromTransactions } from './store.js';
 import { showToast } from './toast.js';
 import { downloadExcel } from './excel.js';
 import { generateInventoryPDF } from './pdf-generator.js';
@@ -175,6 +175,7 @@ export function renderInventoryPage(container, navigateTo) {
         <div class="page-desc">${state.fileName ? `📄 ${state.fileName}` : ''} 총 ${data.length}개 품목</div>
       </div>
       <div class="page-actions">
+        <button class="btn btn-outline" id="btn-rebuild-inventory" title="입출고 이력 기준으로 재고 수량 재계산">🔄 재고 재계산</button>
         <button class="btn btn-outline" id="btn-export">📥 엑셀</button>
         <button class="btn btn-outline" id="btn-export-pdf">📄 PDF</button>
         <button class="btn btn-primary" id="btn-add-item">+ 품목 추가</button>
@@ -1542,6 +1543,18 @@ export function renderInventoryPage(container, navigateTo) {
     const searchEl = container.querySelector('#search-input');
     if (searchEl) searchEl.classList.toggle('filter-active', !!currentFilter.keyword);
   }
+
+  // 재고 재계산 (입출고 이력 기반)
+  container.querySelector('#btn-rebuild-inventory')?.addEventListener('click', () => {
+    const txCount = (getState().transactions || []).length;
+    if (txCount === 0) {
+      showToast('입출고 이력이 없어서 재계산할 수 없습니다.', 'warning');
+      return;
+    }
+    rebuildInventoryFromTransactions();
+    showToast(`입출고 ${txCount}건 기준으로 재고를 재계산했습니다.`, 'success');
+    renderInventoryPage(container, navigateTo);
+  });
 
   // 페이지당 행 수
   container.querySelector('#btn-export').addEventListener('click', () => {

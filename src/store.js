@@ -653,3 +653,96 @@ export function restoreTransaction(tx, index = 0) {
   }
   return tx;
 }
+
+/**
+ * 입출고 이력 기반으로 재고 수량 재계산
+ * - transactions에 있는 품목이 mappedData에 없으면 자동 추가
+ * - 이미 있는 품목은 수량만 갱신 (단가·카테고리 등 기존 정보 유지)
+ * - 입고 합계 - 출고 합계 = 현재 재고
+ */
+export function rebuildInventoryFromTransactions() {
+  const txs = [...(state.transactions || [])].sort((a, b) => {
+    const da = new Date(a.date || a.createdAt || 0).getTime();
+    const db = new Date(b.date || b.createdAt || 0).getTime();
+    return da - db;
+  });
+
+  // 품목별 수량 집계 (key: itemCode 우선, 없으면 itemName)
+  const itemQtyMap = {};
+  const itemPriceMap = {};
+  const itemInfoMap = {};
+
+  txs.forEach(tx => {
+    const key = (tx.itemCode && String(tx.itemCode).trim())
+      ? String(tx.itemCode).trim()
+      : String(tx.itemName || '').trim();
+    if (!key) return;
+
+    if (!itemQtyMap[key]) {
+      itemQtyMap[key] = 0;
+      itemPriceMap[key] = 0;
+      itemInfoMap[key] = {
+        itemName: String(tx.itemName || '').trim(),
+        itemCode: String(tx.itemCode || '').trim(),
+        vendor: String(tx.vendor || '').trim(),
+      };
+    }
+
+    const qty = toNum(tx.quantity);
+    if (tx.type === 'in') {
+      itemQtyMap[key] += qty;
+      const txPrice = toNum(tx.unitPrice);
+      if (txPrice > 0 && itemPriceMap[key] === 0) itemPriceMap[key] = txPrice;
+    } else {
+      itemQtyMap[key] = Math.max(0, itemQtyMap[key] - qty);
+    }
+  });
+
+  // mappedData에 반영
+  Object.keys(itemQtyMap).forEach(key => {
+    const newQty = itemQtyMap[key];
+    const info = itemInfoMap[key];
+
+    // 기존 품목 찾기
+    const existing = (state.mappedData || []).find(d =>
+      (info.itemCode && String(d.itemCode || '').trim() === info.itemCode) ||
+      String(d.itemName || '').trim() === info.itemName
+    );
+
+    if (existing) {
+      existing.quantity = newQty;
+      // 단가 없으면 transactions에서 가져옴
+      if (toNum(existing.unitPrice) === 0 && itemPriceMap[key] > 0) {
+        existing.unitPrice = itemPriceMap[key];
+      }
+      recalcItemAmounts(existing);
+    } else {
+      // 새 품목 추가
+      const price = itemPriceMap[key];
+      const supplyValue = newQty * price;
+      const vat = Math.floor(supplyValue * 0.1);
+      const newItem = {
+        itemName: info.itemName,
+        itemCode: info.itemCode,
+        category: '미분류',
+        quantity: newQty,
+        unit: 'EA',
+        unitPrice: price,
+        salePrice: 0,
+        supplyValue,
+        vat,
+        totalPrice: supplyValue + vat,
+        warehouse: '',
+        note: '입출고 이력에서 자동 재계산',
+        safetyStock: 0,
+      };
+      if (!Array.isArray(state.mappedData)) state.mappedData = [];
+      state.mappedData.push(newItem);
+    }
+  });
+
+  saveToDB();
+  if (isSupabaseConfigured) {
+    scheduleSyncToSupabase(['mappedData']);
+  }
+}
