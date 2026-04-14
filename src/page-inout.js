@@ -539,7 +539,7 @@ export function renderInoutPage(container, navigateTo) {
       bulkDelBtn.disabled = selectedTxIds.size === 0;
       bulkDelBtn.onclick = () => {
         if (selectedTxIds.size === 0) return;
-        if (!confirm(\`선택한 \${selectedTxIds.size}건의 기록을 삭제하시겠습니까?\`)) return;
+        if (!confirm("선택한 " + selectedTxIds.size + "건의 기록을 삭제하시겠습니까?")) return;
         
         let failCount = 0;
         selectedTxIds.forEach(id => {
@@ -547,7 +547,7 @@ export function renderInoutPage(container, navigateTo) {
           if(!res) failCount++;
         });
         selectedTxIds.clear();
-        showToast(\`일괄 삭제 완료! (선택 \${selectedTxIds.size}건 중 실패 \${failCount}건)\`, 'success');
+        showToast("일괄 삭제 완료! (선택 건수 중 실패 " + failCount + "건)", 'success');
         renderInoutPage(container, navigateTo);
       };
     }
