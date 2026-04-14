@@ -75,9 +75,7 @@ export function renderUploadPage(container, navigateTo) {
     </div>
 
     <div style="text-align:center; margin-top:12px;">
-      <button class="btn btn-outline btn-sm" id="btn-sample">
-        💡 파일이 없으신가요? 샘플 데이터로 체험하기
-      </button>
+      <!-- 샘플 데이터 기능 삭제 -->
     </div>
 
     <!-- 엑셀 양식 다운로드 -->
@@ -134,9 +132,7 @@ export function renderUploadPage(container, navigateTo) {
     showToast('이전 데이터를 초기화했습니다.', 'info');
   });
 
-  container.querySelector('#btn-sample')?.addEventListener('click', () => {
-    loadSampleData(navigateTo);
-  });
+  // 샘플 이벤트 바인딩 제거
 
   // 템플릿 다운로드 이벤트
   container.querySelectorAll('.template-card').forEach(btn => {
@@ -219,59 +215,7 @@ async function handleFile(file, navigateTo) {
   }
 }
 
-/**
- * 샘플 데이터 로드 — 파일 없이 체험
- */
-function loadSampleData(navigateTo) {
-  const previousMappedData = (getState().mappedData || []).slice();
-  const sampleData = [
-    ['품목명', '품목코드', '분류', '수량', '단위', '단가', '공급가액', '부가세', '합계금액', '창고', '비고', '안전재고'],
-    ['A4용지', 'P-001', '사무용품', 500, 'EA', 5000, 2500000, 250000, 2750000, '본사 1층', '', 100],
-    ['볼펜(청)', 'P-002', '사무용품', 200, 'EA', 800, 160000, 16000, 176000, '본사 1층', '', 50],
-    ['복사기 토너', 'P-003', '소모품', 10, 'EA', 45000, 450000, 45000, 495000, '본사 2층', '정기교체', 5],
-    ['모니터 24인치', 'E-001', '전자기기', 15, 'EA', 250000, 3750000, 375000, 4125000, '본사 2층', '신규 입고', 5],
-    ['키보드(무선)', 'E-002', '전자기기', 30, 'EA', 35000, 1050000, 105000, 1155000, '본사 2층', ''],
-    ['커피원두 1kg', 'F-001', '식음료', 20, 'KG', 15000, 300000, 30000, 330000, '휴게실', ''],
-    ['정수기 필터', 'F-002', '소모품', 5, 'EA', 25000, 125000, 12500, 137500, '휴게실', '6개월 교체'],
-    ['택배상자(소)', 'W-001', '포장재', 300, 'EA', 500, 150000, 15000, 165000, '물류창고', ''],
-    ['택배상자(중)', 'W-002', '포장재', 200, 'EA', 800, 160000, 16000, 176000, '물류창고', ''],
-    ['택배상자(대)', 'W-003', '포장재', 100, 'EA', 1200, 120000, 12000, 132000, '물류창고', ''],
-    ['에어캡', 'W-004', '포장재', 50, 'M', 2000, 100000, 10000, 110000, '물류창고', ''],
-    ['노트북 충전기', 'E-003', '전자기기', 10, 'EA', 45000, 450000, 45000, 495000, '본사 1층', ''],
-    ['화이트보드 마커', 'P-004', '사무용품', 100, 'EA', 1500, 150000, 15000, 165000, '본사 1층', '4색 세트'],
-    ['포스트잇', 'P-005', '사무용품', 150, 'EA', 2000, 300000, 30000, 330000, '본사 1층', ''],
-  ];
-
-  const headers = sampleData[0];
-  const dataRows = sampleData.slice(1);
-  const mapping = autoMap(headers);
-  const mappedData = buildMappedData(dataRows, mapping);
-
-  const uploadSafetyStock = { ...getState().safetyStock };
-  mappedData.forEach(row => {
-    if (row.safetyStock !== '' && row.safetyStock !== undefined && row.safetyStock !== null) {
-      let val = parseFloat(row.safetyStock);
-      if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
-    }
-  });
-
-  resetState();
-  setState({
-    rawData: sampleData,
-    sheetNames: ['샘플데이터'],
-    activeSheet: '샘플데이터',
-    fileName: '샘플_재고데이터.xlsx',
-    currentStep: 3,
-    allSheets: { '샘플데이터': sampleData },
-    columnMapping: mapping,
-    mappedData,
-    safetyStock: uploadSafetyStock,
-    lastUploadDiff: buildUploadDiff(previousMappedData, mappedData, '샘플_재고데이터.xlsx'),
-  });
-
-  showToast(`샘플 데이터 ${mappedData.length}건 자동 등록 완료`, 'success');
-  navigateTo('inventory');
-}
+// 샘플 데이터 로드(loadSampleData) 함수 제거됨
 
 // === 자동 매핑 유틸 ===
 
