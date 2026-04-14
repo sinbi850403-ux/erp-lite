@@ -917,18 +917,19 @@ export function renderInventoryPage(container, navigateTo) {
 
         return `
           <tr class="${isDanger ? 'row-danger' : isLow ? 'row-warning' : ''} ${isFocused ? 'row-focused' : ''}" data-idx="${realIdx}" data-row-key="${rowKey}">
-            <td class="col-check">
+            <td data-label="" class="col-check">
               <input type="checkbox" class="table-row-check inv-row-check" data-idx="${realIdx}" ${selectedIndexes.has(realIdx) ? 'checked' : ''} aria-label="행 선택" />
             </td>
             <td class="col-num">${start + i + 1}</td>
             ${activeFields.map(key => `
               <td class="editable-cell ${ALL_FIELDS.find(f => f.key === key)?.numeric ? 'text-right' : ''}"
+                  data-label="${FIELD_LABELS[key] || key}"
                   data-field="${key}" data-idx="${realIdx}">
                 ${formatCell(key, row[key])}
                 ${key === 'quantity' && isLow ? ' <span class="badge badge-danger" style="font-size:10px;">부족</span>' : ''}
               </td>
             `).join('')}
-            <td class="text-center">
+            <td data-label="안전재고" class="text-center">
               <button class="btn-icon btn-safety" data-name="${escapeHtml(row.itemName)}" data-min="${min ?? ''}"
                 title="클릭하여 안전재고 수량 설정"
                 style="font-size:11px; padding:2px 6px; border-radius:4px;
@@ -936,7 +937,7 @@ export function renderInventoryPage(container, navigateTo) {
                 ${min !== undefined ? `기준 ${min}` : '설정'}
               </button>
             </td>
-            <td class="col-actions">
+            <td data-label="" class="col-actions">
               ${canEdit   ? `<button class="btn-icon btn-edit" data-idx="${realIdx}" title="수정">수정</button>` : `<button class="btn-icon" title="권한 없음" disabled style="opacity:0.3;cursor:not-allowed;">수정</button>`}
               ${canDelete ? `<button class="btn-icon btn-icon-danger btn-del" data-idx="${realIdx}" title="삭제">삭제</button>` : ''}
             </td>

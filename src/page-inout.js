@@ -467,27 +467,27 @@ export function renderInoutPage(container, navigateTo) {
     } else {
       tbody.innerHTML = pageData.map((tx, i) => `
         <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''}">
-          <td style="text-align:center;">
+          <td data-label="" style="text-align:center;">
             <input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
           </td>
           <td class="col-num">${start + i + 1}</td>
-          <td>
+          <td data-label="구분">
             <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">
               ${tx.type === 'in' ? '입고' : '출고'}
             </span>
           </td>
-          <td style="font-size:12px;">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
-          <td><strong>${tx.itemName || '-'}</strong></td>
-          <td style="color:var(--text-muted);">${tx.itemCode || '-'}</td>
-          <td class="text-right">
+          <td data-label="거래처" style="font-size:12px;">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
+          <td data-label="품목명"><strong>${tx.itemName || '-'}</strong></td>
+          <td data-label="품목코드" style="color:var(--text-muted);">${tx.itemCode || '-'}</td>
+          <td data-label="수량" class="text-right">
             <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">
               ${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}
             </span>
           </td>
-          <td class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
-          <td>${formatDate(tx.date)}</td>
-          <td style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
-          <td class="text-center">
+          <td data-label="단가" class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
+          <td data-label="날짜">${formatDate(tx.date)}</td>
+          <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
+          <td data-label="" class="text-center">
             <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button>
           </td>
         </tr>

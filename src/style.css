@@ -502,7 +502,7 @@ a:hover {
     min-width: 44px;
   }
   .stat-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
   .nav-btn {
     width: 100%;
@@ -1101,6 +1101,8 @@ a:hover {
 .btn-icon {
   padding: 6px;
   border-radius: var(--radius-sm);
+  min-height: 32px;
+  min-width: 32px;
   background: none;
   border: none;
   cursor: pointer;
@@ -3299,11 +3301,48 @@ html.dark-mode .report-spotlight-card {
     align-items: flex-start;
     gap: var(--space-sm);
   }
+
+  /* 헤더 액션 버튼 — 작은 화면에서 줄바꿈 허용 & 터치 최적화 */
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .page-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 100px;
+  }
+
+  /* btn-icon 터치 타겟 강화 */
+  .btn-icon {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 600px) {
+  /* stat-grid — 모바일에서도 2열 유지 (1열은 너무 좁음) */
   .stat-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* iOS Safari 자동 확대 방지 — 16px 미만 폰트는 zoom 트리거 */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* 헤더 액션 버튼 — 모바일에서 전체 너비 */
+  .page-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .page-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .toolbar {
@@ -3390,6 +3429,63 @@ html.dark-mode .report-spotlight-card {
 
   .data-table td.col-num {
     display: none;
+  }
+}
+
+/* ─── 480px: 소형 스마트폰 전용 ───────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* 콘텐츠 패딩 최소화 */
+  #main-content {
+    padding: 60px var(--space-sm) var(--space-md);
+  }
+
+  /* 카드 패딩 축소 */
+  .card {
+    padding: var(--space-md);
+    border-radius: var(--radius);
+  }
+
+  /* 스탯 카드 컴팩트 */
+  .stat-card {
+    padding: 10px 12px;
+  }
+  .stat-value {
+    font-size: 20px;
+  }
+
+  /* 페이지 타이틀 축소 */
+  .page-title {
+    font-size: 17px;
+  }
+
+  /* 모달 → 하단 시트(bottom sheet) — 엄지로 닫기 쉬움 */
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  /* 테이블 카드 row 패딩 축소 */
+  .data-table tr {
+    padding: 10px;
+  }
+  .data-table td {
+    font-size: 13px;
+  }
+
+  /* 페이지네이션 */
+  .pagination-btns {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .page-btn {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 13px;
   }
 }
 
@@ -3938,6 +4034,7 @@ html.dark-mode .report-spotlight-card {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   width: 100%;
+  max-width: min(580px, calc(100vw - 32px));
   max-height: 90vh;
   overflow-y: auto;
 }
