@@ -404,7 +404,9 @@ export async function loginWithEmail(email, password) {
     return null;
   }
 
-  sanitizeSupabaseStorage();
+  // 로그인 시도 전 기존 세션/토큰 완전 삭제
+  // 만료된 세션이 localStorage에 남아있으면 signInWithPassword가 실패할 수 있음
+  purgeLegacyAuthStorage({ includeSupabaseSession: true });
 
   const loginBtn = document.getElementById('gate-email-login');
   const originalText = loginBtn?.textContent || '이메일로 로그인';
