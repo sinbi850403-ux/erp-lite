@@ -1684,8 +1684,8 @@ export function renderInventoryPage(container, navigateTo) {
   syncFocusChips();
 
   // 입출고 변경 시 재고 현황 즉시 자동 반영
+  // addTransaction이 mappedData를 직접 갱신하므로 renderTable만 호출
   setSyncCallback(() => {
-    rebuildInventoryFromTransactions();
     renderTable();
   });
 

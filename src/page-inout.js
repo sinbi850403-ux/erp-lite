@@ -470,6 +470,13 @@ export function renderInoutPage(container, navigateTo) {
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
       </td></tr>`;
     } else {
+      // ── 현재 재고 현황 조회 (mappedData 기반 — 초기재고 포함) ──
+      const currentStockByKey = new Map();
+      (getState().mappedData || []).forEach(item => {
+        const key = item.itemCode ? String(item.itemCode).trim() : String(item.itemName || '').trim();
+        currentStockByKey.set(key, (currentStockByKey.get(key) || 0) + (parseFloat(item.quantity) || 0));
+      });
+
       // ── 전체 필터 결과 기준 품목별 집계 (페이지 무관) ──────
       const allQtyByKey = new Map();
       sorted.forEach(tx => {
@@ -576,10 +583,14 @@ export function renderInoutPage(container, navigateTo) {
           const avgMargin = avgCost > 0 && avgActual > 0
             ? ((avgActual - avgCost) / avgCost * 100).toFixed(1)
             : null;
-          const qtyLabel = [
-            totalInQty > 0 ? `<span class="type-in">+${totalInQty.toLocaleString('ko-KR')}</span>` : '',
-            totalOutQty > 0 ? `<span class="type-out">-${totalOutQty.toLocaleString('ko-KR')}</span>` : '',
-          ].filter(Boolean).join(' ');
+          const currentStock = currentStockByKey.has(key) ? currentStockByKey.get(key) : null;
+          const stockLabel = currentStock !== null
+            ? `<span style="font-weight:700; color:var(--text-primary);">${currentStock.toLocaleString('ko-KR')}</span>`
+            : '-';
+          const txNote = [
+            totalInQty > 0 ? `+${totalInQty.toLocaleString('ko-KR')}` : '',
+            totalOutQty > 0 ? `-${totalOutQty.toLocaleString('ko-KR')}` : '',
+          ].filter(Boolean).join('/');
           const pageCountNote = group.length < totalCount ? ` <span style="color:var(--text-muted); font-size:10px;">(이 페이지 ${group.length}건)</span>` : '';
           const marginColor = avgMargin !== null ? (parseFloat(avgMargin) > 0 ? 'var(--success)' : parseFloat(avgMargin) < 0 ? 'var(--danger)' : 'var(--text-muted)') : '';
 
@@ -596,7 +607,10 @@ export function renderInoutPage(container, navigateTo) {
                 <span style="font-size:11px; color:var(--text-muted); margin-left:8px;">총 ${totalCount}건${pageCountNote}</span>
               </td>
               <td class="col-num"></td>
-              <td class="text-right">${qtyLabel}</td>
+              <td class="text-right">
+                ${stockLabel}
+                ${txNote ? `<div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${txNote}</div>` : ''}
+              </td>
               <td class="text-right" style="font-size:12px;">${avgCost > 0 ? '<span style="color:var(--text-muted); font-size:10px;">평균</span> ₩' + avgCost.toLocaleString('ko-KR') : '-'}</td>
               <td class="text-right" style="font-size:12px;">${avgSell > 0 ? '₩' + avgSell.toLocaleString('ko-KR') : '-'}</td>
               <td class="text-right" style="font-size:12px;">${avgActual > 0 ? '₩' + avgActual.toLocaleString('ko-KR') : '-'}</td>
