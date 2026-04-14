@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="INVEX">
+  <defs>
+    <!-- Top face: light hits here, brightest -->
+    <linearGradient id="lm-top" x1="18" y1="14" x2="62" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <!-- Left face: mid-tone -->
+    <linearGradient id="lm-left" x1="18" y1="25" x2="40" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <!-- Right face: shadow side, darkest -->
+    <linearGradient id="lm-right" x1="62" y1="25" x2="40" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4338ca"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <!-- Background radial glow -->
+    <radialGradient id="lm-bg" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0a0e1a"/>
+    </radialGradient>
+    <!-- Glow filter for top face -->
+    <filter id="lm-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Ambient glow behind cube -->
+    <filter id="lm-ambient" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+    </filter>
+  </defs>
+
+  <!-- Icon background -->
+  <rect width="80" height="80" rx="20" fill="url(#lm-bg)"/>
+
+  <!-- Ambient purple glow behind cube -->
+  <ellipse cx="40" cy="40" rx="24" ry="16" fill="#6366f1" opacity="0.18" filter="url(#lm-ambient)"/>
+
+  <!-- ═══ Isometric Cube ═══
+       Vertices:
+         A(top)  = 40, 14
+         B(right)= 62, 25   C(center)= 40, 36   D(left)= 18, 25
+         E(bot-r)= 62, 47   F(bottom)= 40, 58   G(bot-l)= 18, 47
+  -->
+
+  <!-- Right face (shadow) — draw first, behind -->
+  <polygon points="62,25 40,36 40,58 62,47" fill="url(#lm-right)"/>
+
+  <!-- Left face (mid) -->
+  <polygon points="18,25 40,36 40,58 18,47" fill="url(#lm-left)"/>
+
+  <!-- Top face (highlight) — draw last, on top -->
+  <polygon points="40,14 62,25 40,36 18,25" fill="url(#lm-top)" filter="url(#lm-glow)"/>
+
+  <!-- Edge highlights (lit edges) -->
+  <line x1="40" y1="14" x2="62" y2="25" stroke="rgba(255,255,255,0.55)" stroke-width="1" stroke-linecap="round"/>
+  <line x1="40" y1="14" x2="18" y2="25" stroke="rgba(255,255,255,0.55)" stroke-width="1" stroke-linecap="round"/>
+  <!-- Vertical center ridge -->
+  <line x1="40" y1="14" x2="40" y2="36" stroke="rgba(255,255,255,0.20)" stroke-width="0.75"/>
+  <!-- Bottom silhouette edges (subtle) -->
+  <polyline points="18,47 40,58 62,47" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.75" stroke-linejoin="round"/>
+  <line x1="18" y1="25" x2="18" y2="47" stroke="rgba(255,255,255,0.12)" stroke-width="0.75"/>
+  <line x1="62" y1="25" x2="62" y2="47" stroke="rgba(255,255,255,0.08)" stroke-width="0.75"/>
+
+  <!-- Apex highlight dot -->
+  <circle cx="40" cy="14" r="1.8" fill="rgba(255,255,255,0.75)"/>
+
+  <!-- Premium border ring -->
+  <rect x="1.5" y="1.5" width="77" height="77" rx="18.5" fill="none" stroke="rgba(139,92,246,0.35)" stroke-width="1.5"/>
+  <!-- Subtle inner rim -->
+  <rect x="3" y="3" width="74" height="74" rx="17" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+</svg>
