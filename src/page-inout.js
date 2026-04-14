@@ -173,8 +173,12 @@ export function renderInoutPage(container, navigateTo) {
     </div>
     <div class="filter-summary" id="tx-filter-summary"></div>
 
-    <!-- 오늘 통계 -->
+    <!-- 테이블 영역 -->
     <div class="card card-flush">
+      <div style="padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); background:var(--bg-lighter);">
+        <div style="font-size:13px; font-weight:600;" id="tx-selection-info">선택 0건</div>
+        <button class="btn btn-danger btn-sm" id="btn-tx-bulk-delete" disabled>선택 삭제</button>
+      </div>
       <div class="table-wrapper" style="border:none;">
         <table class="data-table">
           <thead id="tx-head"></thead>
@@ -192,6 +196,7 @@ export function renderInoutPage(container, navigateTo) {
   `;
 
   let currentPageNum = 1;
+  let selectedTxIds = new Set();
   const defaultFilter = { keyword: '', type: '', date: '', vendor: '', itemCode: '', quick: 'all' };
   const defaultSort = { key: 'date', direction: 'desc' };
   const savedViewPrefs = state.inoutViewPrefs || {};
@@ -294,6 +299,7 @@ export function renderInoutPage(container, navigateTo) {
     const thead = container.querySelector('#tx-head');
     thead.innerHTML = `
       <tr>
+        <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
         <th class="col-num">#</th>
         <th class="sortable-header ${sort.key === 'type' ? 'is-active' : ''}" data-sort-key="type" title="클릭하여 정렬" aria-sort="${sort.key === 'type' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
           <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
@@ -431,12 +437,15 @@ export function renderInoutPage(container, navigateTo) {
 
     const tbody = container.querySelector('#tx-body');
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:32px; color:var(--text-muted);">
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
       </td></tr>`;
     } else {
       tbody.innerHTML = pageData.map((tx, i) => `
-        <tr>
+        <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''}">
+          <td style="text-align:center;">
+            <input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
+          </td>
           <td class="col-num">${start + i + 1}</td>
           <td>
             <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">
@@ -475,16 +484,17 @@ export function renderInoutPage(container, navigateTo) {
       </div>
     `;
 
-    // ??젣 ?대깽??
+    // 삭제 이벤트
     container.querySelectorAll('.btn-del-tx').forEach(btn => {
       btn.addEventListener('click', () => {
         const removed = deleteTransaction(btn.dataset.id);
-        if (!removed?.deleted) {
+        if (!removed || !removed.deleted) {
           showToast('삭제할 기록을 찾지 못했습니다.', 'warning');
           return;
         }
 
         const itemName = removed.deleted.itemName || '선택 기록';
+        selectedTxIds.delete(btn.dataset.id); // 혹시 선택되어 있으면 해제
         renderInoutPage(container, navigateTo);
         showToast(`"${itemName}" 기록을 삭제했습니다.`, 'info', 5000, {
           actionLabel: '실행 취소',
@@ -496,6 +506,51 @@ export function renderInoutPage(container, navigateTo) {
         });
       });
     });
+
+    // 선택 박스 이벤트
+    const selectAllCheckbox = container.querySelector('#tx-select-all');
+    if (selectAllCheckbox) {
+      const isAllSelected = pageData.length > 0 && pageData.every(tx => selectedTxIds.has(tx.id));
+      selectAllCheckbox.checked = isAllSelected;
+
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        pageData.forEach(tx => {
+          if (checked) selectedTxIds.add(tx.id);
+          else selectedTxIds.delete(tx.id);
+        });
+        renderTxTable();
+      });
+    }
+
+    container.querySelectorAll('.tx-select-row').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        if (e.target.checked) selectedTxIds.add(e.target.value);
+        else selectedTxIds.delete(e.target.value);
+        renderTxTable();
+      });
+    });
+
+    // 헤더 상태 업데이트
+    const selInfo = container.querySelector('#tx-selection-info');
+    const bulkDelBtn = container.querySelector('#btn-tx-bulk-delete');
+    if (selInfo) selInfo.textContent = `선택 ${selectedTxIds.size}건`;
+    if (bulkDelBtn) {
+      bulkDelBtn.disabled = selectedTxIds.size === 0;
+      bulkDelBtn.onclick = () => {
+        if (selectedTxIds.size === 0) return;
+        if (!confirm(\`선택한 \${selectedTxIds.size}건의 기록을 삭제하시겠습니까?\`)) return;
+        
+        let failCount = 0;
+        selectedTxIds.forEach(id => {
+          const res = deleteTransaction(id);
+          if(!res) failCount++;
+        });
+        selectedTxIds.clear();
+        showToast(\`일괄 삭제 완료! (선택 \${selectedTxIds.size}건 중 실패 \${failCount}건)\`, 'success');
+        renderInoutPage(container, navigateTo);
+      };
+    }
 
     //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
     pagEl.querySelector('#tx-prev')?.addEventListener('click', () => { currentPageNum--; renderTxTable(); });

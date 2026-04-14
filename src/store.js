@@ -474,46 +474,48 @@ export function addTransaction(tx) {
  * 입출고 기록 삭제
  */
 export function deleteTransaction(id) {
-  const target = state.transactions.find(t => t.id === id);
-  if (target) {
-    const item = (state.mappedData || []).find(d =>
-      d.itemName === target.itemName ||
-      (d.itemCode && d.itemCode === target.itemCode)
-    );
-    if (item) {
-      const qty = parseFloat(target.quantity) || 0;
-      const currentQty = parseFloat(item.quantity) || 0;
-      if (target.type === 'in') {
-        item.quantity = Math.max(0, currentQty - qty);
-      } else {
-        item.quantity = currentQty + qty;
-      }
-      // 합계금액 재계산 (기존 VAT 비율 유지)
-      const price = parseFloat(item.unitPrice) || parseFloat(target.unitPrice) || 0;
-      const prevSupplyValue = parseFloat(item.supplyValue) || 0;
-      const prevVat = parseFloat(item.vat) || 0;
-      
-      let vatRate = 0.1;
-      if (prevSupplyValue > 0) {
-        vatRate = prevVat / prevSupplyValue;
-        if (vatRate < 0.05) vatRate = 0;
-        else vatRate = 0.1;
-      }
-      
-      item.unitPrice = price;
-      item.supplyValue = item.quantity * price;
-      item.vat = Math.floor(item.supplyValue * vatRate);
-      item.totalPrice = item.supplyValue + item.vat;
+  const index = state.transactions.findIndex(t => t.id === id);
+  if (index === -1) return null;
+  const target = state.transactions[index];
+  
+  const item = (state.mappedData || []).find(d =>
+    d.itemName === target.itemName ||
+    (d.itemCode && d.itemCode === target.itemCode)
+  );
+  if (item) {
+    const qty = parseFloat(target.quantity) || 0;
+    const currentQty = parseFloat(item.quantity) || 0;
+    if (target.type === 'in') {
+      item.quantity = Math.max(0, currentQty - qty);
+    } else {
+      item.quantity = currentQty + qty;
     }
-
-    // Supabase에서도 삭제
-    if (isSupabaseConfigured && target._synced) {
-      db.transactions.remove(target.id).catch(err =>
-        console.warn('[Store] 입출고 삭제 동기화 실패:', err.message)
-      );
+    // 합계금액 재계산 (기존 VAT 비율 유지)
+    const price = parseFloat(item.unitPrice) || parseFloat(target.unitPrice) || 0;
+    const prevSupplyValue = parseFloat(item.supplyValue) || 0;
+    const prevVat = parseFloat(item.vat) || 0;
+    
+    let vatRate = 0.1;
+    if (prevSupplyValue > 0) {
+      vatRate = prevVat / prevSupplyValue;
+      if (vatRate < 0.05) vatRate = 0;
+      else vatRate = 0.1;
     }
+    
+    item.unitPrice = price;
+    item.supplyValue = item.quantity * price;
+    item.vat = Math.floor(item.supplyValue * vatRate);
+    item.totalPrice = item.supplyValue + item.vat;
   }
-  state.transactions = state.transactions.filter(t => t.id !== id);
+
+  // Supabase에서도 삭제
+  if (isSupabaseConfigured && target._synced) {
+    db.transactions.remove(target.id).catch(err =>
+      console.warn('[Store] 입출고 삭제 동기화 실패:', err.message)
+    );
+  }
+
+  state.transactions.splice(index, 1);
   saveToDB();
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['mappedData']);
@@ -521,6 +523,7 @@ export function deleteTransaction(id) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('notifications-updated'));
   }
+  return { deleted: target, index };
 }
 
 /**
