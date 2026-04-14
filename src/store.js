@@ -426,8 +426,6 @@ export function addTransaction(tx) {
       if (vatRate < 0.05) vatRate = 0;
       else vatRate = 0.1;
     } else if (prevSupplyValue === 0 && prevVat === 0 && item.quantity > 0) {
-      // 기존에도 0 재고인 경우 10% 또는 transaction.vat이 없으므로 기본 10%를 적용하지만, 항목이 면세 명시일 수도 있으므로 주의
-      // (여기서는 일반적인 기본값 10% 적용)
       vatRate = 0.1;
     }
 
@@ -435,6 +433,30 @@ export function addTransaction(tx) {
     item.supplyValue = item.quantity * price;
     item.vat = Math.floor(item.supplyValue * vatRate);
     item.totalPrice = item.supplyValue + item.vat;
+  } else {
+    // 기존에 없는 품목일 경우, 재고 마스터(mappedData)에 신규 자동 생성
+    const qty = tx.type === 'in' ? (parseFloat(tx.quantity) || 0) : 0;
+    const price = parseFloat(tx.unitPrice) || 0;
+    const supplyValue = qty * price;
+    const vat = Math.floor(supplyValue * 0.1);
+
+    const newItem = {
+      itemName: tx.itemName,
+      itemCode: tx.itemCode || '',
+      category: '미분류',
+      quantity: qty,
+      unit: 'EA',
+      unitPrice: price,
+      salePrice: 0,
+      supplyValue: supplyValue,
+      vat: vat,
+      totalPrice: supplyValue + vat,
+      warehouse: tx.warehouse || '',
+      note: '입출고 등록에 의한 자동 생성',
+      safetyStock: 0
+    };
+    
+    state.mappedData = [newItem, ...state.mappedData];
   }
 
   saveToDB();

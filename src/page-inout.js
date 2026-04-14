@@ -1,4 +1,4 @@
-﻿/**
+/**
  * page-inout.js - 입출고 관리 페이지
  * 역할: 입고/출고 기록 등록, 이력 조회, 재고 자동 반영
  * 핵심: 입출고를 기록하면 재고 현황의 수량이 자동으로 증감됨
@@ -891,7 +891,7 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
           </tbody>
         </table>
       </div>
-      ${unmatchedCount > 0 ? '<div class="alert alert-warning" style="margin-bottom:12px; font-size:12px;">품목 미매칭 행은 이력은 저장되지만 기존 재고 수량과는 연결되지 않을 수 있습니다. 가능하면 품목코드를 맞춘 뒤 다시 업로드해 주세요.</div>' : ''}
+      ${unmatchedCount > 0 ? '<div class="alert alert-info" style="margin-bottom:12px; font-size:12px;">품목 미매칭 행은 재고 마스터에 \'신규 품목\'으로 자동 등록됩니다.</div>' : ''}
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn btn-outline" id="bulk-cancel">취소</button>
         <button class="btn btn-primary" id="bulk-confirm">총 ${rows.length}건 등록</button>
