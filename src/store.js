@@ -520,6 +520,21 @@ export function addTransaction(tx) {
 /**
  * 입출고 기록 삭제
  */
+/**
+ * 트랜잭션 가격 필드(판매가/실판매가) 부분 업데이트
+ */
+export function updateTransactionPrices(id, fields) {
+  const tx = state.transactions.find(t => t.id === id);
+  if (!tx) return false;
+  const allowed = ['sellingPrice', 'actualSellingPrice'];
+  allowed.forEach(key => {
+    if (key in fields) tx[key] = fields[key];
+  });
+  saveToDB();
+  if (_syncCallback) _syncCallback();
+  return true;
+}
+
 export function deleteTransaction(id) {
   const index = state.transactions.findIndex(t => t.id === id);
   if (index === -1) return null;
