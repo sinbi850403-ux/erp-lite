@@ -474,10 +474,17 @@ export function renderInoutPage(container, navigateTo) {
       const allQtyByKey = new Map();
       sorted.forEach(tx => {
         const key = tx.itemCode ? tx.itemCode : (tx.itemName || '');
-        if (!allQtyByKey.has(key)) allQtyByKey.set(key, { inQty: 0, outQty: 0, count: 0, itemName: tx.itemName, itemCode: tx.itemCode });
+        if (!allQtyByKey.has(key)) allQtyByKey.set(key, { inQty: 0, outQty: 0, count: 0, inCostSum: 0, inSellSum: 0, inActualSum: 0 });
         const entry = allQtyByKey.get(key);
-        if (tx.type === 'in') entry.inQty += parseFloat(tx.quantity) || 0;
-        else entry.outQty += parseFloat(tx.quantity) || 0;
+        const qty = parseFloat(tx.quantity) || 0;
+        if (tx.type === 'in') {
+          entry.inQty += qty;
+          entry.inCostSum += qty * (parseFloat(tx.unitPrice) || 0);
+          entry.inSellSum += qty * (parseFloat(tx.sellingPrice) || 0);
+          entry.inActualSum += qty * (parseFloat(tx.actualSellingPrice) || 0);
+        } else {
+          entry.outQty += qty;
+        }
         entry.count++;
       });
 
@@ -559,15 +566,22 @@ export function renderInoutPage(container, navigateTo) {
           const isExpanded = expandedGroups.has(key);
           const firstName = group[0].itemName || '-';
           const firstCode = group[0].itemCode || '';
-          const allEntry = allQtyByKey.get(key) || { inQty: 0, outQty: 0, count: group.length };
+          const allEntry = allQtyByKey.get(key) || { inQty: 0, outQty: 0, count: group.length, inCostSum: 0, inSellSum: 0, inActualSum: 0 };
           const totalInQty = allEntry.inQty;
           const totalOutQty = allEntry.outQty;
           const totalCount = allEntry.count;
+          const avgCost = totalInQty > 0 ? Math.round(allEntry.inCostSum / totalInQty) : 0;
+          const avgSell = totalInQty > 0 ? Math.round(allEntry.inSellSum / totalInQty) : 0;
+          const avgActual = totalInQty > 0 ? Math.round(allEntry.inActualSum / totalInQty) : 0;
+          const avgMargin = avgCost > 0 && avgActual > 0
+            ? ((avgActual - avgCost) / avgCost * 100).toFixed(1)
+            : null;
           const qtyLabel = [
             totalInQty > 0 ? `<span class="type-in">+${totalInQty.toLocaleString('ko-KR')}</span>` : '',
             totalOutQty > 0 ? `<span class="type-out">-${totalOutQty.toLocaleString('ko-KR')}</span>` : '',
           ].filter(Boolean).join(' ');
           const pageCountNote = group.length < totalCount ? ` <span style="color:var(--text-muted); font-size:10px;">(이 페이지 ${group.length}건)</span>` : '';
+          const marginColor = avgMargin !== null ? (parseFloat(avgMargin) > 0 ? 'var(--success)' : parseFloat(avgMargin) < 0 ? 'var(--danger)' : 'var(--text-muted)') : '';
 
           html += `
             <tr class="tx-group-header" data-group-key="${escapeHtml(key)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
@@ -583,7 +597,11 @@ export function renderInoutPage(container, navigateTo) {
               </td>
               <td class="col-num"></td>
               <td class="text-right">${qtyLabel}</td>
-              <td colspan="6"></td>
+              <td class="text-right" style="font-size:12px;">${avgCost > 0 ? '<span style="color:var(--text-muted); font-size:10px;">평균</span> ₩' + avgCost.toLocaleString('ko-KR') : '-'}</td>
+              <td class="text-right" style="font-size:12px;">${avgSell > 0 ? '₩' + avgSell.toLocaleString('ko-KR') : '-'}</td>
+              <td class="text-right" style="font-size:12px;">${avgActual > 0 ? '₩' + avgActual.toLocaleString('ko-KR') : '-'}</td>
+              <td class="text-right" style="font-size:12px;">${avgMargin !== null ? `<span style="color:${marginColor}; font-weight:600;">${parseFloat(avgMargin) > 0 ? '+' : ''}${avgMargin}%</span>` : '-'}</td>
+              <td colspan="2"></td>
               <td></td>
             </tr>
             ${isExpanded ? group.map(tx => renderTxRow(tx, true)).join('') : ''}`;
