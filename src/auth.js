@@ -404,8 +404,18 @@ export async function loginWithEmail(email, password) {
     return null;
   }
 
-  // 로그인 시도 전 기존 세션/토큰 완전 삭제
-  // 만료된 세션이 localStorage에 남아있으면 signInWithPassword가 실패할 수 있음
+  // 로그인 시도 전 Supabase 클라이언트 내부 상태까지 완전 초기화
+  // localStorage 정리만으로는 클라이언트 객체 내부의 세션/토큰 갱신 상태가 남아
+  // signInWithPassword 호출 시 충돌하거나 fetch timeout이 발생하는 근본 원인
+  try {
+    await withTimeout(
+      supabase.auth.signOut({ scope: 'local' }),
+      3000,
+      'pre-login-signout',
+    );
+  } catch {
+    // signOut 실패해도 로그인 시도 계속
+  }
   purgeLegacyAuthStorage({ includeSupabaseSession: true });
 
   const loginBtn = document.getElementById('gate-email-login');
