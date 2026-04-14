@@ -4,7 +4,7 @@
  * 핵심: 입출고를 기록하면 재고 현황의 수량이 자동으로 증감됨
  */
 
-import { getState, setState, addTransaction, deleteTransaction, restoreTransaction } from './store.js';
+import { getState, setState, addTransaction, deleteTransaction, restoreTransaction, updateTransactionPrices } from './store.js';
 import { showToast } from './toast.js';
 import { downloadExcel, readExcelFile } from './excel.js';
 import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow } from './ux-toolkit.js';
@@ -489,8 +489,12 @@ export function renderInoutPage(container, navigateTo) {
             </span>
           </td>
           <td data-label="원가" class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
-          <td data-label="판매가" class="text-right">${tx.sellingPrice ? '₩' + Math.round(parseFloat(tx.sellingPrice)).toLocaleString('ko-KR') : '-'}</td>
-          <td data-label="실판매가" class="text-right">${tx.actualSellingPrice ? '₩' + Math.round(parseFloat(tx.actualSellingPrice)).toLocaleString('ko-KR') : '-'}</td>
+          <td data-label="판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="sellingPrice" title="클릭하여 수정">
+            <span class="price-display">${tx.sellingPrice ? '₩' + Math.round(parseFloat(tx.sellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
+          </td>
+          <td data-label="실판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="actualSellingPrice" title="클릭하여 수정">
+            <span class="price-display">${tx.actualSellingPrice ? '₩' + Math.round(parseFloat(tx.actualSellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
+          </td>
           <td data-label="이익률" class="text-right">${(() => {
             const cost = parseFloat(tx.unitPrice) || 0;
             const actual = parseFloat(tx.actualSellingPrice) || 0;
@@ -523,6 +527,39 @@ export function renderInoutPage(container, navigateTo) {
         <button class="page-btn" id="tx-next" ${currentPageNum >= totalPages ? 'disabled' : ''}>다음</button>
       </div>
     `;
+
+    // 판매가/실판매가 인라인 편집
+    container.querySelectorAll('.editable-price-cell').forEach(cell => {
+      cell.style.cursor = 'pointer';
+      cell.addEventListener('click', () => {
+        if (cell.querySelector('input')) return; // 이미 편집 중
+        const txId = cell.dataset.txId;
+        const field = cell.dataset.field;
+        const txData = (getState().transactions || []).find(t => t.id === txId);
+        if (!txData) return;
+        const currentVal = parseFloat(txData[field]) || 0;
+
+        cell.innerHTML = `
+          <input type="number" class="inline-price-input" value="${currentVal || ''}"
+            placeholder="금액 입력" min="0"
+            style="width:100px; text-align:right; padding:2px 4px; border:1px solid var(--accent); border-radius:4px; background:var(--bg-card); color:var(--text-primary); font-size:13px;" />
+        `;
+        const input = cell.querySelector('input');
+        input.focus();
+        input.select();
+
+        const commit = () => {
+          const newVal = parseFloat(input.value) || 0;
+          updateTransactionPrices(txId, { [field]: newVal });
+          renderTxTable();
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { renderTxTable(); }
+        });
+      });
+    });
 
     // 삭제 이벤트
     container.querySelectorAll('.btn-del-tx').forEach(btn => {

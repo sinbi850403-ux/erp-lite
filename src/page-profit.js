@@ -34,7 +34,7 @@ export function renderProfitPage(container, navigateTo) {
   const vendorLossOnly = viewPrefs.vendorLossOnly === true;
   const vendorType = viewPrefs.vendorType || 'all';
 
-  const rows = items
+  const rawRows = items
     .map((item) => {
       const quantity = toNumber(item.quantity);
       const unitCost = toNumber(item.unitPrice || item.unitCost);
@@ -62,6 +62,30 @@ export function renderProfitPage(container, navigateTo) {
       };
     })
     .filter((row) => row.quantity > 0 || row.totalCost > 0);
+
+  // 동일 품목명 또는 동일 코드끼리 그룹핑
+  const groupMap = new Map();
+  rawRows.forEach((row) => {
+    const key = row.code ? row.code : row.name;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { ...row });
+    } else {
+      const g = groupMap.get(key);
+      const combinedQty = g.quantity + row.quantity;
+      const combinedCost = g.totalCost + row.totalCost;
+      const combinedRevenue = g.totalRevenue + row.totalRevenue;
+      g.quantity = combinedQty;
+      g.totalCost = combinedCost;
+      g.totalRevenue = combinedRevenue;
+      g.profit = combinedRevenue - combinedCost;
+      g.unitCost = combinedQty > 0 ? Math.round(combinedCost / combinedQty) : 0;
+      g.profitRate = combinedRevenue > 0 ? (g.profit / combinedRevenue) * 100 : 0;
+      g.marginRate = combinedCost > 0 ? (g.profit / combinedCost) * 100 : 0;
+      g.hasSalePrice = g.hasSalePrice || row.hasSalePrice;
+      if (!g.salePrice && row.salePrice) g.salePrice = row.salePrice;
+    }
+  });
+  const rows = Array.from(groupMap.values());
 
   const sortedByProfit = [...rows].sort((a, b) => b.profit - a.profit);
   const topProfit = sortedByProfit.slice(0, 5);
