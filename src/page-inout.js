@@ -12,6 +12,22 @@ import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow 
 const PAGE_SIZE = 15;
 
 /**
+ * 날짜 문자열을 YYYY-MM-DD 형식으로 변환
+ * "Tue Apr 14 2026 09:00:00 GMT+0900" 등 다양한 형식 처리
+ */
+function formatDate(dateStr) {
+  if (!dateStr || dateStr === '-') return '-';
+  // 이미 YYYY-MM-DD 형식이면 그대로 반환
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return dateStr;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * 입출고 관리 페이지 렌더링
  */
 export function renderInoutPage(container, navigateTo) {
@@ -461,7 +477,7 @@ export function renderInoutPage(container, navigateTo) {
             </span>
           </td>
           <td class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
-          <td>${tx.date || '-'}</td>
+          <td>${formatDate(tx.date)}</td>
           <td style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
           <td class="text-center">
             <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button>
