@@ -12,6 +12,7 @@ import { renderItemTimelineChart } from './charts.js';
 import { renderGuidedPanel, renderInsightHero, renderQuickFilterRow, escapeHtml } from './ux-toolkit.js';
 import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
+import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
 // 페이지당 행 수
 const PAGE_SIZE = 20;
@@ -1829,41 +1830,108 @@ function openItemModal(container, navigateTo, editIdx = null) {
   refreshItemSummary();
 
   overlay.querySelector('#modal-save').addEventListener('click', () => {
-    const name = inputs.name.value.trim();
-    const qty = inputs.quantity.value;
+    // ── 모든 에러 초기화 ──────────────────────────────────
+    clearAllFieldErrors(overlay);
 
+    let hasError = false;
+    const name    = inputs.name.value.trim();
+    const qtyRaw  = inputs.quantity.value.trim();
+    const upRaw   = inputs.unitPrice.value.trim();
+    const spRaw   = inputs.salePrice.value.trim();
+
+    // 1. 품목명 필수
     if (!name) {
-      showToast('품목명은 필수입니다.', 'warning');
-      inputs.name.focus();
-      return;
-    }
-
-    const newItem = {
-      itemName: name,
-      itemCode: inputs.code.value.trim(),
-      category: inputs.category.value.trim(),
-      vendor: inputs.vendor.value.trim(),
-      quantity: qty === '' ? 0 : parseFloat(qty),
-      unit: inputs.unit.value.trim(),
-      unitPrice: parseFloat(inputs.unitPrice.value) || 0,
-      salePrice: parseFloat(inputs.salePrice.value) || 0,
-      warehouse: inputs.warehouse.value.trim(),
-      note: inputs.note.value.trim(),
-    };
-    newItem.supplyValue = newItem.quantity * newItem.unitPrice;
-    newItem.vat = Math.floor(newItem.supplyValue * 0.1);
-    newItem.totalPrice = newItem.supplyValue + newItem.vat;
-
-    if (isEdit) {
-      updateItem(editIdx, newItem);
-      showToast(`"${name}" 품목을 수정했습니다.`, 'success');
+      showFieldError(inputs.name, '품목명은 필수입니다.');
+      hasError = true;
     } else {
-      addItem(newItem);
-      showToast(`"${name}" 품목을 추가했습니다.`, 'success');
+      // 중복 품목명 체크 (수정 모드 제외)
+      const state2 = getState();
+      const existingNames = (state2.mappedData || []).map(d => d.itemName?.trim().toLowerCase());
+      if (!isEdit && existingNames.includes(name.toLowerCase())) {
+        showFieldError(inputs.name, `"${name}"은(는) 이미 등록된 품목명입니다.`);
+        hasError = true;
+      }
     }
 
-    close();
-    renderInventoryPage(container, navigateTo);
+    // 2. 수량 — 숫자, 0 이상
+    let qty = 0;
+    if (qtyRaw !== '') {
+      qty = parseFloat(qtyRaw);
+      if (isNaN(qty)) {
+        showFieldError(inputs.quantity, '수량에 숫자만 입력해 주세요.');
+        hasError = true;
+      } else if (qty < 0) {
+        showFieldError(inputs.quantity, '수량은 0 이상이어야 합니다.');
+        hasError = true;
+      }
+    }
+
+    // 3. 원가 — 숫자, 음수 불가
+    let unitPrice = 0;
+    if (upRaw !== '') {
+      unitPrice = parseFloat(upRaw);
+      if (isNaN(unitPrice)) {
+        showFieldError(inputs.unitPrice, '원가에 숫자만 입력해 주세요.');
+        hasError = true;
+      } else if (unitPrice < 0) {
+        showFieldError(inputs.unitPrice, '원가는 0 이상이어야 합니다.');
+        hasError = true;
+      }
+    }
+
+    // 4. 판매가 — 숫자, 음수 불가
+    let salePrice = 0;
+    if (spRaw !== '') {
+      salePrice = parseFloat(spRaw);
+      if (isNaN(salePrice)) {
+        showFieldError(inputs.salePrice, '판매가에 숫자만 입력해 주세요.');
+        hasError = true;
+      } else if (salePrice < 0) {
+        showFieldError(inputs.salePrice, '판매가는 0 이상이어야 합니다.');
+        hasError = true;
+      } else if (salePrice > 0 && unitPrice > 0 && salePrice < unitPrice) {
+        // 경고 (에러는 아님 — 저장은 가능)
+        const warnEl = document.createElement('div');
+        warnEl.className = 'form-warn-msg';
+        warnEl.textContent = '판매가가 원가보다 낮습니다. 손실이 발생할 수 있습니다.';
+        inputs.salePrice.parentNode?.appendChild(warnEl);
+      }
+    }
+
+    if (hasError) return;
+
+    // ── 저장 ─────────────────────────────────────────────
+    const restore = setSavingState(overlay.querySelector('#modal-save'));
+    try {
+      const newItem = {
+        itemName:  name,
+        itemCode:  inputs.code.value.trim(),
+        category:  inputs.category.value.trim(),
+        vendor:    inputs.vendor.value.trim(),
+        quantity:  qty,
+        unit:      inputs.unit.value.trim(),
+        unitPrice,
+        salePrice,
+        warehouse: inputs.warehouse.value.trim(),
+        note:      inputs.note.value.trim(),
+      };
+      newItem.supplyValue = newItem.quantity * newItem.unitPrice;
+      newItem.vat         = Math.floor(newItem.supplyValue * 0.1);
+      newItem.totalPrice  = newItem.supplyValue + newItem.vat;
+
+      if (isEdit) {
+        updateItem(editIdx, newItem);
+        showToast(`"${name}" 품목을 수정했습니다.`, 'success');
+      } else {
+        addItem(newItem);
+        showToast(`"${name}" 품목을 추가했습니다.`, 'success');
+      }
+      close();
+      renderInventoryPage(container, navigateTo);
+    } catch (err) {
+      restore();
+      handlePageError(err, { page: 'inventory', action: 'save-item' });
+    }
   });
 
   setTimeout(() => overlay.querySelector('#f-itemName').focus(), 100);

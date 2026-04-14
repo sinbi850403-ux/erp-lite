@@ -10,6 +10,7 @@ import { downloadExcel, readExcelFile } from './excel.js';
 import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow } from './ux-toolkit.js';
 import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
+import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
 const PAGE_SIZE = 15;
 
@@ -1276,61 +1277,119 @@ function openTxModal(container, navigateTo, type, items) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   overlay.querySelector('#modal-save').addEventListener('click', () => {
+    // ── 모든 에러 초기화 ──────────────────────────────────
+    clearAllFieldErrors(overlay);
+
+    let hasError = false;
     let itemName = '';
     let itemCode = '';
+    let currentQty = 0;
 
+    // 1. 품목 선택 / 품목명 입력
     if (items.length > 0 && itemSelect) {
       const idx = itemSelect.value;
       if (idx === '') {
-        showToast('품목을 선택해 주세요.', 'warning');
-        return;
+        showFieldError(itemSelect, '품목을 선택해 주세요.');
+        hasError = true;
+      } else {
+        const selectedItem = items[parseInt(idx, 10)];
+        itemName    = selectedItem.itemName;
+        itemCode    = selectedItem.itemCode || '';
+        currentQty  = parseFloat(selectedItem.quantity) || 0;
       }
-      const selectedItem = items[parseInt(idx, 10)];
-      itemName = selectedItem.itemName;
-      itemCode = selectedItem.itemCode || '';
     } else {
-      itemName = inputs.itemName?.value.trim();
+      itemName = inputs.itemName?.value.trim() || '';
       if (!itemName) {
-        showToast('품목명을 입력해 주세요.', 'warning');
-        return;
+        showFieldError(inputs.itemName, '품목명을 입력해 주세요.');
+        hasError = true;
       }
     }
 
-    const qty = parseFloat(inputs.qty.value);
-    if (!qty || qty <= 0) {
-      showToast('수량을 입력해 주세요.', 'warning');
-      return;
+    // 2. 수량 — 필수, 양수, 정수
+    const qtyRaw = inputs.qty.value.trim();
+    let qty = 0;
+    if (!qtyRaw) {
+      showFieldError(inputs.qty, '수량을 입력해 주세요.');
+      hasError = true;
+    } else {
+      qty = parseFloat(qtyRaw);
+      if (isNaN(qty)) {
+        showFieldError(inputs.qty, '수량에 숫자만 입력해 주세요.');
+        hasError = true;
+      } else if (qty <= 0) {
+        showFieldError(inputs.qty, '수량은 1 이상이어야 합니다.');
+        hasError = true;
+      } else if (!Number.isInteger(qty)) {
+        // 경고만 표시 (소수점 허용하되 알림)
+        const warnEl = document.createElement('div');
+        warnEl.className = 'form-warn-msg';
+        warnEl.textContent = '소수점 수량입니다. 맞으면 그냥 저장하세요.';
+        inputs.qty.parentNode?.appendChild(warnEl);
+      }
     }
 
+    // 3. 날짜 필수
     const date = inputs.date.value;
     if (!date) {
-      showToast('날짜를 선택해 주세요.', 'warning');
-      return;
-    }
-
-    if (type === 'out' && items.length > 0 && itemSelect) {
-      const idx = parseInt(itemSelect.value, 10);
-      const currentQty = parseFloat(items[idx]?.quantity) || 0;
-      if (qty > currentQty) {
-        showToast(`출고 수량이 현재 재고 ${currentQty}개를 넘습니다.`, 'error');
-        return;
+      showFieldError(inputs.date, '날짜를 선택해 주세요.');
+      hasError = true;
+    } else {
+      // 미래 날짜 경고 (에러는 아님)
+      const today = new Date().toISOString().split('T')[0];
+      if (date > today) {
+        const warnEl = document.createElement('div');
+        warnEl.className = 'form-warn-msg';
+        warnEl.textContent = '미래 날짜입니다. 의도한 날짜인지 확인해 주세요.';
+        inputs.date.parentNode?.appendChild(warnEl);
       }
     }
 
-    addTransaction({
-      type,
-      vendor: inputs.vendor.value || '',
-      itemName,
-      itemCode,
-      quantity: qty,
-      unitPrice: parseFloat(inputs.price.value) || 0,
-      date,
-      note: inputs.note.value.trim(),
-    });
+    // 4. 단가 — 숫자, 음수 불가 (선택 사항)
+    const priceRaw = inputs.price?.value?.trim();
+    if (priceRaw) {
+      const price = parseFloat(priceRaw);
+      if (isNaN(price)) {
+        showFieldError(inputs.price, '단가에 숫자만 입력해 주세요.');
+        hasError = true;
+      } else if (price < 0) {
+        showFieldError(inputs.price, '단가는 0 이상이어야 합니다.');
+        hasError = true;
+      }
+    }
 
-    showToast(`${typeLabel} 기록: ${itemName} ${qty}개`, type === 'in' ? 'success' : 'info');
-    close();
-    renderInoutPage(container, navigateTo);
+    // 5. 출고 재고 초과 체크
+    if (!hasError && type === 'out' && items.length > 0 && itemSelect && qty > 0) {
+      if (qty > currentQty) {
+        showFieldError(inputs.qty,
+          `현재 재고(${currentQty.toLocaleString('ko-KR')}개)보다 많이 출고할 수 없습니다.`
+        );
+        hasError = true;
+      }
+    }
+
+    if (hasError) return;
+
+    // ── 저장 ─────────────────────────────────────────────
+    const saveBtn  = overlay.querySelector('#modal-save');
+    const restore  = setSavingState(saveBtn, '저장 중...');
+    try {
+      addTransaction({
+        type,
+        vendor:    inputs.vendor.value || '',
+        itemName,
+        itemCode,
+        quantity:  qty,
+        unitPrice: parseFloat(inputs.price?.value) || 0,
+        date,
+        note:      inputs.note.value.trim(),
+      });
+      showToast(`${typeLabel} 기록: ${itemName} ${qty}개`, type === 'in' ? 'success' : 'info');
+      close();
+      renderInoutPage(container, navigateTo);
+    } catch (err) {
+      restore();
+      handlePageError(err, { page: 'inout', action: 'save-transaction' });
+    }
   });
 
   setTimeout(() => {

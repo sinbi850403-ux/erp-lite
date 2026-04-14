@@ -4095,6 +4095,68 @@ html.dark-mode .report-spotlight-card {
   opacity: 0.7;
 }
 
+/* ─── 폼 유효성 검증 상태 ────────────────────────────────────────────────────── */
+
+/* 에러 상태 — 빨간 테두리 + 배경 틴트 */
+.form-input.is-error,
+.form-select.is-error,
+input.is-error,
+select.is-error,
+textarea.is-error {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+  background: rgba(239, 68, 68, 0.03) !important;
+}
+
+/* 성공 상태 — 초록 테두리 */
+.form-input.is-success,
+.form-select.is-success,
+input.is-success,
+select.is-success {
+  border-color: var(--success) !important;
+}
+
+/* 인라인 에러 메시지 */
+.form-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 5px;
+  line-height: 1.4;
+  animation: fadeSlideIn 0.18s ease;
+}
+
+.form-error-msg::before {
+  content: '⚠';
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* 경고 메시지 (노란색) */
+.form-warn-msg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warning, #f59e0b);
+  font-size: 12px;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+.form-warn-msg::before {
+  content: '⚡';
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* required 별표 */
+.required {
+  color: var(--danger);
+  margin-left: 2px;
+}
+
 /* --- form row --- */
 .form-row {
   display: grid;
