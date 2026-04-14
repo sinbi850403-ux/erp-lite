@@ -82,6 +82,22 @@ export function renderInventoryPage(container, navigateTo) {
   const canBulk   = canAction('item:bulk');
   // ─────────────────────────────────────────────────────────
 
+  // 트랜잭션 기반 재고 자동 동기화
+  // mappedData에 없는 품목이 transactions에 있으면 재계산해서 동기화
+  {
+    const st = getState();
+    const txs = st.transactions || [];
+    const mapped = st.mappedData || [];
+    const mappedKeys = new Set(mapped.map(d =>
+      d.itemCode ? String(d.itemCode).trim() : String(d.itemName || '').trim()
+    ));
+    const hasOrphaned = txs.some(tx => {
+      const key = tx.itemCode ? String(tx.itemCode).trim() : String(tx.itemName || '').trim();
+      return key && !mappedKeys.has(key);
+    });
+    if (hasOrphaned) rebuildInventoryFromTransactions();
+  }
+
   const state = getState();
   const data = state.mappedData || [];
   const safetyStock = state.safetyStock || {};
@@ -1684,9 +1700,9 @@ export function renderInventoryPage(container, navigateTo) {
   syncFocusChips();
 
   // 입출고 변경 시 재고 현황 즉시 자동 반영
-  // addTransaction이 mappedData를 직접 갱신하므로 renderTable만 호출
+  // renderTable은 클로저 내 data를 쓰므로 전체 페이지를 재렌더링
   setSyncCallback(() => {
-    renderTable();
+    renderInventoryPage(container, navigateTo);
   });
 
   if (sessionStorage.getItem('invex:quick-open-item') === '1') {
