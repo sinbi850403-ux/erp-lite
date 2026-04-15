@@ -219,46 +219,52 @@ document.getElementById('gate-google-login')?.addEventListener('click', async ()
 });
 
 initAuth((user, profile) => {
-  const gate = document.getElementById('auth-gate');
-  
-  if (user) {
-    // ??濡쒓렇???깃났 ???쒕뵫 + 寃뚯씠???④린怨????쒖떆
-    const landing = document.getElementById('landing-page');
-    if (landing) landing.style.display = 'none';
-    if (gate) {
-      gate.style.opacity = '0';
-      setTimeout(() => { gate.style.display = 'none'; }, 300);
-    }
-    updateUserUI(user, profile);
-    // ?먮윭 紐⑤땲?곕쭅 珥덇린??(媛?ν븳 ??鍮⑤━ ?ㅽ뻾)
-    setMonitorUser(user.uid, user.email);
-    
-    // 珥앷?由ъ옄留?愿由ъ옄 硫붾돱 + POS 留ㅼ텧遺꾩꽍 ?쒖떆
-    const adminBtn = document.querySelector('[data-page="admin"]');
-    const posBtn = document.querySelector('[data-page="pos"]');
-    if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
-    if (posBtn) posBtn.style.display = isAdmin() ? '' : 'none';
-    
-    // ?먮윭 紐⑤땲?곕쭅 珥덇린??(媛?ν븳 ??鍮⑤━ ?ㅽ뻾)
-    if (!isAuthReady) {
-      isAuthReady = true;
-      initAppAfterAuth();
-    }
-  } else {
-    // 미로그인 상태
-    updateUserUI(null, null);
-    clearMonitorUser();
+  // try/catch: DOM 조작·updateUserUI·setMonitorUser 중 하나라도 오류가
+  // 나면 auth 게이트가 멈춰서 앱에 아예 진입 못 하는 치명적 현상이 발생했음.
+  // 콜백 전체를 감싸 어떤 오류도 조용히 로그만 남기고 안전하게 진행.
+  try {
+    const gate = document.getElementById('auth-gate');
 
-    // 게이트가 열려 있으면(사용자가 로그인/회원가입 입력 중) 닫지 않음
-    // getSession() timeout이나 onAuthStateChange null 이벤트가
-    // 뒤늦게 도착해도 게이트를 유지 → 입력 중 홈화면 복귀 방지
-    const gateIsOpen = gate && gate.style.display === 'flex';
-    if (!gateIsOpen) {
-      if (gate) gate.style.display = 'none';
+    if (user) {
       const landing = document.getElementById('landing-page');
-      if (landing) landing.style.display = 'block';
+      if (landing) landing.style.display = 'none';
+      if (gate) {
+        gate.style.opacity = '0';
+        setTimeout(() => {
+          try { gate.style.display = 'none'; } catch {}
+        }, 300);
+      }
+
+      try { updateUserUI(user, profile); } catch (e) { console.error('[Auth] updateUserUI error:', e); }
+      try { setMonitorUser(user.uid, user.email); } catch (e) { console.error('[Auth] setMonitorUser error:', e); }
+
+      const adminBtn = document.querySelector('[data-page="admin"]');
+      const posBtn   = document.querySelector('[data-page="pos"]');
+      try {
+        if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
+        if (posBtn)   posBtn.style.display   = isAdmin() ? '' : 'none';
+      } catch (e) { console.error('[Auth] admin/pos button error:', e); }
+
+      if (!isAuthReady) {
+        isAuthReady = true;
+        try { initAppAfterAuth(); } catch (e) { console.error('[Auth] initAppAfterAuth error:', e); }
+      }
+    } else {
+      try { updateUserUI(null, null); } catch (e) { console.error('[Auth] updateUserUI(null) error:', e); }
+      try { clearMonitorUser(); } catch (e) { console.error('[Auth] clearMonitorUser error:', e); }
+
+      // 게이트가 열려 있으면(로그인 입력 중) 닫지 않음
+      const gateIsOpen = gate && gate.style.display === 'flex';
+      if (!gateIsOpen) {
+        try { if (gate) gate.style.display = 'none'; } catch {}
+        const landing = document.getElementById('landing-page');
+        try { if (landing) landing.style.display = 'block'; } catch {}
+      }
+      isAuthReady = false;
     }
-    isAuthReady = false;
+  } catch (fatalErr) {
+    // 최후 방어선: 콘솔에만 기록하고 앱은 계속
+    console.error('[Auth] FATAL initAuth callback error:', fatalErr);
   }
 });
 
