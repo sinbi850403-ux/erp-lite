@@ -101,6 +101,14 @@ const DEFAULT_STATE = {
   notificationChannelPrefs: { webhook: true },
   // 수불부 기초재고 수동 입력
   ledgerOpeningOverrides: {},
+  // === HR 모듈 (Phase A) ===
+  employees: [],         // 직원 마스터 [{id, empNo, name, dept, position, hireDate, baseSalary, ...}]
+  attendance: [],        // 일별 근태   [{id, employeeId, workDate, checkIn, checkOut, workMin, overtimeMin, nightMin, holidayMin, status}]
+  payrolls: [],          // 월별 급여   [{id, employeeId, payYear, payMonth, base, gross, net, status}]
+  leaves: [],            // 휴가        [{id, employeeId, leaveType, startDate, endDate, days, status}]
+  salaryItems: [],       // 수당·공제 마스터
+  hrFilters: { dept: '', status: 'active' },
+  currentPayrollPeriod: null, // {year, month}
 };
 
 let state = { ...DEFAULT_STATE };

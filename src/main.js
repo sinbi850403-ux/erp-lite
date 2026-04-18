@@ -20,7 +20,7 @@ import { renderNotificationPanel, getNotificationCount, syncExternalNotification
 import { showToast } from './toast.js';
 import { canAccessPage, getPageBadge, showUpgradeModal, getCurrentPlan, PLANS, setPlan, injectGetCurrentUser, injectGetUserProfile } from './plan.js';
 import { mountAutoTableSort } from './table-auto-sort.js';
-import { renderHubData, renderHubInventory, renderHubWarehouse, renderHubOrder, renderHubReport, renderHubDocuments, renderHubSettings, renderHubSupport, HUB_MAP, PAGE_LABELS } from './page-hubs.js';
+import { renderHubData, renderHubInventory, renderHubWarehouse, renderHubOrder, renderHubReport, renderHubDocuments, renderHubSettings, renderHubSupport, renderHubHr, HUB_MAP, PAGE_LABELS } from './page-hubs.js';
 
 // 여기서부터는 초기화 과정에서 에러를 잡기 위함
 initTheme();
@@ -314,6 +314,12 @@ const pageLoaders = {
   referral: () => import('./page-referral.js').then(m => m.renderReferralPage),
   'weekly-report': () => import('./page-weekly-report.js').then(m => m.renderWeeklyReportPage),
   pos: () => import('./page-pos.js').then(m => m.renderPosPage),
+  // 인사·급여 모듈
+  'hr-dashboard': () => import('./page-hr-dashboard.js').then(m => m.renderHrDashboardPage),
+  employees: () => import('./page-employees.js').then(m => m.renderEmployeesPage),
+  attendance: () => import('./page-attendance.js').then(m => m.renderAttendancePage),
+  payroll: () => import('./page-payroll.js').then(m => m.renderPayrollPage),
+  leaves: () => import('./page-leaves.js').then(m => m.renderLeavesPage),
   // 허브 페이지 — 하위 기능을 타일 그리드로 묶은 인덱스 페이지
   'hub-data': async () => renderHubData,
   'hub-inventory': async () => renderHubInventory,
@@ -323,6 +329,7 @@ const pageLoaders = {
   'hub-documents': async () => renderHubDocuments,
   'hub-settings': async () => renderHubSettings,
   'hub-support': async () => renderHubSupport,
+  'hub-hr': async () => renderHubHr,
 };
 
 const pageRendererCache = {};
