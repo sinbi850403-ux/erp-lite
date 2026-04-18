@@ -18,7 +18,7 @@ const COSTING_SORT_FIELDS = [
   { key: 'sellPrice', label: '판매단가', numeric: true, align: 'text-right' },
   { key: 'marketValue', label: '시가환산', numeric: true, align: 'text-right' },
   { key: 'profit', label: '예상이익', numeric: true, align: 'text-right' },
-  { key: 'marginRate', label: '마진율', numeric: true, align: 'text-right' },
+  { key: 'marginRate', label: '매출이익률', numeric: true, align: 'text-right' },
 ];
 const COSTING_SORT_FIELD_MAP = Object.fromEntries(COSTING_SORT_FIELDS.map(field => [field.key, field]));
 let costingSortState = { key: 'totalCost', direction: 'desc' };
@@ -80,7 +80,7 @@ export function renderCostingPage(container, navigateTo) {
         <div class="stat-value ${totalProfit >= 0 ? 'text-success' : 'text-danger'}">${formatSignedCostMoney(totalProfit)}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">평균 마진율</div>
+        <div class="stat-label">평균 매출이익률</div>
         <div class="stat-value text-accent">${avgMargin === '-' ? '-' : `${avgMargin}%`}</div>
       </div>
     </div>
