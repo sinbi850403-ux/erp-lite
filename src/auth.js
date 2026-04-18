@@ -790,6 +790,12 @@ export const PAGE_MIN_ROLE = {
   api:          'admin',
   team:         'admin',
   backup:       'admin',
+  // 인사·급여 모듈
+  'hr-dashboard': 'manager',
+  employees:      'staff',
+  attendance:     'staff',
+  payroll:        'admin',
+  leaves:         'staff',
 };
 
 export const ACTION_MIN_ROLE = {
@@ -814,6 +820,17 @@ export const ACTION_MIN_ROLE = {
   'backup:restore':     'admin',
   'order:create':       'manager',
   'order:delete':       'manager',
+  // 인사·급여 액션
+  'payroll:confirm':    'admin',
+  'payroll:export':     'admin',
+  'payroll:email':      'admin',
+  'employee:viewRRN':   'admin',
+  'employee:bulkEdit':  'admin',
+  'employee:create':    'manager',
+  'employee:edit':      'manager',
+  'employee:delete':    'admin',
+  'attendance:edit':    'manager',
+  'leave:approve':      'manager',
 };
 
 export function canAction(actionKey) {

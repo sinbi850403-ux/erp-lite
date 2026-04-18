@@ -190,6 +190,29 @@ export function renderHubSettings(container, navigateTo) {
   bindHubNav(container, navigateTo);
 }
 
+/* ── 허브 9: 인사·급여 ── */
+export function renderHubHr(container, navigateTo) {
+  const state = getState();
+  const empCount = (state.employees || []).filter(e => e.status !== 'resigned').length;
+
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title"><span class="title-icon">👥</span> 인사·급여</h1>
+        <div class="page-desc">직원 마스터, 근태, 급여 계산, 휴가를 통합 관리합니다</div>
+      </div>
+    </div>
+    <div class="hub-grid">
+      ${renderHubCard({ icon: '📊', title: 'HR 대시보드', desc: '인원·이번달 급여·근태 이슈·연차 잔여를 한눈에', nav: 'hr-dashboard', color: '#2563eb' })}
+      ${renderHubCard({ icon: '👥', title: '직원 관리', desc: '직원 등록·조회·수정, 주민번호 암호화 저장', nav: 'employees', color: '#0284c7', meta: empCount > 0 ? `재직 ${empCount}명` : undefined })}
+      ${renderHubCard({ icon: '🕒', title: '근태 관리', desc: '출퇴근·연장·야간·휴일근무 기록과 월별 집계', nav: 'attendance', color: '#16a34a' })}
+      ${renderHubCard({ icon: '💰', title: '급여 계산', desc: '4대보험·원천징수 자동 계산, 급여명세서 PDF 발행', nav: 'payroll', color: '#d97706' })}
+      ${renderHubCard({ icon: '🏖️', title: '휴가·연차 관리', desc: '연차 자동 부여, 휴가 신청·승인 워크플로우', nav: 'leaves', color: '#7c3aed' })}
+    </div>
+  `;
+  bindHubNav(container, navigateTo);
+}
+
 /* ── 허브 8: 지원 ── */
 export function renderHubSupport(container, navigateTo) {
   container.innerHTML = `
@@ -220,6 +243,7 @@ export const HUB_MAP = {
   'tax-reports': 'hub-documents', documents: 'hub-documents', ledger: 'hub-documents', auditlog: 'hub-documents',
   settings: 'hub-settings', team: 'hub-settings', backup: 'hub-settings', roles: 'hub-settings', billing: 'hub-settings',
   mypage: 'hub-support', guide: 'hub-support', support: 'hub-support', referral: 'hub-support',
+  'hr-dashboard': 'hub-hr', employees: 'hub-hr', attendance: 'hub-hr', payroll: 'hub-hr', leaves: 'hub-hr',
 };
 
 /* ── 페이지 라벨 — 브레드크럼/빠른 이동 표시용 ── */
@@ -227,7 +251,8 @@ export const PAGE_LABELS = {
   home: '대시보드',
   'hub-data': '데이터 가져오기', 'hub-inventory': '재고 관리', 'hub-warehouse': '창고·거래처',
   'hub-order': '발주·예측', 'hub-report': '보고·분석', 'hub-documents': '문서·서류',
-  'hub-settings': '설정', 'hub-support': '지원',
+  'hub-settings': '설정', 'hub-support': '지원', 'hub-hr': '인사·급여',
+  'hr-dashboard': 'HR 대시보드', employees: '직원 관리', attendance: '근태 관리', payroll: '급여 계산', leaves: '휴가·연차 관리',
   upload: '파일 업로드', mapping: '데이터 확인',
   inventory: '재고 현황', inout: '입출고 관리', bulk: '일괄 처리', stocktake: '재고 실사',
   warehouses: '다중 창고 관리', transfer: '창고 이동', vendors: '거래처 관리',
