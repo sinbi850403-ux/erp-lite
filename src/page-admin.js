@@ -368,7 +368,9 @@ export async function renderAdminPage(container, navigateTo) {
     btn.addEventListener('click', () => {
       const uid = btn.dataset.uid;
       const u = allUsers.find(x => x.id === uid);
+      console.log('[Admin] 요금제 변경 클릭 uid=', uid, 'found=', !!u, 'allUsers=', allUsers.length);
       if (u) showPlanChangeModal(u, container, navigateTo);
+      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
     });
   });
 
@@ -377,7 +379,9 @@ export async function renderAdminPage(container, navigateTo) {
     btn.addEventListener('click', () => {
       const uid = btn.dataset.uid;
       const u = allUsers.find(x => x.id === uid);
+      console.log('[Admin] 상세보기 클릭 uid=', uid, 'found=', !!u, 'allUsers=', allUsers.length);
       if (u) showUserDetailModal(u);
+      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
     });
   });
 
