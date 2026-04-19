@@ -363,45 +363,39 @@ export async function renderAdminPage(container, navigateTo) {
     filterUsers(container);
   });
 
-  // 요금제 변경
-  container.querySelectorAll('.btn-plan-user').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      console.log('[Admin] 요금제 변경 클릭 uid=', uid, 'found=', !!u, 'allUsers=', allUsers.length);
-      if (u) showPlanChangeModal(u, container, navigateTo);
-      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    });
-  });
+  // 이벤트 위임 — 관리 버튼 전체를 container 하나로 처리
+  container.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[class*="btn-detail-user"],[class*="btn-plan-user"],[class*="btn-suspend-user"]');
+    if (!btn) return;
 
-  // 사용자 상세
-  container.querySelectorAll('.btn-detail-user').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      console.log('[Admin] 상세보기 클릭 uid=', uid, 'found=', !!u, 'allUsers=', allUsers.length);
+    const uid = btn.dataset.uid;
+    const u = allUsers.find(x => x.id === uid);
+
+    if (btn.classList.contains('btn-detail-user')) {
       if (u) showUserDetailModal(u);
       else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    });
-  });
+    }
 
-  // 사용자 정지/활성
-  container.querySelectorAll('.btn-suspend-user').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const uid = btn.dataset.uid;
+    if (btn.classList.contains('btn-plan-user')) {
+      if (u) showPlanChangeModal(u, container, navigateTo);
+      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
+    }
+
+    if (btn.classList.contains('btn-suspend-user')) {
       const current = btn.dataset.status;
       const newStatus = current === 'suspended' ? 'active' : 'suspended';
       try {
-        await supabase
+        const { error } = await supabase
           .from('profiles')
           .update({ status: newStatus })
           .eq('id', uid);
+        if (error) throw error;
         showToast(newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.', newStatus === 'suspended' ? 'warning' : 'success');
         renderAdminPage(container, navigateTo);
       } catch (e) {
         showToast('처리 실패: ' + e.message, 'error');
       }
-    });
+    }
   });
 
   // 공지 작성
