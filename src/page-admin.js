@@ -636,9 +636,11 @@ function showPlanChangeModal(user, container, navigateTo) {
     card.addEventListener('click', async () => {
       const planId = card.dataset.plan;
       try {
-        if (isConfigured && db) {
-          await updateDoc(doc(db, 'users', user.id), { plan: planId });
-        }
+        const { error } = await supabase
+          .from('profiles')
+          .update({ plan: planId })
+          .eq('id', user.id);
+        if (error) throw error;
         modal.remove();
         showToast(`${user.name || '사용자'}님의 요금제를 ${PLANS[planId].name}으로 변경했습니다.`, 'success');
         renderAdminPage(container, navigateTo);
@@ -706,23 +708,24 @@ const TICKET_STATUS = {
 
 async function loadAdminTickets(container) {
   const area = container.querySelector('#admin-tickets-area');
-  if (!area || !isConfigured) return;
+  if (!area) return;
 
   try {
-    const q = query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (snap.empty) {
+    if (error || !tickets || tickets.length === 0) {
       area.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:13px;">접수된 문의가 없습니다.</div>';
       return;
     }
 
     area.innerHTML = '';
-    snap.forEach(docSnap => {
-      const d = docSnap.data();
+    tickets.forEach(d => {
       const st = TICKET_STATUS[d.status] || TICKET_STATUS.open;
-      const date = d.createdAt?.toDate
-        ? d.createdAt.toDate().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      const date = d.created_at
+        ? new Date(d.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '-';
 
       const row = document.createElement('div');
@@ -731,11 +734,11 @@ async function loadAdminTickets(container) {
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
             <span style="font-size:10px; padding:1px 6px; border-radius:3px; background:${st.bg}; color:${st.color}; font-weight:600;">${st.label}</span>
-            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title}</span>
+            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title || ''}</span>
           </div>
-          <div style="font-size:10px; color:var(--text-muted);">${d.userName || ''} (${d.userEmail || ''}) · ${date}</div>
+          <div style="font-size:10px; color:var(--text-muted);">${d.user_name || ''} (${d.user_email || ''}) · ${date}</div>
         </div>
-        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${docSnap.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
+        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${d.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
       `;
       area.appendChild(row);
     });
@@ -744,8 +747,8 @@ async function loadAdminTickets(container) {
     area.querySelectorAll('.btn-reply-ticket').forEach(btn => {
       btn.addEventListener('click', async () => {
         const ticketId = btn.dataset.id;
-        const ticketDoc = snap.docs.find(d => d.id === ticketId);
-        if (ticketDoc) showReplyModal(ticketId, ticketDoc.data(), container);
+        const ticket = tickets.find(t => t.id === ticketId);
+        if (ticket) showReplyModal(ticketId, ticket, container);
       });
     });
   } catch (e) {
@@ -796,11 +799,11 @@ function showReplyModal(ticketId, data, container) {
     if (!reply) { showToast('답변 내용을 입력하세요.', 'warning'); return; }
 
     try {
-      await updateDoc(doc(db, 'support_tickets', ticketId), {
-        reply,
-        status: 'closed',
-        repliedAt: new Date(),
-      });
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ reply, status: 'closed', replied_at: new Date().toISOString() })
+        .eq('id', ticketId);
+      if (error) throw error;
       modal.remove();
       showToast('답변이 저장되었습니다.', 'success');
       loadAdminTickets(container);
