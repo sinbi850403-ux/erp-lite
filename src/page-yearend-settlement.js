@@ -131,7 +131,7 @@ export async function renderYearendSettlementPage(container, navigateTo) {
       const totalYearendTax = settlements.reduce((sum, s) => sum + s.yearendTax, 0);
       const totalRefund = settlements.reduce((sum, s) => sum + s.refundAmount, 0);
 
-      const summaryHtml = \`
+      const summaryHtml = `
         <div class="table-wrapper">
           <table class="data-table">
             <thead>
@@ -145,34 +145,34 @@ export async function renderYearendSettlementPage(container, navigateTo) {
               </tr>
             </thead>
             <tbody>
-              \${settlements.map((s, idx) => \`
+              ${settlements.map((s, idx) => `
                 <tr>
-                  <td>\${escapeHtml(s.name)} (\${escapeHtml(s.empNo)})</td>
-                  <td class="text-right">\${(s.annualGross || 0).toLocaleString()}</td>
-                  <td class="text-right">\${(s.monthlyTaxPaid || 0).toLocaleString()}</td>
-                  <td class="text-right">\${(s.yearendTax || 0).toLocaleString()}</td>
-                  <td class="text-right" style="color: \${s.refundAmount > 0 ? '#4CAF50' : '#F44336'}; font-weight: bold;">
-                    \${s.refundAmount > 0 ? '+' : ''}\${(s.refundAmount || 0).toLocaleString()}
+                  <td>${escapeHtml(s.name)} (${escapeHtml(s.empNo)})</td>
+                  <td class="text-right">${(s.annualGross || 0).toLocaleString()}</td>
+                  <td class="text-right">${(s.monthlyTaxPaid || 0).toLocaleString()}</td>
+                  <td class="text-right">${(s.yearendTax || 0).toLocaleString()}</td>
+                  <td class="text-right" style="color: ${s.refundAmount > 0 ? '#4CAF50' : '#F44336'}; font-weight: bold;">
+                    ${s.refundAmount > 0 ? '+' : ''}${(s.refundAmount || 0).toLocaleString()}
                   </td>
                   <td>
-                    <button class="btn-icon yes-detail" data-idx="\${idx}" title="상세">→</button>
+                    <button class="btn-icon yes-detail" data-idx="${idx}" title="상세">→</button>
                   </td>
                 </tr>
-              \`).join('')}
+              `).join('')}
               <tr style="background: #f5f5f5; font-weight: bold; border-top: 2px solid #333;">
                 <td>합계</td>
-                <td class="text-right">\${totalGross.toLocaleString()}</td>
-                <td class="text-right">\${totalTaxPaid.toLocaleString()}</td>
-                <td class="text-right">\${totalYearendTax.toLocaleString()}</td>
-                <td class="text-right" style="color: \${totalRefund > 0 ? '#4CAF50' : '#F44336'}; font-weight: bold;">
-                  \${totalRefund > 0 ? '+' : ''}\${totalRefund.toLocaleString()}
+                <td class="text-right">${totalGross.toLocaleString()}</td>
+                <td class="text-right">${totalTaxPaid.toLocaleString()}</td>
+                <td class="text-right">${totalYearendTax.toLocaleString()}</td>
+                <td class="text-right" style="color: ${totalRefund > 0 ? '#4CAF50' : '#F44336'}; font-weight: bold;">
+                  ${totalRefund > 0 ? '+' : ''}${totalRefund.toLocaleString()}
                 </td>
                 <td></td>
               </tr>
             </tbody>
           </table>
         </div>
-      \`;
+      `;
 
       container.querySelector('#yes-summary').innerHTML = summaryHtml;
 
@@ -194,10 +194,10 @@ export async function renderYearendSettlementPage(container, navigateTo) {
 function showDetailModal(settlement) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = \`
+  overlay.innerHTML = `
     <div class="modal" style="max-width:700px;">
       <div class="modal-header">
-        <h3>\${escapeHtml(settlement.name)} (\${escapeHtml(settlement.empNo)}) - 연말정산 상세</h3>
+        <h3>${escapeHtml(settlement.name)} (${escapeHtml(settlement.empNo)}) - 연말정산 상세</h3>
         <button class="btn-close">✕</button>
       </div>
       <div class="modal-body">
@@ -205,28 +205,28 @@ function showDetailModal(settlement) {
           <tbody>
             <tr style="border-bottom: 1px solid #e0e0e0;">
               <td style="padding: 8px 0; font-weight: 500;">연간 급여합계</td>
-              <td style="padding: 8px 0; text-align: right;">\${(settlement.annualGross || 0).toLocaleString()} 원</td>
+              <td style="padding: 8px 0; text-align: right;">${(settlement.annualGross || 0).toLocaleString()} 원</td>
             </tr>
             <tr style="border-bottom: 1px solid #e0e0e0;">
               <td style="padding: 8px 0; font-weight: 500;">4대보험 합계</td>
-              <td style="padding: 8px 0; text-align: right;">\${(settlement.annualInsurance || 0).toLocaleString()} 원</td>
+              <td style="padding: 8px 0; text-align: right;">${(settlement.annualInsurance || 0).toLocaleString()} 원</td>
             </tr>
             <tr style="border-bottom: 1px solid #e0e0e0;">
               <td style="padding: 8px 0; font-weight: 500;">월별 소득세 합계</td>
-              <td style="padding: 8px 0; text-align: right;">\${(settlement.monthlyTaxPaid || 0).toLocaleString()} 원</td>
+              <td style="padding: 8px 0; text-align: right;">${(settlement.monthlyTaxPaid || 0).toLocaleString()} 원</td>
             </tr>
             <tr style="border-bottom: 2px solid #333;">
               <td style="padding: 8px 0; font-weight: 500;">부양가족</td>
-              <td style="padding: 8px 0; text-align: right;">\${settlement.dependents}명</td>
+              <td style="padding: 8px 0; text-align: right;">${settlement.dependents}명</td>
             </tr>
             <tr style="border-bottom: 1px solid #e0e0e0;">
               <td style="padding: 8px 0; font-weight: 500; color: #2196F3;">재계산 소득세</td>
-              <td style="padding: 8px 0; text-align: right; color: #2196F3; font-weight: bold;">\${(settlement.yearendTax || 0).toLocaleString()} 원</td>
+              <td style="padding: 8px 0; text-align: right; color: #2196F3; font-weight: bold;">${(settlement.yearendTax || 0).toLocaleString()} 원</td>
             </tr>
             <tr style="background: #f0f7ff;">
               <td style="padding: 12px 0; font-weight: bold; color: #2196F3; font-size: 1.1em;">환급액 / 납부액</td>
-              <td style="padding: 12px 0; text-align: right; font-weight: bold; color: \${settlement.refundAmount > 0 ? '#4CAF50' : '#F44336'}; font-size: 1.2em;">
-                \${settlement.refundAmount > 0 ? '+' : ''}\${(settlement.refundAmount || 0).toLocaleString()} 원
+              <td style="padding: 12px 0; text-align: right; font-weight: bold; color: ${settlement.refundAmount > 0 ? '#4CAF50' : '#F44336'}; font-size: 1.2em;">
+                ${settlement.refundAmount > 0 ? '+' : ''}${(settlement.refundAmount || 0).toLocaleString()} 원
               </td>
             </tr>
           </tbody>
@@ -243,13 +243,13 @@ function showDetailModal(settlement) {
               </tr>
             </thead>
             <tbody>
-              \${settlement.payrolls.map(p => \`
+              ${settlement.payrolls.map(p => `
                 <tr>
-                  <td>\${p.payYear}년 \${String(p.payMonth).padStart(2, '0')}월</td>
-                  <td class="text-right">\${(p.gross || 0).toLocaleString()}</td>
-                  <td class="text-right">\${((p.incomeTax || 0) + (p.localTax || 0)).toLocaleString()}</td>
+                  <td>${p.payYear}년 ${String(p.payMonth).padStart(2, '0')}월</td>
+                  <td class="text-right">${(p.gross || 0).toLocaleString()}</td>
+                  <td class="text-right">${((p.incomeTax || 0) + (p.localTax || 0)).toLocaleString()}</td>
                 </tr>
-              \`).join('')}
+              `).join('')}
             </tbody>
           </table>
         </div>
@@ -258,7 +258,7 @@ function showDetailModal(settlement) {
         <button class="btn btn-primary btn-close">닫기</button>
       </div>
     </div>
-  \`;
+  `;
 
   document.body.appendChild(overlay);
   overlay.querySelector('.btn-close').addEventListener('click', () => overlay.remove());

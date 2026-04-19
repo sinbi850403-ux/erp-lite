@@ -79,7 +79,7 @@ export async function renderSeverancePage(container, navigateTo) {
   emps.forEach(e => {
     const opt = document.createElement('option');
     opt.value = e.id;
-    opt.textContent = \`\${escapeHtml(e.name)} (사번: \${escapeHtml(e.empNo)})\`;
+    opt.textContent = `${escapeHtml(e.name)} (사번: ${escapeHtml(e.empNo)})`;
     empSelect.appendChild(opt);
   });
 

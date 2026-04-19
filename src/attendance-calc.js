@@ -304,3 +304,34 @@ export function getExpectedWorkDays(year, month) {
 
   return expectedDays;
 }
+
+/**
+ * 분을 시간으로 변환 (소수점 1자리)
+ * @param {number} minutes - 분 단위
+ * @returns {string} 시간 (예: "1.5")
+ */
+export function minToHours(minutes) {
+  if (!minutes) return '0';
+  return (Math.round((minutes / 60) * 10) / 10).toFixed(1);
+}
+
+/**
+ * 월별 근태 집계 (카멜케이스 버전 - page-attendance.js 호환성)
+ * @param {array} attendanceList - 근태 기록 배열
+ * @returns {object} 카멜케이스 집계 결과
+ */
+export function summarizeMonth(attendanceList) {
+  const result = summarizeMonthAttendance(attendanceList);
+  return {
+    days: result.work_days,
+    totalDays: result.total_days,
+    totalMin: result.total_work_min,
+    overtimeMin: result.total_overtime_min,
+    nightMin: result.total_night_min,
+    holidayMin: result.total_holiday_min,
+    absentDays: result.absence_days,
+    lateDays: result.late_days,
+    earlyLeaveDays: result.early_leave_days,
+    leaveDays: result.leave_days,
+  };
+}
