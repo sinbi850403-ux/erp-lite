@@ -381,9 +381,10 @@ export async function renderAdminPage(container, navigateTo) {
       const current = btn.dataset.status;
       const newStatus = current === 'suspended' ? 'active' : 'suspended';
       try {
-        if (isConfigured && db) {
-          await updateDoc(doc(db, 'users', uid), { status: newStatus });
-        }
+        await supabase
+          .from('profiles')
+          .update({ status: newStatus })
+          .eq('id', uid);
         showToast(newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.', newStatus === 'suspended' ? 'warning' : 'success');
         renderAdminPage(container, navigateTo);
       } catch (e) {
