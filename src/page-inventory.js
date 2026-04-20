@@ -14,6 +14,23 @@ import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
+function safeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">${escapeHtml(String(value))}</option>`).join('');
+}
+
+function buildDatalistOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">`).join('');
+}
+
 // 페이지당 행 수
 const PAGE_SIZE = 20;
 
@@ -320,26 +337,26 @@ export function renderInventoryPage(container, navigateTo) {
     <div class="filter-detail-panel" id="filter-detail-panel">
       <select class="filter-select" id="filter-item-code">
         <option value="">전체 품목코드</option>
-        ${getItemCodes(data).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getItemCodes(data))}
       </select>
       <select class="filter-select" id="filter-vendor">
         <option value="">전체 거래처</option>
-        ${getVendors(data).map(v => `<option value="${v}">${v}</option>`).join('')}
+        ${buildOptionTags(getVendors(data))}
       </select>
       <select class="filter-select" id="filter-category">
         <option value="">전체 분류</option>
-        ${getCategories(data).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getCategories(data))}
       </select>
       <select class="filter-select" id="filter-warehouse">
         <option value="">전체 창고</option>
-        ${getWarehouses(data).map(w => `<option value="${w}">${w}</option>`).join('')}
+        ${buildOptionTags(getWarehouses(data))}
       </select>
       <select class="filter-select" id="filter-stock">
         <option value="">전체 재고</option>
         <option value="low">부족 항목만</option>
       </select>
       <select class="filter-select" id="sort-preset" title="정렬">
-        ${sortOptions.map(option => `<option value="${option.value}">${option.label}</option>`).join('')}
+        ${sortOptions.map(option => `<option value="${safeAttr(option.value)}">${escapeHtml(option.label)}</option>`).join('')}
       </select>
     </div>
     <div class="smart-search-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0 4px;">
@@ -792,7 +809,7 @@ export function renderInventoryPage(container, navigateTo) {
     if (currentSort.key && currentSort.direction) chips.push(`정렬: ${getSortOptionLabel(currentSort)}`);
 
     const chipsHtml = chips.length > 0
-      ? chips.map(text => `<span class="filter-chip">${text}</span>`).join('')
+      ? chips.map(text => `<span class="filter-chip">${escapeHtml(text)}</span>`).join('')
       : '<span class="filter-chip filter-chip-muted">필터 없음</span>';
 
     summaryEl.innerHTML = `
@@ -952,7 +969,7 @@ export function renderInventoryPage(container, navigateTo) {
 
         return `
           <tr class="${isDanger ? 'row-danger' : isLow ? 'row-warning' : ''} ${isFocused ? 'row-focused' : ''} ${isChild ? 'inv-child-row' : ''}"
-              data-idx="${realIdx}" data-row-key="${rowKey}" style="${childStyle}">
+              data-idx="${realIdx}" data-row-key="${safeAttr(rowKey)}" style="${childStyle}">
             <td data-label="" class="col-check">
               <input type="checkbox" class="table-row-check inv-row-check" data-idx="${realIdx}" ${selectedIndexes.has(realIdx) ? 'checked' : ''} aria-label="행 선택" />
             </td>
@@ -967,7 +984,7 @@ export function renderInventoryPage(container, navigateTo) {
               </td>
             `).join('')}
             <td data-label="안전재고" class="text-center">
-              <button class="btn-icon btn-safety" data-name="${escapeHtml(row.itemName)}" data-min="${min ?? ''}"
+              <button class="btn-icon btn-safety" data-name="${safeAttr(row.itemName)}" data-min="${safeAttr(min ?? '')}"
                 title="클릭하여 안전재고 수량 설정"
                 style="font-size:11px; padding:2px 6px; border-radius:4px;
                   ${min !== undefined ? 'background:rgba(63,185,80,0.15); color:var(--success);' : 'color:var(--text-muted);'}">
@@ -996,7 +1013,7 @@ export function renderInventoryPage(container, navigateTo) {
           const firstCode = group[0].itemCode || '';
           const totalQty = group.reduce((s, r) => s + (parseFloat(String(r.quantity || '').replace(/,/g, '')) || 0), 0);
           invHtml += `
-            <tr class="inv-group-header" data-inv-group-key="${escapeHtml(grpKey)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
+            <tr class="inv-group-header" data-inv-group-key="${safeAttr(grpKey)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
               <td class="col-check"><span style="color:var(--text-muted); font-size:11px;">${group.length}건</span></td>
               <td class="col-num">${invRowNum++}</td>
               <td colspan="${totalCols - 2}" style="padding-left:8px;">
@@ -1777,18 +1794,18 @@ function openItemModal(container, navigateTo, editIdx = null) {
             })}
 
             <!-- datalist 마스터 -->
-            <datalist id="dl-category">${existingCats.map(c => `<option value="${c}">`).join('')}</datalist>
-            <datalist id="dl-unit">${existingUnits.map(u => `<option value="${u}">`).join('')}<option value="EA"><option value="BOX"><option value="KG"><option value="L"><option value="M"><option value="SET"></datalist>
+            <datalist id="dl-category">${buildDatalistOptionTags(existingCats)}</datalist>
+            <datalist id="dl-unit">${buildDatalistOptionTags([...existingUnits, 'EA', 'BOX', 'KG', 'L', 'M', 'SET'])}</datalist>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">품목명 <span class="required">*</span></label>
-                <input class="form-input" id="f-itemName" value="${item.itemName || ''}" placeholder="예: A4용지, 복사용지 80g" />
+                <input class="form-input" id="f-itemName" value="${safeAttr(item.itemName || '')}" placeholder="예: A4용지, 복사용지 80g" />
               </div>
               <div class="form-group">
                 <label class="form-label">품목코드</label>
                 <div style="display:flex; gap:6px;">
-                  <input class="form-input" id="f-itemCode" value="${item.itemCode || ''}" placeholder="예: I00001" style="flex:1;" />
+                  <input class="form-input" id="f-itemCode" value="${safeAttr(item.itemCode || '')}" placeholder="예: I00001" style="flex:1;" />
                   ${!isEdit ? `<button type="button" class="btn btn-outline btn-sm" id="btn-auto-code" title="자동생성" style="white-space:nowrap; padding:0 10px;">자동</button>` : ''}
                 </div>
               </div>
@@ -1797,33 +1814,33 @@ function openItemModal(container, navigateTo, editIdx = null) {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">규격/스펙</label>
-                <input class="form-input" id="f-spec" value="${item.spec || ''}" placeholder="예: 80g/m², A4, 500매" />
+                <input class="form-input" id="f-spec" value="${safeAttr(item.spec || '')}" placeholder="예: 80g/m², A4, 500매" />
               </div>
               <div class="form-group">
                 <label class="form-label">분류(카테고리)</label>
-                <input class="form-input" id="f-category" list="dl-category" value="${item.category || ''}" placeholder="예: 사무용품" autocomplete="off" />
+                <input class="form-input" id="f-category" list="dl-category" value="${safeAttr(item.category || '')}" placeholder="예: 사무용품" autocomplete="off" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">수량 <span class="required">*</span></label>
-                <input class="form-input" type="number" id="f-quantity" value="${item.quantity ?? ''}" placeholder="0" />
+                <input class="form-input" type="number" id="f-quantity" value="${safeAttr(item.quantity ?? '')}" placeholder="0" />
               </div>
               <div class="form-group">
                 <label class="form-label">단위</label>
-                <input class="form-input" id="f-unit" list="dl-unit" value="${item.unit || ''}" placeholder="EA, BOX, KG ..." autocomplete="off" />
+                <input class="form-input" id="f-unit" list="dl-unit" value="${safeAttr(item.unit || '')}" placeholder="EA, BOX, KG ..." autocomplete="off" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">매입가(원가)</label>
-                <input class="form-input" type="number" id="f-unitPrice" value="${item.unitPrice ?? ''}" placeholder="0" />
+                <input class="form-input" type="number" id="f-unitPrice" value="${safeAttr(item.unitPrice ?? '')}" placeholder="0" />
               </div>
               <div class="form-group">
                 <label class="form-label">판매단가</label>
-                <input class="form-input" type="number" id="f-salePrice" value="${item.salePrice ?? ''}" placeholder="미입력 시 손익 정확도가 내려갑니다." />
+                <input class="form-input" type="number" id="f-salePrice" value="${safeAttr(item.salePrice ?? '')}" placeholder="미입력 시 손익 정확도가 내려갑니다." />
               </div>
             </div>
 
@@ -1835,25 +1852,25 @@ function openItemModal(container, navigateTo, editIdx = null) {
                     <label class="form-label">주공급처</label>
                     <select class="form-select" id="f-vendor">
                       <option value="">-- 선택 또는 직접 입력 --</option>
-                      ${vendors.map(v => `<option value="${v.name}" ${item.vendor === v.name ? 'selected' : ''}>${v.name}${v.code ? ` (${v.code})` : ''}</option>`).join('')}
-                      ${item.vendor && !vendors.find(v => v.name === item.vendor) ? `<option value="${item.vendor}" selected>${item.vendor}</option>` : ''}
+                      ${vendors.map(v => `<option value="${safeAttr(v.name)}" ${item.vendor === v.name ? 'selected' : ''}>${escapeHtml(v.name)}${v.code ? ` (${escapeHtml(v.code)})` : ''}</option>`).join('')}
+                      ${item.vendor && !vendors.find(v => v.name === item.vendor) ? `<option value="${safeAttr(item.vendor)}" selected>${escapeHtml(item.vendor)}</option>` : ''}
                     </select>
                   </div>
                   <div class="form-group">
                     <label class="form-label">창고/위치</label>
-                    <input class="form-input" id="f-warehouse" value="${item.warehouse || ''}" placeholder="예: 본사 1층 A-03" />
+                    <input class="form-input" id="f-warehouse" value="${safeAttr(item.warehouse || '')}" placeholder="예: 본사 1층 A-03" />
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">비고</label>
-                    <input class="form-input" id="f-note" value="${item.note || ''}" placeholder="메모" />
+                    <input class="form-input" id="f-note" value="${safeAttr(item.note || '')}" placeholder="메모" />
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">🔒 품목 잠금 해제일</label>
-                    <input class="form-input" type="date" id="f-lockedUntil" value="${item.lockedUntil || ''}" />
+                    <input class="form-input" type="date" id="f-lockedUntil" value="${safeAttr(item.lockedUntil || '')}" />
                   </div>
                   <div class="form-group">
                     <div style="font-size:12px; color:var(--text-muted); margin-top:28px; line-height:1.6;">
@@ -1876,9 +1893,9 @@ function openItemModal(container, navigateTo, editIdx = null) {
                 <div class="smart-summary-label">현재 재고 가치</div>
                 <div class="smart-summary-value" id="f-totalPriceLabel">₩0</div>
                 <div class="smart-summary-note" id="item-price-note">수량과 원가를 입력하면 공급가액, 부가세, 합계가 자동 계산됩니다.</div>
-                <input type="hidden" id="f-supplyValue" value="${item.supplyValue ?? ''}" />
-                <input type="hidden" id="f-vat" value="${item.vat ?? ''}" />
-                <input type="hidden" id="f-totalPrice" value="${item.totalPrice ?? ''}" />
+                <input type="hidden" id="f-supplyValue" value="${safeAttr(item.supplyValue ?? '')}" />
+                <input type="hidden" id="f-vat" value="${safeAttr(item.vat ?? '')}" />
+                <input type="hidden" id="f-totalPrice" value="${safeAttr(item.totalPrice ?? '')}" />
               </div>
               <div class="smart-summary-item">
                 <div class="smart-summary-label">예상 판매 기준 차익</div>

@@ -14,6 +14,19 @@ import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolki
 
 const PAGE_SIZE = 15;
 
+function safeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">${escapeHtml(String(value))}</option>`).join('');
+}
+
 /**
  * 날짜 문자열을 YYYY-MM-DD 형식으로 변환
  * "Tue Apr 14 2026 09:00:00 GMT+0900" 등 다양한 형식 처리
@@ -184,15 +197,15 @@ export function renderInoutPage(container, navigateTo) {
       </select>
       <select class="filter-select" id="tx-vendor-filter">
         <option value="">전체 거래처</option>
-        ${getVendorOptions(transactions, items).map(v => `<option value="${v}">${v}</option>`).join('')}
+        ${buildOptionTags(getVendorOptions(transactions, items))}
       </select>
       <select class="filter-select" id="tx-code-filter">
         <option value="">전체 품목코드</option>
-        ${getCodeList(items).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getCodeList(items))}
       </select>
       <input type="date" class="filter-select" id="tx-date-filter" style="padding:7px 10px;" />
       <select class="filter-select" id="tx-sort-filter">
-        ${sortOptions.map(option => `<option value="${option.value}">${option.label}</option>`).join('')}
+        ${sortOptions.map(option => `<option value="${safeAttr(option.value)}">${escapeHtml(option.label)}</option>`).join('')}
       </select>
       <button class="btn btn-ghost btn-sm" id="tx-filter-reset" title="필터 초기화">초기화</button>
     </div>
@@ -438,7 +451,7 @@ export function renderInoutPage(container, navigateTo) {
       <div class="filter-summary-row">
         <div class="filter-summary-count">표시 ${filteredCount}건 / 전체 ${transactions.length}건</div>
         <div class="filter-summary-chips">
-          ${chips.map(text => `<span class="filter-chip">${text}</span>`).join('')}
+          ${chips.map(text => `<span class="filter-chip">${escapeHtml(text)}</span>`).join('')}
         </div>
       </div>
     `;
@@ -522,9 +535,9 @@ export function renderInoutPage(container, navigateTo) {
         const childStyle = isChild ? 'background:var(--bg-lighter);' : '';
         const indent = isChild ? 'padding-left:24px;' : '';
         return `
-          <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${tx.id}" style="${childStyle}">
+          <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${safeAttr(tx.id)}" style="${childStyle}">
             <td style="text-align:center;">
-              <input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
+              <input type="checkbox" class="tx-select-row" value="${safeAttr(tx.id)}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
             </td>
             <td class="col-num"></td>
             <td data-label="구분">
@@ -532,30 +545,30 @@ export function renderInoutPage(container, navigateTo) {
                 ${tx.type === 'in' ? '입고' : '출고'}
               </span>
             </td>
-            <td data-label="거래처" style="font-size:12px; ${indent}">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
+            <td data-label="거래처" style="font-size:12px; ${indent}">${tx.vendor ? escapeHtml(tx.vendor) : '<span style="color:var(--text-muted)">-</span>'}</td>
             <td data-label="품목명" style="${indent}">
               ${isChild
-                ? `<span style="color:var(--text-muted); font-size:12px;">${tx.itemName || '-'}</span>`
-                : `<strong>${tx.itemName || '-'}</strong>`}
+                ? `<span style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemName || '-')}</span>`
+                : `<strong>${escapeHtml(tx.itemName || '-')}</strong>`}
             </td>
-            <td data-label="품목코드" style="color:var(--text-muted); font-size:12px;">${tx.itemCode || '-'}</td>
+            <td data-label="품목코드" style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemCode || '-')}</td>
             <td data-label="수량" class="text-right">
               <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">
                 ${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}
               </span>
             </td>
             <td data-label="원가" class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
-            <td data-label="판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="sellingPrice" title="클릭하여 수정">
+            <td data-label="판매가" class="text-right editable-price-cell" data-tx-id="${safeAttr(tx.id)}" data-field="sellingPrice" title="클릭하여 수정">
               <span class="price-display">${tx.sellingPrice ? '₩' + Math.round(parseFloat(tx.sellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
             </td>
-            <td data-label="실판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="actualSellingPrice" title="클릭하여 수정">
+            <td data-label="실판매가" class="text-right editable-price-cell" data-tx-id="${safeAttr(tx.id)}" data-field="actualSellingPrice" title="클릭하여 수정">
               <span class="price-display">${tx.actualSellingPrice ? '₩' + Math.round(parseFloat(tx.actualSellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
             </td>
             <td data-label="이익률" class="text-right">${renderMargin(tx)}</td>
             <td data-label="날짜">${formatDate(tx.date)}</td>
-            <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
+            <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${escapeHtml(tx.note || '')}</td>
             <td class="text-center">
-              <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button>
+              <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${safeAttr(tx.id)}" title="삭제">삭제</button>
             </td>
           </tr>`;
       };
@@ -595,7 +608,7 @@ export function renderInoutPage(container, navigateTo) {
           const marginColor = avgMargin !== null ? (parseFloat(avgMargin) > 0 ? 'var(--success)' : parseFloat(avgMargin) < 0 ? 'var(--danger)' : 'var(--text-muted)') : '';
 
           html += `
-            <tr class="tx-group-header" data-group-key="${escapeHtml(key)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
+            <tr class="tx-group-header" data-group-key="${safeAttr(key)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
               <td style="text-align:center;">
                 <span style="color:var(--text-muted); font-size:11px;">${totalCount}건</span>
               </td>
@@ -663,7 +676,7 @@ export function renderInoutPage(container, navigateTo) {
         const currentVal = parseFloat(txData[field]) || 0;
 
         cell.innerHTML = `
-          <input type="number" class="inline-price-input" value="${currentVal || ''}"
+          <input type="number" class="inline-price-input" value="${safeAttr(currentVal || '')}"
             placeholder="금액 입력" min="0"
             style="width:100px; text-align:right; padding:2px 4px; border:1px solid var(--accent); border-radius:4px; background:var(--bg-card); color:var(--text-primary); font-size:13px;" />
         `;
@@ -1257,7 +1270,7 @@ function openTxModal(container, navigateTo, type, items) {
               <label class="form-label">${partnerLabel}</label>
               <select class="form-select" id="tx-vendor">
                 <option value="">-- 거래처 선택 (선택 사항) --</option>
-                ${vendors.map(v => `<option value="${v.name}">${v.name}${v.contactName ? ` (${v.contactName})` : ''}</option>`).join('')}
+                ${vendors.map(v => `<option value="${safeAttr(v.name)}">${escapeHtml(v.name)}${v.contactName ? ` (${escapeHtml(v.contactName)})` : ''}</option>`).join('')}
               </select>
               ${vendors.length === 0 ? `<div class="smart-inline-note">거래처 관리에 ${type === 'in' ? '공급처' : '고객'}를 먼저 등록하면 ${typeLabel} 기록이 더 편해집니다.</div>` : ''}
             </div>
@@ -1270,8 +1283,8 @@ function openTxModal(container, navigateTo, type, items) {
                 <select class="form-select" id="tx-item">
                   <option value="">-- 품목 선택 --</option>
                   ${items.map((item, i) => `
-                    <option value="${i}" data-code="${item.itemCode || ''}" data-price="${item.unitPrice || ''}" data-qty="${item.quantity || 0}">
-                      ${item.itemName}${item.itemCode ? ` (${item.itemCode})` : ''}${type === 'out' ? ` [현재 ${parseFloat(item.quantity || 0)}]` : ''}
+                    <option value="${i}" data-code="${safeAttr(item.itemCode || '')}" data-price="${safeAttr(item.unitPrice || '')}" data-qty="${safeAttr(item.quantity || 0)}">
+                      ${escapeHtml(item.itemName || '')}${item.itemCode ? ` (${escapeHtml(item.itemCode)})` : ''}${type === 'out' ? ` [현재 ${parseFloat(item.quantity || 0)}]` : ''}
                     </option>
                   `).join('')}
                 </select>
@@ -1404,22 +1417,38 @@ function openTxModal(container, navigateTo, type, items) {
       });
 
     const visibleValues = new Set(['']);
-    let optionMarkup = '<option value="">-- 품목 선택 --</option>';
+    itemSelect.textContent = '';
+
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = '-- 품목 선택 --';
+    itemSelect.appendChild(placeholderOption);
 
     if (previousValue !== '' && !matched.some(({ index }) => String(index) === previousValue)) {
       const selectedItem = items[parseInt(previousValue, 10)];
       if (selectedItem) {
         visibleValues.add(String(previousValue));
-        optionMarkup += `<option value="${previousValue}" data-code="${selectedItem.itemCode || ''}" data-price="${selectedItem.unitPrice || ''}" data-qty="${selectedItem.quantity || 0}">${getOptionLabel(selectedItem)} (현재 선택)</option>`;
+        const option = document.createElement('option');
+        option.value = previousValue;
+        option.dataset.code = String(selectedItem.itemCode || '');
+        option.dataset.price = String(selectedItem.unitPrice || '');
+        option.dataset.qty = String(selectedItem.quantity || 0);
+        option.textContent = `${selectedItem.itemName || '-'}${selectedItem.itemCode ? ` (${selectedItem.itemCode})` : ''}${type === 'out' ? ` [현재 ${(parseFloat(selectedItem.quantity || 0) || 0).toLocaleString('ko-KR')}]` : ''} (현재 선택)`;
+        itemSelect.appendChild(option);
       }
     }
 
-    optionMarkup += matched.map(({ item, index }) => {
+    matched.forEach(({ item, index }) => {
       visibleValues.add(String(index));
-      return `<option value="${index}" data-code="${item.itemCode || ''}" data-price="${item.unitPrice || ''}" data-qty="${item.quantity || 0}">${getOptionLabel(item)}</option>`;
-    }).join('');
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.dataset.code = String(item.itemCode || '');
+      option.dataset.price = String(item.unitPrice || '');
+      option.dataset.qty = String(item.quantity || 0);
+      option.textContent = `${item.itemName || '-'}${item.itemCode ? ` (${item.itemCode})` : ''}${type === 'out' ? ` [현재 ${(parseFloat(item.quantity || 0) || 0).toLocaleString('ko-KR')}]` : ''}`;
+      itemSelect.appendChild(option);
+    });
 
-    itemSelect.innerHTML = optionMarkup;
     itemSelect.value = visibleValues.has(previousValue) ? previousValue : '';
 
     if (itemSearchMeta) {
