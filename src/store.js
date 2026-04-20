@@ -423,34 +423,17 @@ export async function restoreState() {
       console.log('[Store] Supabase에서 데이터 로딩 중...');
       const cloudData = await managedQuery(() => db.loadAllData());
 
-      // 로컬 IndexedDB에서 UI 설정만 로드 (Supabase에 없는 것들)
+      // 로컬 IndexedDB 전체를 먼저 읽어 두고, Supabase가 담당하는 키만 cloudData로 덮어쓴다.
+      // 이렇게 해야 아직 Supabase 동기화 대상이 아닌 로컬 전용/미이관 데이터가
+      // 로그인 후 복원 과정에서 DEFAULT_STATE로 날아가지 않는다.
       const localData = await loadFromDB();
-      const localOnly = {};
-      if (localData) {
-        // Supabase에 저장하지 않는 로컬 전용 데이터
-        const localOnlyKeys = [
-          'rawData', 'sheetNames', 'activeSheet', 'fileName',
-          'columnMapping', 'currentStep', 'allSheets',
-          'activeWarehouseFilter', 'currentPlan', 'subscription',
-          'paymentHistory', 'adminUsers', 'adminNotices',
-          'notificationReadMap', 'notificationDeliveryLog',
-          'notificationChannelPrefs', 'ledgerOpeningOverrides',
-          'warehouses', 'roles', 'members', 'apiKeys', 'webhooks',
-          'userName',
-        ];
-        localOnlyKeys.forEach(key => {
-          if (localData[key] !== undefined) {
-            localOnly[key] = localData[key];
-          }
-        });
-      }
 
       // Supabase 데이터에 입출고는 _synced 표시
       if (cloudData.transactions) {
         cloudData.transactions.forEach(tx => { tx._synced = true; });
       }
 
-      state = { ...DEFAULT_STATE, ...localOnly, ...cloudData };
+      state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData };
       // 로컬 캐시도 업데이트
       saveToDB();
       console.log(`[Store] Supabase 로딩 완료: 품목 ${(cloudData.mappedData || []).length}건, 입출고 ${(cloudData.transactions || []).length}건`);
