@@ -62,8 +62,6 @@ function shouldSkipTable(table) {
   if (!thead || !tbody || !tbody.rows.length) return true;
 
   const headerCells = Array.from(thead.querySelectorAll('th'));
-  if (headerCells.some(th => hasInteractiveHeader(th))) return true;
-
   return headerCells.some(th => {
     const isCustomSortable = th.dataset.sortKey || (th.classList.contains('sortable-header') && !th.dataset.autoSortKey);
     return Boolean(isCustomSortable);
@@ -118,7 +116,11 @@ function decorateHeaders(table) {
     cell.dataset.autoSortDisplayLabel = displayLabel;
     cell.dataset.autoSortNormalizedLabel = normalizedLabel;
 
-    if (cell.dataset.autoSortIgnore === 'true' || !isSortableColumn(normalizedLabel, index)) {
+    if (
+      cell.dataset.autoSortIgnore === 'true' ||
+      hasInteractiveHeader(cell) ||
+      !isSortableColumn(normalizedLabel, index)
+    ) {
       cell.removeAttribute('data-auto-sort-key');
       cell.classList.remove('sortable-header', 'is-active');
       cell.removeAttribute('aria-sort');
@@ -274,7 +276,7 @@ function getHeaderRow(table) {
 
 function isSortableColumn(label, index) {
   if (!label) return false;
-  if (index === 0 && ['#', 'no', '번호', '순위'].includes(label)) {
+  if (index === 0 && ['#', 'no', '번호', '순위', '컬럼'].includes(label)) {
     return false;
   }
   return !NON_SORTABLE_HEADERS.has(label);
