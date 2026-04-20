@@ -35,6 +35,21 @@ function handleError(error, context) {
   }
 }
 
+function toNullableNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const normalized = String(value).replace(/,/g, '').trim();
+  if (!normalized || normalized === '-' || normalized.toLowerCase() === 'nan') return null;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
+}
+
+function toNullableString(value) {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized : null;
+}
+
 /**
  * 현재 로그인한 사용자 ID를 안전하게 가져오기
  */
@@ -115,10 +130,35 @@ export const items = {
    */
   async bulkUpsert(itemsArray) {
     const userId = await getUserId();
-    const rows = itemsArray.map(item => ({
-      ...item,
-      user_id: userId,
-    }));
+    const rows = itemsArray.map((item) => {
+      const payload = {
+        user_id: userId,
+        item_name: toNullableString(item?.item_name),
+        item_code: toNullableString(item?.item_code),
+        category: toNullableString(item?.category),
+        quantity: toNullableNumber(item?.quantity),
+        unit: toNullableString(item?.unit),
+        unit_price: toNullableNumber(item?.unit_price),
+        supply_value: toNullableNumber(item?.supply_value),
+        vat: toNullableNumber(item?.vat),
+        total_price: toNullableNumber(item?.total_price),
+        sale_price: toNullableNumber(item?.sale_price),
+        warehouse: toNullableString(item?.warehouse),
+        location: toNullableString(item?.location),
+        vendor: toNullableString(item?.vendor),
+        min_stock: toNullableNumber(item?.min_stock),
+        expiry_date: toNullableString(item?.expiry_date),
+        lot_number: toNullableString(item?.lot_number),
+        memo: toNullableString(item?.memo),
+        extra: item?.extra && typeof item.extra === 'object' ? item.extra : {},
+      };
+
+      const rawId = item?.id;
+      if (rawId !== null && rawId !== undefined && String(rawId).trim() !== '') {
+        payload.id = rawId;
+      }
+      return payload;
+    });
     const dedupedMap = new Map();
     const normalizeItemName = (value) => String(value ?? '').trim().toLowerCase();
     rows.forEach((row) => {
@@ -916,16 +956,16 @@ export function storeItemToDb(storeItem) {
   });
 
   return {
-    ...((_id) ? { id: _id } : {}),
-    item_name: itemName,
-    item_code: itemCode,
-    unit_price: unitPrice,
-    supply_value: supplyValue,
-    total_price: totalPrice,
-    sale_price: salePrice,
-    min_stock: minStock,
-    expiry_date: expiryDate,
-    lot_number: lotNumber,
+    ...((_id !== null && _id !== undefined && String(_id).trim() !== '') ? { id: _id } : {}),
+    item_name: toNullableString(itemName),
+    item_code: toNullableString(itemCode),
+    unit_price: toNullableNumber(unitPrice),
+    supply_value: toNullableNumber(supplyValue),
+    total_price: toNullableNumber(totalPrice),
+    sale_price: toNullableNumber(salePrice),
+    min_stock: toNullableNumber(minStock),
+    expiry_date: toNullableString(expiryDate),
+    lot_number: toNullableString(lotNumber),
     extra,
     ...known,
   };
