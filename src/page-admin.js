@@ -12,6 +12,45 @@ import { PLANS } from './plan.js';
 import { supabase } from './supabase-client.js';
 
 // ═══════════════════════════════════════════
+// 전역 onclick 핸들러 (이벤트 버블링 우회)
+// ═══════════════════════════════════════════
+let _adminUserCache = [];
+let _adminContainer = null;
+let _adminNavigateTo = null;
+
+window._invexAdminAction = function(btn) {
+  const action = btn.dataset.action;
+  const uid    = btn.dataset.uid;
+  const u      = _adminUserCache.find(x => x.id === uid);
+
+  if (action === 'detail') {
+    if (u) showUserDetailModal(u);
+    else showToast('사용자 정보를 찾을 수 없습니다', 'error');
+
+  } else if (action === 'plan') {
+    if (u) showPlanChangeModal(u, _adminContainer, _adminNavigateTo);
+    else showToast('사용자 정보를 찾을 수 없습니다', 'error');
+
+  } else if (action === 'suspend') {
+    const current   = btn.dataset.status;
+    const newStatus = current === 'suspended' ? 'active' : 'suspended';
+    supabase
+      .from('profiles')
+      .update({ status: newStatus })
+      .eq('id', uid)
+      .then(({ error }) => {
+        if (error) { showToast('처리 실패: ' + error.message, 'error'); return; }
+        showToast(
+          newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.',
+          newStatus === 'suspended' ? 'warning' : 'success'
+        );
+        if (_adminContainer && _adminNavigateTo)
+          renderAdminPage(_adminContainer, _adminNavigateTo);
+      });
+  }
+};
+
+// ═══════════════════════════════════════════
 // 총관리자(사이트 소유자) 이메일 목록
 // ═══════════════════════════════════════════
 const ADMIN_EMAILS = [
@@ -117,6 +156,10 @@ export async function renderAdminPage(container, navigateTo) {
 
   // 백엔드에서 실제 사용자 데이터 조회
   const allUsers = await fetchAllUsers();
+  // 전역 캐시에 저장 (onclick 핸들러에서 참조)
+  _adminUserCache  = allUsers;
+  _adminContainer  = container;
+  _adminNavigateTo = navigateTo;
   const state = getState();
   const notices = state.adminNotices || [];
   const paymentHistory = state.paymentHistory || [];
@@ -362,46 +405,7 @@ export async function renderAdminPage(container, navigateTo) {
     filterUsers(container);
   });
 
-  // 관리 버튼 직접 바인딩 (이벤트 위임 대신 각 버튼에 직접 연결)
-  container.querySelectorAll('.btn-detail-user').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      if (u) showUserDetailModal(u);
-      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    });
-  });
-
-  container.querySelectorAll('.btn-plan-user').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      if (u) showPlanChangeModal(u, container, navigateTo);
-      else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    });
-  });
-
-  container.querySelectorAll('.btn-suspend-user').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const uid = btn.dataset.uid;
-      const current = btn.dataset.status;
-      const newStatus = current === 'suspended' ? 'active' : 'suspended';
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ status: newStatus })
-          .eq('id', uid);
-        if (error) throw error;
-        showToast(newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.', newStatus === 'suspended' ? 'warning' : 'success');
-        renderAdminPage(container, navigateTo);
-      } catch (err) {
-        showToast('처리 실패: ' + err.message, 'error');
-      }
-    });
-  });
+  // (관리 버튼은 onclick="window._invexAdminAction(this)" 인라인으로 처리됨)
 
   // 공지 작성
   container.querySelector('#btn-add-notice')?.addEventListener('click', () => {
@@ -504,9 +508,9 @@ function renderUserRow(u) {
       </td>
       <td style="text-align:center;">
         <div style="display:flex; gap:2px; justify-content:center;">
-          <button class="btn btn-ghost btn-sm btn-detail-user" data-uid="${u.id}" title="상세 보기" style="font-size:12px; padding:4px 6px;">👁️</button>
-          <button class="btn btn-ghost btn-sm btn-plan-user" data-uid="${u.id}" title="요금제 변경" style="font-size:12px; padding:4px 6px;">💎</button>
-          <button class="btn btn-ghost btn-sm btn-suspend-user" data-uid="${u.id}" data-status="${u.status || 'active'}" title="${isActive ? '정지' : '활성화'}" style="font-size:12px; padding:4px 6px;">
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="detail" data-uid="${u.id}" title="상세 보기" style="font-size:12px; padding:4px 6px;">👁️</button>
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="plan" data-uid="${u.id}" title="요금제 변경" style="font-size:12px; padding:4px 6px;">💎</button>
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="suspend" data-uid="${u.id}" data-status="${u.status || 'active'}" title="${isActive ? '정지' : '활성화'}" style="font-size:12px; padding:4px 6px;">
             ${isActive ? '● 활성' : '● 정지'}
           </button>
         </div>
