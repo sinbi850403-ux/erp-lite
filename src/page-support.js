@@ -6,6 +6,7 @@ import { getCurrentUser, getUserProfileData } from './auth.js';
 import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, deleteDoc } from './backend-store.js';
 import { db, isConfigured } from './backend-config.js';
 import { showToast } from './toast.js';
+import { escapeHtml } from './ux-toolkit.js';
 
 // 문의 상태별 라벨
 const STATUS_MAP = {
@@ -114,9 +115,9 @@ async function loadMyTickets(container, user) {
           <div style="flex:1; min-width:0;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
               <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:${status.bg}; color:${status.color}; font-weight:600;">${status.label}</span>
-              <span style="font-size:11px; color:var(--text-muted);">${typeLabel}</span>
+              <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(typeLabel)}</span>
             </div>
-            <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${data.title}</div>
+            <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(data.title)}</div>
           </div>
           <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; flex-shrink:0;">${date}</div>
         </div>
@@ -233,11 +234,11 @@ function renderDetailView(container, ticketId, data) {
       <div class="card" style="padding:24px; margin-bottom:16px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
           <span style="font-size:11px; padding:2px 8px; border-radius:4px; background:${status.bg}; color:${status.color}; font-weight:600;">${status.label}</span>
-          <span style="font-size:11px; color:var(--text-muted);">${typeLabel}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${escapeHtml(typeLabel)}</span>
           <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">${date}</span>
         </div>
-        <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">${data.title}</h3>
-        <div style="font-size:13px; line-height:1.8; white-space:pre-wrap; color:var(--text-secondary);">${data.content}</div>
+        <h3 style="font-size:18px; font-weight:700; margin-bottom:16px;">${escapeHtml(data.title)}</h3>
+        <div style="font-size:13px; line-height:1.8; white-space:pre-wrap; color:var(--text-secondary);">${escapeHtml(data.content)}</div>
       </div>
 
       <!-- 답변 -->
@@ -247,7 +248,7 @@ function renderDetailView(container, ticketId, data) {
           <span style="font-size:13px; font-weight:700;">💬 관리자 답변</span>
           <span style="font-size:11px; color:var(--text-muted);">${replyDate}</span>
         </div>
-        <div style="font-size:13px; line-height:1.8; white-space:pre-wrap; color:var(--text-secondary);">${data.reply}</div>
+        <div style="font-size:13px; line-height:1.8; white-space:pre-wrap; color:var(--text-secondary);">${escapeHtml(data.reply)}</div>
       </div>
       ` : `
       <div class="card" style="padding:24px; text-align:center;">

@@ -10,6 +10,7 @@ import { showToast } from './toast.js';
 import { getCurrentUser } from './auth.js';
 import { PLANS } from './plan.js';
 import { supabase } from './supabase-client.js';
+import { escapeHtml } from './ux-toolkit.js';
 
 // ═══════════════════════════════════════════
 // 전역 onclick 핸들러 (이벤트 버블링 우회)
@@ -791,11 +792,11 @@ async function loadAdminTickets(container) {
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
             <span style="font-size:10px; padding:1px 6px; border-radius:3px; background:${st.bg}; color:${st.color}; font-weight:600;">${st.label}</span>
-            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title || ''}</span>
+            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.title || '')}</span>
           </div>
-          <div style="font-size:10px; color:var(--text-muted);">${d.user_name || ''} (${d.user_email || ''}) · ${date}</div>
+          <div style="font-size:10px; color:var(--text-muted);">${escapeHtml(d.user_name || '')} (${escapeHtml(d.user_email || '')}) · ${date}</div>
         </div>
-        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${d.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
+        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${escapeHtml(d.id)}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
       `;
       area.appendChild(row);
     });
@@ -832,12 +833,12 @@ function showReplyModal(ticketId, data, container) {
       </div>
       <div class="modal-body" style="padding:20px;">
         <div style="margin-bottom:16px; padding:12px; background:var(--bg-secondary); border-radius:8px;">
-          <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${data.title}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${data.userName} (${data.userEmail})</div>
-          <div style="font-size:12px; line-height:1.6; white-space:pre-wrap;">${data.content}</div>
+          <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${escapeHtml(data.title)}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${escapeHtml(data.userName)} (${escapeHtml(data.userEmail)})</div>
+          <div style="font-size:12px; line-height:1.6; white-space:pre-wrap;">${escapeHtml(data.content)}</div>
         </div>
         <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">답변 내용</label>
-        <textarea id="reply-content" class="input" rows="5" style="width:100%; resize:vertical; font-family:inherit;">${data.reply || ''}</textarea>
+        <textarea id="reply-content" class="input" rows="5" style="width:100%; resize:vertical; font-family:inherit;">${escapeHtml(data.reply || '')}</textarea>
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
           <button class="btn btn-ghost" id="reply-cancel">취소</button>
           <button class="btn btn-primary" id="reply-submit">답변 저장</button>
