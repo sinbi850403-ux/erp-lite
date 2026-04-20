@@ -13,6 +13,7 @@ import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 import { downloadExcel } from './excel.js';
 import { addAuditLog } from './audit-log.js';
+import { enableLocalReportSort } from './report-local-sort.js';
 
 let currentTab = 'receivable';
 
@@ -165,6 +166,10 @@ export function renderAccountsPage(container, navigateTo) {
   });
 
   bindAccountActions(container, navigateTo);
+  container.querySelectorAll('.data-table').forEach((table) => {
+    table.dataset.autoSort = 'off';
+  });
+  enableLocalReportSort(container);
 }
 
 // ─── 에이징 요약 카드 ────────────────────────────────────────────────────────

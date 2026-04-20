@@ -7,6 +7,7 @@ import { getState } from './store.js';
 import { showToast } from './toast.js';
 import { downloadExcel } from './excel.js';
 import { renderInsightHero } from './ux-toolkit.js';
+import { enableLocalReportSort } from './report-local-sort.js';
 
 /**
  * 요약 보고 페이지 렌더링
@@ -357,6 +358,11 @@ export function renderSummaryPage(container, navigateTo) {
   container.querySelector('#btn-print')?.addEventListener('click', () => {
     window.print();
   });
+
+  container.querySelectorAll('.data-table').forEach((table) => {
+    table.dataset.autoSort = 'off';
+  });
+  enableLocalReportSort(container);
 }
 
 /**

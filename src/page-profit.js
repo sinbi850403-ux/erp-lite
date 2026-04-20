@@ -6,6 +6,7 @@ import { showToast } from './toast.js';
 import { destroyAllCharts, renderProfitTrendChart, renderVendorProfitChart } from './charts.js';
 import { jsPDF } from 'jspdf';
 import { applyKoreanFont } from './pdf-font.js';
+import { enableLocalReportSort } from './report-local-sort.js';
 
 export function renderProfitPage(container, navigateTo) {
   destroyAllCharts();
@@ -742,6 +743,11 @@ export function renderProfitPage(container, navigateTo) {
 
   renderProfitTrendChart('profit-trend-chart', monthlySeries);
   renderVendorProfitChart('profit-vendor-chart', vendorChartRows);
+
+  container.querySelectorAll('.data-table').forEach((table) => {
+    table.dataset.autoSort = 'off';
+  });
+  enableLocalReportSort(container);
 }
 
 function summarizeByCategory(rows) {
