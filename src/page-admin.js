@@ -8,7 +8,7 @@
 import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 import { getCurrentUser } from './auth.js';
-import { PLANS } from './plan.js';
+import { PLANS, setPlan } from './plan.js';
 import { supabase } from './supabase-client.js';
 import { escapeHtml } from './ux-toolkit.js';
 
@@ -699,6 +699,10 @@ function showPlanChangeModal(user, container, navigateTo) {
           .update({ plan: planId })
           .eq('id', user.id);
         if (error) throw error;
+        const me = getCurrentUser();
+        if (me?.uid === user.id) {
+          setPlan(planId);
+        }
         modal.remove();
         showToast(`${user.name || '사용자'}님의 요금제를 ${PLANS[planId].name}으로 변경했습니다.`, 'success');
         renderAdminPage(container, navigateTo);

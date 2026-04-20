@@ -128,6 +128,12 @@ initAuth((user, profile) => {
   const gate = document.getElementById('auth-gate');
   
   if (user) {
+    // DB 프로필의 요금제를 앱 런타임 상태에 동기화
+    const profilePlan = profile?.plan;
+    if (profilePlan && PLANS[profilePlan]) {
+      setPlan(profilePlan);
+    }
+
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'none';
     if (gate) {
@@ -723,6 +729,12 @@ async function initAppAfterAuth() {
   }
 
   await restoreState();
+  // restoreState가 로컬 캐시의 예전 currentPlan을 복원할 수 있으므로,
+  // 인증 프로필(plan)을 다시 우선 동기화한다.
+  const profilePlan = getUserProfileData()?.plan;
+  if (profilePlan && PLANS[profilePlan]) {
+    setPlan(profilePlan);
+  }
   const lastPage = localStorage.getItem(LAST_PAGE_KEY);
   const startPage = (lastPage && PAGE_LOADERS[lastPage]) ? lastPage : 'home';
   updateSidebarBadges();
