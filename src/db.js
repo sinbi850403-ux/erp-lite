@@ -119,13 +119,19 @@ export const items = {
       ...item,
       user_id: userId,
     }));
+    const dedupedMap = new Map();
+    rows.forEach((row) => {
+      const key = String(row.item_name ?? '');
+      dedupedMap.set(key, row);
+    });
+    const dedupedRows = [...dedupedMap.values()];
 
     // 500개씩 배치 처리 — Supabase 요청 크기 제한 대응
     const BATCH_SIZE = 500;
     const results = [];
 
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < dedupedRows.length; i += BATCH_SIZE) {
+      const batch = dedupedRows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase
         .from('items')
         .upsert(batch, { onConflict: 'user_id,item_name' })

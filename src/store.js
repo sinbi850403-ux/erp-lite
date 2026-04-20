@@ -11,7 +11,7 @@
  *   restoreState() → Supabase 로딩 → 메모리 적용 → IndexedDB 캐시
  */
 
-import { isSupabaseConfigured } from './supabase-client.js';
+import { isSupabaseConfigured, supabase } from './supabase-client.js';
 import * as db from './db.js';
 import { storeItemToDb } from './db.js';
 import { managedQuery, invalidateCache, getTrafficMetrics } from './traffic-manager.js';
@@ -194,6 +194,8 @@ let _dirtyKeys = new Set();
  */
 async function syncToSupabase() {
   if (!isSupabaseConfigured || _dirtyKeys.size === 0) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return;
 
   const keysToSync = new Set(_dirtyKeys);
   _dirtyKeys.clear();

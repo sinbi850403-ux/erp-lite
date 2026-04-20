@@ -257,7 +257,7 @@ export async function managedQuery(queryFn) {
     const result = await queryFn();
 
     // 에러가 429라면 백오프 후 재시도
-    if (result.error?.message?.includes('rate') || result.error?.code === '429') {
+    if (result?.error?.message?.includes('rate') || result?.error?.code === '429') {
       _metrics.retried++;
       await new Promise(r => setTimeout(r, CONFIG.BASE_BACKOFF_MS));
       return queryFn();

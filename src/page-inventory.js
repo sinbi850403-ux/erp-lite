@@ -1689,7 +1689,7 @@ export function renderInventoryPage(container, navigateTo) {
   });
 
   // 페이지당 행 수
-  container.querySelector('#btn-add-item').addEventListener('click', () => {
+  container.querySelector('#btn-add-item')?.addEventListener('click', () => {
     openItemModal(container, navigateTo);
   });
 
