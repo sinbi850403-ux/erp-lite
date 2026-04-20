@@ -70,29 +70,52 @@ export function isAdmin() {
 
 /**
  * 백엔드 사용자 목록 가져오기 (Supabase profiles 테이블)
- * 관리자 권한 체크
+ * Supabase cold start 대응: 최대 3회 재시도, 타임아웃 20초
  */
-async function fetchAllUsers() {
+async function fetchAllUsers(attempt = 1) {
   try {
-    // 타임아웃 10초
+    const timeout = 20000; // 20초 (cold start 대응)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Supabase query timeout')), 10000)
+      setTimeout(() => reject(new Error('Supabase query timeout')), timeout)
     );
 
     const queryPromise = supabase
       .from('profiles')
-      .select('*')
+      .select('id, email, name, photo_url, role, plan, status, created_at, last_login_at')
       .order('created_at', { ascending: false });
 
     const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
-      console.warn('사용자 목록 조회 실패:', error);
+      console.warn(`사용자 목록 조회 실패 (시도 ${attempt}):`, error.message);
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        return fetchAllUsers(attempt + 1);
+      }
       return [];
     }
-    return Array.isArray(data) ? data : [];
+
+    if (!Array.isArray(data) || data.length === 0) {
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 2000));
+        return fetchAllUsers(attempt + 1);
+      }
+      return [];
+    }
+
+    // 필드명 정규화 (DB 컬럼명 → JS 객체)
+    return data.map(u => ({
+      ...u,
+      photoURL: u.photo_url,
+      lastLogin: u.last_login_at,
+      createdAt: u.created_at,
+    }));
   } catch (e) {
-    console.warn('사용자 목록 조회 실패:', e.message);
+    console.warn(`사용자 목록 조회 실패 (시도 ${attempt}):`, e.message);
+    if (attempt < 3) {
+      await new Promise(r => setTimeout(r, 1500 * attempt));
+      return fetchAllUsers(attempt + 1);
+    }
     return [];
   }
 }
