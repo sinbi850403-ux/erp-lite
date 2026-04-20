@@ -217,7 +217,7 @@ export async function renderAdminPage(container, navigateTo) {
     <!-- 메인 2단 레이아웃 -->
     <div style="display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:20px;">
 
-      <!-- 왼쪽: 사용자 관리 테이블 -->
+      <!-- 왼쪽: 사용자 관리 카드 목록 -->
       <div class="card" style="padding:0; overflow:hidden;">
         <div style="padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -227,41 +227,18 @@ export async function renderAdminPage(container, navigateTo) {
               <div style="font-size:11px; color:var(--text-muted);">총 ${totalUsers}명 등록</div>
             </div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <div style="position:relative;">
-              <input class="form-input" id="admin-user-search" placeholder="🔍 검색..." style="width:180px; font-size:12px; padding:6px 10px; border-radius:6px;" />
-            </div>
-            <select class="form-input" id="admin-filter-plan" style="width:100px; font-size:12px; padding:6px 8px; border-radius:6px;">
-              <option value="all">전체 요금제</option>
-              <option value="free">🆓 Free</option>
-              <option value="pro">⭐ Pro</option>
-              <option value="enterprise">🏢 Enterprise</option>
-            </select>
-          </div>
+          <input class="form-input" id="admin-user-search" placeholder="🔍 이름 / 이메일 검색" style="width:200px; font-size:12px; padding:6px 10px; border-radius:6px;" />
         </div>
-        <div style="max-height:460px; overflow-y:auto; overflow-x:auto;">
-          <table class="data-table" id="admin-users-table" style="margin:0; min-width:600px;">
-            <thead style="position:sticky; top:0; z-index:1;"><tr>
-              <th style="padding-left:20px;">사용자</th>
-              <th>요금제</th>
-              <th>최근 접속</th>
-              <th>상태</th>
-              <th style="text-align:center; width:130px;">관리</th>
-            </tr></thead>
-            <tbody>
-              ${allUsers.length > 0 ? allUsers.map(u => renderUserRow(u)).join('') : `
-                <tr>
-                  <td colspan="6" style="text-align:center; padding:48px; color:var(--text-muted);">
-                    <div style="font-size:36px; margin-bottom:12px;">👥</div>
-                    <div style="font-size:14px; font-weight:600; margin-bottom:4px;">아직 가입된 사용자가 없습니다</div>
-                    <div style="font-size:12px;">사용자가 회원가입하면 자동으로 이곳에 표시됩니다.</div>
-                  </td>
-                </tr>
-              `}
-            </tbody>
-          </table>
+        <div style="max-height:500px; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;" id="admin-user-cards">
+          ${allUsers.length > 0 ? allUsers.map(u => renderUserCard(u)).join('') : `
+            <div style="text-align:center; padding:48px; color:var(--text-muted);">
+              <div style="font-size:36px; margin-bottom:12px;">👥</div>
+              <div style="font-size:14px; font-weight:600;">아직 가입된 사용자가 없습니다</div>
+            </div>
+          `}
         </div>
       </div>
+
 
       <!-- 오른쪽 패널 -->
       <div style="display:flex; flex-direction:column; gap:16px;">
@@ -520,21 +497,72 @@ function renderUserRow(u) {
 }
 
 // ═══════════════════════════════════════════
-// 필터링
+// 사용자 카드 렌더
+// ═══════════════════════════════════════════
+function renderUserCard(u) {
+  const planId = u.plan || 'free';
+  const planInfo = PLANS[planId] || PLANS.free;
+  const isActive = u.status !== 'suspended';
+  const isOnline = u.lastLogin && (Date.now() - new Date(u.lastLogin).getTime()) < 15 * 60 * 1000;
+
+  return `
+    <div style="
+      display:flex; align-items:center; gap:12px;
+      padding:12px 14px; border-radius:10px;
+      border:1px solid var(--border);
+      background:var(--bg-secondary);
+    " data-email="${u.email || ''}" data-name="${u.name || ''}" data-plan="${planId}">
+
+      <!-- 아바타 -->
+      <div style="position:relative; flex-shrink:0;">
+        ${u.photoURL
+          ? `<img src="${u.photoURL}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" />`
+          : `<div style="width:38px;height:38px;border-radius:50%;background:${planInfo.color}25;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:${planInfo.color};">${(u.name||'?').charAt(0)}</div>`
+        }
+        ${isOnline ? `<div style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:#22c55e;border:2px solid var(--bg-secondary);"></div>` : ''}
+      </div>
+
+      <!-- 사용자 정보 -->
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.name || '(이름 없음)'}</div>
+        <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.email || '-'}</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+          <span style="font-size:10px; padding:1px 6px; border-radius:4px; background:${planInfo.color}15; color:${planInfo.color}; font-weight:600;">${planInfo.icon} ${planId.toUpperCase()}</span>
+          <span style="font-size:10px; padding:1px 6px; border-radius:4px; background:${isActive ? '#22c55e15' : '#ef444415'}; color:${isActive ? '#22c55e' : '#ef4444'}; font-weight:600;">${isActive ? '● 활성' : '● 정지'}</span>
+          ${isOnline ? `<span style="font-size:10px; color:#22c55e;">🟢 온라인</span>` : `<span style="font-size:10px; color:var(--text-muted);">${timeAgo(u.lastLogin)}</span>`}
+        </div>
+      </div>
+
+      <!-- 액션 버튼 -->
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="detail" data-uid="${u.id}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-primary); cursor:pointer; font-size:12px; color:var(--text-primary); white-space:nowrap;"
+          title="상세 보기">👁 상세</button>
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="plan" data-uid="${u.id}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-primary); cursor:pointer; font-size:12px; color:var(--text-primary); white-space:nowrap;"
+          title="요금제 변경">💎 요금제</button>
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="suspend" data-uid="${u.id}" data-status="${u.status || 'active'}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid ${isActive ? '#ef444430' : '#22c55e30'}; background:${isActive ? '#ef444410' : '#22c55e10'}; cursor:pointer; font-size:12px; color:${isActive ? '#ef4444' : '#22c55e'}; white-space:nowrap;"
+          title="${isActive ? '정지' : '활성화'}">${isActive ? '🚫 정지' : '✅ 활성화'}</button>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// 필터링 (카드 기반)
 // ═══════════════════════════════════════════
 function filterUsers(container) {
   const q = (container.querySelector('#admin-user-search')?.value || '').toLowerCase();
-  const plan = container.querySelector('#admin-filter-plan')?.value || 'all';
 
-  container.querySelectorAll('#admin-users-table tbody tr').forEach(row => {
-    const email = (row.dataset.email || '').toLowerCase();
-    const name = (row.dataset.name || '').toLowerCase();
-    const rowPlan = row.dataset.plan || 'free';
+  container.querySelectorAll('#admin-user-cards > div[data-email]').forEach(card => {
+    const email = (card.dataset.email || '').toLowerCase();
+    const name = (card.dataset.name || '').toLowerCase();
+    const rowPlan = card.dataset.plan || 'free';
 
     const matchText = !q || email.includes(q) || name.includes(q);
-    const matchPlan = plan === 'all' || rowPlan === plan;
 
-    row.style.display = (matchText && matchPlan) ? '' : 'none';
+    card.style.display = matchText ? '' : 'none';
   });
 }
 
