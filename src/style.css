@@ -132,6 +132,14 @@ button:hover {
   --radius-xl: 12px;
 }
 
+/* 테마 전환 중 transition 억제 — 다크/라이트 즉각 전환 */
+html.invex-no-transition *,
+html.invex-no-transition *::before,
+html.invex-no-transition *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
 /* === 다크 모드 === */
 html.dark-mode {
   /* 배경 — 통일된 어두운 톤 */
