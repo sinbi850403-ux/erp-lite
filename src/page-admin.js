@@ -363,29 +363,31 @@ export async function renderAdminPage(container, navigateTo) {
     filterUsers(container);
   });
 
-  // 이벤트 위임 — 관리 버튼 전체를 container 하나로 처리
-  container.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const isDetail  = btn.classList.contains('btn-detail-user');
-    const isPlan    = btn.classList.contains('btn-plan-user');
-    const isSuspend = btn.classList.contains('btn-suspend-user');
-    if (!isDetail && !isPlan && !isSuspend) return;
-
-    const uid = btn.dataset.uid;
-    const u = allUsers.find(x => x.id === uid);
-
-    if (isDetail) {
+  // 관리 버튼 직접 바인딩 (이벤트 위임 대신 각 버튼에 직접 연결)
+  container.querySelectorAll('.btn-detail-user').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const uid = btn.dataset.uid;
+      const u = allUsers.find(x => x.id === uid);
       if (u) showUserDetailModal(u);
       else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    }
+    });
+  });
 
-    if (isPlan) {
+  container.querySelectorAll('.btn-plan-user').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const uid = btn.dataset.uid;
+      const u = allUsers.find(x => x.id === uid);
       if (u) showPlanChangeModal(u, container, navigateTo);
       else showToast('사용자 정보를 찾을 수 없습니다', 'error');
-    }
+    });
+  });
 
-    if (isSuspend) {
+  container.querySelectorAll('.btn-suspend-user').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const uid = btn.dataset.uid;
       const current = btn.dataset.status;
       const newStatus = current === 'suspended' ? 'active' : 'suspended';
       try {
@@ -396,10 +398,10 @@ export async function renderAdminPage(container, navigateTo) {
         if (error) throw error;
         showToast(newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.', newStatus === 'suspended' ? 'warning' : 'success');
         renderAdminPage(container, navigateTo);
-      } catch (e) {
-        showToast('처리 실패: ' + e.message, 'error');
+      } catch (err) {
+        showToast('처리 실패: ' + err.message, 'error');
       }
-    }
+    });
   });
 
   // 공지 작성
