@@ -62,7 +62,7 @@ export function renderUploadPage(container, navigateTo) {
       <div id="upload-zone" class="upload-zone">
         <div class="icon">📄</div>
         <div class="label">파일을 끌어놓거나 클릭해서 업로드하세요.</div>
-        <div class="hint">`.xlsx`, `.xls`, `.csv` 파일을 지원하며 업로드 즉시 자동 매핑합니다.</div>
+        <div class="hint">.xlsx, .xls, .csv 파일을 지원하며 업로드 즉시 자동 매핑합니다.</div>
         <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none" />
       </div>
     </div>
