@@ -1,4 +1,4 @@
-﻿/**
+/**
  * page-admin.js - 총관리자 대시보드 (Pro Edition)
  * 역할: 백엔드에 저장된 실제 사용자 데이터를 조회하여 SaaS 전체를 관리
  * 관리자 권한 체크
@@ -365,23 +365,27 @@ export async function renderAdminPage(container, navigateTo) {
 
   // 이벤트 위임 — 관리 버튼 전체를 container 하나로 처리
   container.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[class*="btn-detail-user"],[class*="btn-plan-user"],[class*="btn-suspend-user"]');
+    const btn = e.target.closest('button');
     if (!btn) return;
+    const isDetail  = btn.classList.contains('btn-detail-user');
+    const isPlan    = btn.classList.contains('btn-plan-user');
+    const isSuspend = btn.classList.contains('btn-suspend-user');
+    if (!isDetail && !isPlan && !isSuspend) return;
 
     const uid = btn.dataset.uid;
     const u = allUsers.find(x => x.id === uid);
 
-    if (btn.classList.contains('btn-detail-user')) {
+    if (isDetail) {
       if (u) showUserDetailModal(u);
       else showToast('사용자 정보를 찾을 수 없습니다', 'error');
     }
 
-    if (btn.classList.contains('btn-plan-user')) {
+    if (isPlan) {
       if (u) showPlanChangeModal(u, container, navigateTo);
       else showToast('사용자 정보를 찾을 수 없습니다', 'error');
     }
 
-    if (btn.classList.contains('btn-suspend-user')) {
+    if (isSuspend) {
       const current = btn.dataset.status;
       const newStatus = current === 'suspended' ? 'active' : 'suspended';
       try {
