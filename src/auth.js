@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured, getSupabaseConfig, getSupabaseDebugInfo } from './supabase-client.js';
 import { showToast } from './toast.js';
+import { isSuperAdminEmail } from './admin-emails.js';
 
 let currentUser = null;
 let userProfile = null;
@@ -25,6 +26,7 @@ const AUTH_STORAGE_PATTERNS = [
   /^supabase\.auth\./,
 ];
 const LEGACY_AUTH_PREFIX = `${String.fromCharCode(102, 105, 114, 101, 98, 97, 115, 101)}:`;
+const VALID_ROLES = new Set(['viewer', 'staff', 'manager', 'admin']);
 
 // ─── 유틸리티 ─────────────────────────────────────────────────────────────────
 
@@ -72,12 +74,18 @@ function getFallbackProfile(user) {
     email: user?.email || null,
     name: user?.displayName || '사용자',
     photoURL: user?.photoURL || null,
-    role: 'admin',
+    role: resolveProfileRole(null, user?.email),
     plan: 'free',
   };
 }
 
 // ─── 스토리지 관련 ────────────────────────────────────────────────────────────
+
+function resolveProfileRole(role, email) {
+  if (isSuperAdminEmail(email)) return 'admin';
+  if (VALID_ROLES.has(role)) return role;
+  return 'viewer';
+}
 
 function forEachStorageKey(callback) {
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -153,7 +161,6 @@ async function loadProfile(user) {
         email: user.email,
         name: user.displayName,
         photo_url: user.photoURL,
-        role: 'admin',
         plan: 'free',
         created_at: new Date().toISOString(),
       };
@@ -178,7 +185,7 @@ async function loadProfile(user) {
       email: data.email || fallback.email,
       name: data.name || fallback.name,
       photoURL: data.photo_url || fallback.photoURL,
-      role: data.role || 'admin',
+      role: resolveProfileRole(data.role, data.email || fallback.email),
       plan: data.plan || 'free',
       createdAt: data.created_at,
       lastLogin: new Date().toISOString(),

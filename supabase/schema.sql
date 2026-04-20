@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   name TEXT,
   email TEXT,
   photo_url TEXT,
+  role TEXT DEFAULT 'viewer' CHECK (role IN ('viewer', 'staff', 'manager', 'admin')),
   plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'enterprise')),
   industry_template TEXT DEFAULT 'general',
   cost_method TEXT DEFAULT 'weighted-avg',
@@ -32,16 +33,44 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- role 컬럼 보강 (기존 DB 호환)
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS role TEXT;
+
+ALTER TABLE profiles
+  ALTER COLUMN role SET DEFAULT 'viewer';
+
+UPDATE profiles
+SET role = 'viewer'
+WHERE role IS NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'profiles_role_check'
+  ) THEN
+    ALTER TABLE profiles
+      ADD CONSTRAINT profiles_role_check
+      CHECK (role IN ('viewer', 'staff', 'manager', 'admin'));
+  END IF;
+END $$;
+
 -- 프로필 자동 생성 트리거: 가입 시 자동으로 profiles 행 생성
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, name, email, photo_url)
+  INSERT INTO profiles (id, name, email, photo_url, role)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', '사용자'),
     NEW.email,
-    NEW.raw_user_meta_data->>'avatar_url'
+    NEW.raw_user_meta_data->>'avatar_url',
+    CASE
+      WHEN lower(COALESCE(NEW.email, '')) IN ('sinbi0214@naver.com', 'sinbi850403@gmail.com', 'admin@invex.io.kr') THEN 'admin'
+      ELSE 'viewer'
+    END
   );
   RETURN NEW;
 END;
