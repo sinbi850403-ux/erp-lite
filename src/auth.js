@@ -551,15 +551,22 @@ export async function loginWithEmail(email, password) {
     // localStorage 정리만으로는 클라이언트 내부 토큰/갱신 상태가 남아
     // signInWithPassword 충돌 또는 fetch timeout의 근본 원인이 됨
     try {
-      await withTimeout(supabase.auth.signOut({ scope: 'local' }), 3000, 'pre-login-signout');
+      const sessionProbe = await withTimeout(
+        supabase.auth.getSession(),
+        1200,
+        'pre-login-session-check',
+      );
+      if (sessionProbe?.data?.session) {
+        await withTimeout(supabase.auth.signOut({ scope: 'local' }), 1200, 'pre-login-signout');
+      }
     } catch {
-      // signOut 실패해도 로그인 계속
+      // session/signOut check 실패해도 로그인 계속
     }
     purgeLegacyAuthStorage({ includeSupabaseSession: true });
 
     // ── 로그인 시도 (재시도 포함) ─────────────────────────────────────────────
     async function attemptLogin(attempt = 1) {
-      const timeout = attempt === 1 ? 15000 : 20000;
+      const timeout = attempt === 1 ? 7000 : 10000;
       try {
         const { data, error } = await withTimeout(
           supabase.auth.signInWithPassword({ email, password }),
@@ -573,7 +580,7 @@ export async function loginWithEmail(email, password) {
         const isNetwork = m.includes('fetch') || m.includes('network') || m.includes('timeout') || m.includes('abort');
         if (isNetwork && attempt === 1) {
           // 1차 실패 → 1.5초 대기 후 directPasswordLogin fallback 시도
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 300));
           purgeLegacyAuthStorage({ includeSupabaseSession: true });
           const fallbackUser = await directPasswordLogin(email, password);
           return fallbackUser;
@@ -586,7 +593,7 @@ export async function loginWithEmail(email, password) {
       const m = String(err?.message || '').toLowerCase();
       const isNetwork = m.includes('fetch') || m.includes('network') || m.includes('timeout') || m.includes('abort');
       if (isNetwork) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 500));
         return attemptLogin(2);
       }
       throw err;
@@ -883,3 +890,4 @@ export function renderLoginScreen(container) {
     await loginWithGoogle();
   });
 }
+
