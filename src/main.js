@@ -8,7 +8,7 @@ import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-moni
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './auth.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { injectGetCurrentUser, injectGetUserProfile, getPageBadge, getCurrentPlan, PLANS, setPlan } from './plan.js';
-import { getNotificationCount, renderNotificationPanel } from './notifications.js';
+import { getNotificationCount, renderNotificationPanel, syncExternalNotifications } from './notifications.js';
 import { showToast } from './toast.js';
 import { isAdmin } from './admin-auth.js';
 import { navigateTo, injectRouterCallbacks, PAGE_LOADERS, LAST_PAGE_KEY, renderQuickAccess } from './router.js';

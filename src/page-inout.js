@@ -336,6 +336,7 @@ export function renderInoutPage(container, navigateTo) {
 
   function renderTxHeader() {
     const thead = container.querySelector('#tx-head');
+    if (!thead) return;
     thead.innerHTML = `
       <tr>
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
@@ -379,6 +380,23 @@ export function renderInoutPage(container, navigateTo) {
       </tr>
     `;
 
+    const applySortByKey = (key) => {
+      if (!key) return;
+      if (sort.key !== key) {
+        sort = { key, direction: 'asc' };
+      } else if (sort.direction === 'asc') {
+        sort = { key, direction: 'desc' };
+      } else {
+        sort = { ...defaultSort };
+      }
+      const sortFilterEl = container.querySelector('#tx-sort-filter');
+      if (sortFilterEl) sortFilterEl.value = getSortPresetValue(sort);
+      persistInoutPrefs();
+      currentPageNum = 1;
+      renderTxHeader();
+      renderTxTable();
+    };
+
     container.querySelectorAll('.sortable-header[data-sort-key]').forEach(header => {
       header.setAttribute('tabindex', '0');
       header.setAttribute('role', 'button');
@@ -386,27 +404,15 @@ export function renderInoutPage(container, navigateTo) {
         event.preventDefault();
         event.stopImmediatePropagation();
         event.stopPropagation();
-        const key = header.dataset.sortKey;
-        if (!key) return;
-        if (sort.key !== key) {
-          sort = { key, direction: 'asc' };
-        } else if (sort.direction === 'asc') {
-          sort = { key, direction: 'desc' };
-        } else {
-          sort = { ...defaultSort };
-        }
-        container.querySelector('#tx-sort-filter').value = getSortPresetValue(sort);
-        persistInoutPrefs();
-        currentPageNum = 1;
-        renderTxHeader();
-        renderTxTable();
+        applySortByKey(header.dataset.sortKey);
       }, true);
 
       header.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        header.click();
+        event.stopPropagation();
+        applySortByKey(header.dataset.sortKey);
       }, true);
     });
   }
@@ -482,6 +488,7 @@ export function renderInoutPage(container, navigateTo) {
     const pageData = sorted.slice(start, start + PAGE_SIZE);
 
     const tbody = container.querySelector('#tx-body');
+    if (!tbody) return;
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
@@ -645,6 +652,7 @@ export function renderInoutPage(container, navigateTo) {
 
     //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
     const pagEl = container.querySelector('#tx-pagination');
+    if (!pagEl) return;
     const pageStart = sorted.length === 0 ? 0 : start + 1;
     pagEl.innerHTML = `
       <span>${sorted.length}건 중 ${pageStart}~${Math.min(start + PAGE_SIZE, sorted.length)}</span>
