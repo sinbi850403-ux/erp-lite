@@ -714,18 +714,19 @@ injectRouterCallbacks({
 // ??珥덇린??(濡쒓렇???꾨즺 ???몄텧)
 // ??遺꾨━? ???몄쬆 ?뺤씤 ?꾩뿉 IndexedDB 蹂듭썝?섎㈃ 鍮??곗씠?곌? 濡쒕뱶?????덉쓬
 async function initAppAfterAuth() {
-  // Supabase health check
+  // Supabase health check는 백그라운드로 실행해 초기 화면 진입을 막지 않음
   if (isSupabaseConfigured) {
-    try {
-      const { error } = await Promise.race([
-        supabase.from('profiles').select('id').limit(1),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 8000)),
-      ]);
-      if (error) throw error;
-    } catch (e) {
-      console.warn('[Health] Supabase 연결 불안정:', e.message);
-      showToast('서버 연결이 불안정합니다. 일부 기능이 제한될 수 있습니다.', 'warning');
-    }
+    Promise.race([
+      supabase.from('profiles').select('id').limit(1),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 3000)),
+    ])
+      .then(({ error }) => {
+        if (error) throw error;
+      })
+      .catch((e) => {
+        console.warn('[Health] Supabase 연결 불안정:', e.message);
+        showToast('서버 연결이 불안정합니다. 일부 기능이 제한될 수 있습니다.', 'warning');
+      });
   }
 
   await restoreState();

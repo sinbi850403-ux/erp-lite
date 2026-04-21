@@ -162,7 +162,7 @@ async function loadProfile(user) {
 
     const { data, error } = await withTimeout(
       supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle(),
-      15000,
+      5000,
       'load-profile',
     );
 

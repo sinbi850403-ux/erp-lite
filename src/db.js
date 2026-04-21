@@ -12,6 +12,9 @@
 import { supabase, isSupabaseConfigured } from './supabase-client.js';
 
 const DB_TIMEOUT_MS = 15_000;
+const USER_ID_CACHE_TTL_MS = 60_000;
+let _cachedUserId = null;
+let _cachedUserIdAt = 0;
 
 /**
  * Supabase 쿼리에 타임아웃을 적용하는 래퍼
@@ -65,9 +68,23 @@ function generateClientUuid() {
  * 현재 로그인한 사용자 ID를 안전하게 가져오기
  */
 async function getUserId() {
+  if (_cachedUserId && Date.now() - _cachedUserIdAt < USER_ID_CACHE_TTL_MS) {
+    return _cachedUserId;
+  }
+
+  const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
+  if (session?.user?.id) {
+    _cachedUserId = session.user.id;
+    _cachedUserIdAt = Date.now();
+    return _cachedUserId;
+  }
+
   const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
-  if (!user) throw new Error('로그인이 필요합니다.');
-  return user.id;
+  if (!user) throw new Error('로그인이 필요합니다');
+
+  _cachedUserId = user.id;
+  _cachedUserIdAt = Date.now();
+  return _cachedUserId;
 }
 
 // ============================================================
@@ -1254,3 +1271,4 @@ function storeLeaveToDb(l) {
   if ('approvedAt' in l) out.approved_at = l.approvedAt;
   return out;
 }
+
