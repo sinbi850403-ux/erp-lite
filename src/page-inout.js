@@ -382,7 +382,9 @@ export function renderInoutPage(container, navigateTo) {
     container.querySelectorAll('.sortable-header[data-sort-key]').forEach(header => {
       header.setAttribute('tabindex', '0');
       header.setAttribute('role', 'button');
-      header.addEventListener('click', () => {
+      header.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const key = header.dataset.sortKey;
         if (!key) return;
         if (sort.key !== key) {
@@ -805,7 +807,11 @@ export function renderInoutPage(container, navigateTo) {
     openTxModal(container, navigateTo, 'out', items);
   });
   container.querySelectorAll('[data-nav]').forEach(button => {
-    button.addEventListener('click', () => navigateTo(button.dataset.nav));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      navigateTo(button.dataset.nav);
+    });
   });
 
   function syncQuickFilterChips() {

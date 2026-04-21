@@ -210,7 +210,7 @@ function renderBulkSection(items) {
       </div>
 
       <div class="table-wrapper" style="border:none; margin-bottom:12px;">
-        <table class="data-table">
+        <table class="data-table" data-auto-sort="off">
           <thead>
             <tr>
               <th>품목 선택</th>

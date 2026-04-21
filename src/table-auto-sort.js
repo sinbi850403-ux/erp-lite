@@ -96,6 +96,8 @@ function ensureSummaryBar(table) {
     summary.addEventListener('click', event => {
       const resetButton = event.target.closest('[data-auto-sort-reset]');
       if (!resetButton) return;
+      event.preventDefault();
+      event.stopPropagation();
       table.__autoSortState = { key: '', direction: '', type: 'text' };
       persistSortState(table);
       applyTableSort(table);
@@ -134,10 +136,15 @@ function decorateHeaders(table) {
     cell.setAttribute('role', 'button');
 
     if (!cell.dataset.autoSortBound) {
-      cell.addEventListener('click', () => toggleTableSort(table, index));
+      cell.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleTableSort(table, index);
+      });
       cell.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        event.stopPropagation();
         toggleTableSort(table, index);
       });
       cell.dataset.autoSortBound = '1';
