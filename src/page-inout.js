@@ -400,14 +400,14 @@ export function renderInoutPage(container, navigateTo) {
         currentPageNum = 1;
         renderTxHeader();
         renderTxTable();
-      });
+      }, true);
 
       header.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         event.stopImmediatePropagation();
         header.click();
-      });
+      }, true);
     });
   }
 

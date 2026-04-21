@@ -97,6 +97,7 @@ function ensureSummaryBar(table) {
       const resetButton = event.target.closest('[data-auto-sort-reset]');
       if (!resetButton) return;
       event.preventDefault();
+      event.stopImmediatePropagation();
       event.stopPropagation();
       table.__autoSortState = { key: '', direction: '', type: 'text' };
       persistSortState(table);
@@ -138,15 +139,17 @@ function decorateHeaders(table) {
     if (!cell.dataset.autoSortBound) {
       cell.addEventListener('click', event => {
         event.preventDefault();
+        event.stopImmediatePropagation();
         event.stopPropagation();
         toggleTableSort(table, index);
-      });
+      }, true);
       cell.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        event.stopImmediatePropagation();
         event.stopPropagation();
         toggleTableSort(table, index);
-      });
+      }, true);
       cell.dataset.autoSortBound = '1';
     }
   });
