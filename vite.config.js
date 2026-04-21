@@ -1,13 +1,15 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
-  // 멀티 페이지 빌드: index.html (앱) + landing.html (마케팅 페이지)
+  plugins: [react()],
   build: {
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
         landing: resolve(__dirname, 'landing.html'),
+        react: resolve(__dirname, 'react.html'),
       },
       output: {
         manualChunks(id) {

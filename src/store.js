@@ -391,6 +391,7 @@ export function setState(partial) {
   const changedKeys = Object.keys(partial);
 
   state = { ...state, ...partial };
+  window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys } }));
   // 비동기로 로컬 저장 — 실패 시 invex:idb-failed 이벤트 dispatch
   saveToDB().catch(e => {
     console.warn('[Store] setState → saveToDB 실패:', e.message);
@@ -409,6 +410,7 @@ export function setState(partial) {
  */
 export function resetState() {
   state = { ...DEFAULT_STATE };
+  window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
   saveToDB();
 }
 
@@ -434,6 +436,7 @@ export async function restoreState() {
       }
 
       state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData };
+      window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
       // 로컬 캐시도 업데이트
       saveToDB();
       console.log(`[Store] Supabase 로딩 완료: 품목 ${(cloudData.mappedData || []).length}건, 입출고 ${(cloudData.transactions || []).length}건`);
@@ -447,6 +450,7 @@ export async function restoreState() {
   const saved = await loadFromDB();
   if (saved) {
     state = { ...DEFAULT_STATE, ...saved };
+    window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
     return;
   }
 
@@ -456,6 +460,7 @@ export async function restoreState() {
     if (fallback) {
       const parsed = JSON.parse(fallback);
       state = { ...DEFAULT_STATE, ...parsed };
+      window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
     }
   } catch (_) { /* 무시 */ }
 }

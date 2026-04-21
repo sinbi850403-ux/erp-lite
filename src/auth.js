@@ -1,6 +1,15 @@
 import { supabase, isSupabaseConfigured, getSupabaseConfig, getSupabaseDebugInfo } from './supabase-client.js';
 import { showToast } from './toast.js';
-import { isSuperAdminEmail } from './admin-emails.js';
+import {
+  ACTION_MIN_ROLE as AUTH_ACTION_MIN_ROLE,
+  PAGE_MIN_ROLE as AUTH_PAGE_MIN_ROLE,
+  hasRequiredPlan,
+  hasRequiredRole,
+} from './auth/rules.js';
+import { createBootstrapProfile, getFallbackProfile as createFallbackProfile, mapProfileData } from './auth/profile.js';
+import { renderInlineLoginError as renderVanillaLoginError, renderLoginScreen as renderVanillaLoginScreen } from './auth/ui.js';
+import { purgeLegacyAuthStorage as purgeAuthStorage, sanitizeSupabaseStorage as sanitizeAuthStorage } from './auth/storage.js';
+import { withTimeout } from './auth/async.js';
 
 let currentUser = null;
 let userProfile = null;
@@ -26,21 +35,7 @@ const AUTH_STORAGE_PATTERNS = [
   /^supabase\.auth\./,
 ];
 const LEGACY_AUTH_PREFIX = `${String.fromCharCode(102, 105, 114, 101, 98, 97, 115, 101)}:`;
-const VALID_ROLES = new Set(['viewer', 'staff', 'manager', 'admin']);
-
 // ─── 유틸리티 ─────────────────────────────────────────────────────────────────
-
-function withTimeout(promise, ms, label) {
-  let timer = null;
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
 
 function toCompatUser(supabaseUser) {
   if (!supabaseUser) return null;
@@ -77,21 +72,6 @@ function getFallbackProfile(user) {
     role: resolveProfileRole(null, user?.email),
     plan: 'free',
   };
-}
-
-function isProfileAuthLikeError(error) {
-  const message = String(error?.message || '').toLowerCase();
-  const code = String(error?.code || '').toUpperCase();
-  return (
-    message.includes('unauthorized') ||
-    message.includes('jwt') ||
-    message.includes('permission denied') ||
-    message.includes('row-level security') ||
-    message.includes('not authenticated') ||
-    message.includes('invalid token') ||
-    code === '401' ||
-    code === '403'
-  );
 }
 
 // ─── 스토리지 관련 ────────────────────────────────────────────────────────────
@@ -156,41 +136,39 @@ function sanitizeSupabaseStorage() {
 // ─── 프로필 로드 ──────────────────────────────────────────────────────────────
 
 async function loadProfile(user) {
-  const fallback = getFallbackProfile(user);
+  const fallback = createFallbackProfile(user);
 
   try {
-
     const { data, error } = await withTimeout(
-      supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle(),
-      5000,
+      supabase.from('profiles').select('*').eq('id', user.uid).single(),
+      15000,
       'load-profile',
     );
 
-    if (error) {
-      if (isProfileAuthLikeError(error)) {
-        return fallback;
-      }
+    if (error && error.code !== 'PGRST116') {
       throw error;
     }
 
-    // ??: ??? ??? ? bootstrap insert ?? fallback? ??
     if (!data) {
-      return fallback;
+      // 프로필 미존재 → 신규 생성
+      const newProfile = createBootstrapProfile(user);
+
+      let { error: insertError } = await supabase.from('profiles').insert(newProfile);
+      if (insertError) {
+        // 1회 재시도 (네트워크 순간 실패 대비)
+        await new Promise(r => setTimeout(r, 1500));
+        ({ error: insertError } = await supabase.from('profiles').insert(newProfile));
+      }
+      if (insertError) {
+        console.warn('[Auth] profile bootstrap failed:', insertError.message);
+        window.dispatchEvent(new CustomEvent('invex:profile-load-failed'));
+        return fallback;
+      }
+
+      return { ...fallback, createdAt: newProfile.created_at };
     }
 
-    return {
-      uid: data.id,
-      email: data.email || fallback.email,
-      name: data.name || fallback.name,
-      photoURL: data.photo_url || fallback.photoURL,
-      role: resolveProfileRole(data.role, data.email || fallback.email),
-      plan: data.plan || 'free',
-      createdAt: data.created_at,
-      lastLogin: new Date().toISOString(),
-      beginnerMode: data.beginner_mode,
-      dashboardMode: data.dashboard_mode,
-      industryTemplate: data.industry_template,
-    };
+    return mapProfileData(data, fallback);
   } catch (error) {
     // 타임아웃 또는 네트워크 오류 — 폴백 프로필로 계속 진행
     console.warn('[Auth] profile load failed:', error.message);
@@ -359,9 +337,9 @@ export function initAuth(callback) {
   }
 
   if (!isSupabaseConfigured) {
-    purgeLegacyAuthStorage({ includeSupabaseSession: true });
+    purgeAuthStorage({ includeSupabaseSession: true });
     currentUser = null;
-    userProfile = getFallbackProfile(null);
+    userProfile = createFallbackProfile(null);
     if (callback) {
       try { callback(null, userProfile); } catch (e) { console.error('[Auth] callback error:', e); }
     }
@@ -376,11 +354,11 @@ export function initAuth(callback) {
   }
 
   authInitialized = true;
-  sanitizeSupabaseStorage();
+  sanitizeAuthStorage();
 
   // 초기 세션 복구 — seq=0 으로 시작
   const initSeq = applySessionSeq;
-  supabase.auth.getSession()
+  withTimeout(supabase.auth.getSession(), 8000, 'initial-session')
     .then(({ data }) => applySession(data?.session || null, initSeq))
     .catch((error) => {
       console.warn('[Auth] Initial session recovery failed:', error.message);
@@ -409,7 +387,7 @@ export function initAuth(callback) {
  * - 3분 타임아웃 후 isLoggingIn 자동 리셋
  *   (네트워크 오류나 팝업 차단으로 redirect 가 안 일어났을 때 복구)
  */
-export async function loginWithGoogle() {
+export async function loginWithGoogle(options = {}) {
   if (!isSupabaseConfigured) {
     showToast('Supabase 설정이 필요합니다.', 'warning');
     return null;
@@ -428,7 +406,7 @@ export async function loginWithGoogle() {
   }, 3 * 60 * 1000);
 
   try {
-    const redirectTo = `${window.location.origin}/index.html`;
+    const redirectTo = options.redirectTo || `${window.location.origin}/index.html`;
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -551,22 +529,15 @@ export async function loginWithEmail(email, password) {
     // localStorage 정리만으로는 클라이언트 내부 토큰/갱신 상태가 남아
     // signInWithPassword 충돌 또는 fetch timeout의 근본 원인이 됨
     try {
-      const sessionProbe = await withTimeout(
-        supabase.auth.getSession(),
-        1200,
-        'pre-login-session-check',
-      );
-      if (sessionProbe?.data?.session) {
-        await withTimeout(supabase.auth.signOut({ scope: 'local' }), 1200, 'pre-login-signout');
-      }
+      await withTimeout(supabase.auth.signOut({ scope: 'local' }), 3000, 'pre-login-signout');
     } catch {
-      // session/signOut check 실패해도 로그인 계속
+      // signOut 실패해도 로그인 계속
     }
-    purgeLegacyAuthStorage({ includeSupabaseSession: true });
+    purgeAuthStorage({ includeSupabaseSession: true });
 
     // ── 로그인 시도 (재시도 포함) ─────────────────────────────────────────────
     async function attemptLogin(attempt = 1) {
-      const timeout = attempt === 1 ? 7000 : 10000;
+      const timeout = attempt === 1 ? 15000 : 20000;
       try {
         const { data, error } = await withTimeout(
           supabase.auth.signInWithPassword({ email, password }),
@@ -580,8 +551,8 @@ export async function loginWithEmail(email, password) {
         const isNetwork = m.includes('fetch') || m.includes('network') || m.includes('timeout') || m.includes('abort');
         if (isNetwork && attempt === 1) {
           // 1차 실패 → 1.5초 대기 후 directPasswordLogin fallback 시도
-          await new Promise(r => setTimeout(r, 300));
-          purgeLegacyAuthStorage({ includeSupabaseSession: true });
+          await new Promise(r => setTimeout(r, 1500));
+          purgeAuthStorage({ includeSupabaseSession: true });
           const fallbackUser = await directPasswordLogin(email, password);
           return fallbackUser;
         }
@@ -593,7 +564,7 @@ export async function loginWithEmail(email, password) {
       const m = String(err?.message || '').toLowerCase();
       const isNetwork = m.includes('fetch') || m.includes('network') || m.includes('timeout') || m.includes('abort');
       if (isNetwork) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 2000));
         return attemptLogin(2);
       }
       throw err;
@@ -645,7 +616,14 @@ export async function loginWithEmail(email, password) {
       showToast(errorMsg, 'error');
     }
 
-    renderInlineLoginError(loginBtn, email, errorMsg, showResetAction);
+    renderVanillaLoginError({
+      loginBtn,
+      email,
+      errorMsg,
+      showResetAction,
+      onRetry: () => loginWithEmail(email, password),
+      onResetPassword: resetPassword,
+    });
     return null;
 
   } finally {
@@ -727,7 +705,7 @@ export async function logout() {
   } catch (error) {
     signOutError = error;
   } finally {
-    purgeLegacyAuthStorage({ includeSupabaseSession: true });
+    purgeAuthStorage({ includeSupabaseSession: true });
     currentUser = null;
     userProfile = null;
     isLoggingIn = false;
@@ -761,14 +739,12 @@ export function getUserProfileData() {
 
 export function hasRole(requiredRole) {
   if (!userProfile) return false;
-  const roles = { viewer: 0, staff: 1, manager: 2, admin: 3 };
-  return (roles[userProfile.role] || 0) >= (roles[requiredRole] || 0);
+  return hasRequiredRole(userProfile.role, requiredRole);
 }
 
 export function hasPlan(requiredPlan) {
   if (!userProfile) return false;
-  const plans = { free: 0, pro: 1, enterprise: 2 };
-  return (plans[userProfile.plan] || 0) >= (plans[requiredPlan] || 0);
+  return hasRequiredPlan(userProfile.plan, requiredPlan);
 }
 
 export const ROLE_LABELS = {
@@ -856,7 +832,7 @@ export const ACTION_MIN_ROLE = {
 export function canAction(actionKey) {
   if (!isSupabaseConfigured) return true;
   if (!userProfile) return false;
-  const required = ACTION_MIN_ROLE[actionKey];
+  const required = AUTH_ACTION_MIN_ROLE[actionKey] || ACTION_MIN_ROLE[actionKey];
   if (!required) return true;
   return hasRole(required);
 }
@@ -864,12 +840,16 @@ export function canAction(actionKey) {
 export function canAccessByRole(pageName) {
   if (!isSupabaseConfigured) return true;
   if (!userProfile) return false;
-  const minRole = PAGE_MIN_ROLE[pageName];
+  const minRole = AUTH_PAGE_MIN_ROLE[pageName] || PAGE_MIN_ROLE[pageName];
   if (!minRole) return true;
   return hasRole(minRole);
 }
 
 export function renderLoginScreen(container) {
+  return renderVanillaLoginScreen(container, {
+    onGoogleLogin: () => loginWithGoogle(),
+  });
+
   container.innerHTML = `
     <div style="display:flex; align-items:center; justify-content:center; min-height:80vh;">
       <div style="text-align:center; max-width:400px; padding:40px;">
@@ -890,4 +870,3 @@ export function renderLoginScreen(container) {
     await loginWithGoogle();
   });
 }
-
