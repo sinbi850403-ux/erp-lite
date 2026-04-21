@@ -1121,6 +1121,13 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       date: headers.findIndex((header) => header === '날짜'),
       note: headers.findIndex((header) => header === '비고'),
     };
+    const detected = detectBulkInoutColumns(sheetData);
+    Object.keys(colMap).forEach((key) => {
+      if (colMap[key] === -1 && detected.colMap[key] >= 0) {
+        colMap[key] = detected.colMap[key];
+      }
+    });
+    const dataStartIndex = Math.max(1, detected.headerRowIndex + 1);
 
     if (colMap.type === -1 || colMap.itemName === -1 || colMap.quantity === -1) {
       previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "구분", "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
@@ -1128,13 +1135,13 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
     }
 
     const rows = [];
-    for (let index = 1; index < sheetData.length; index += 1) {
+    for (let index = dataStartIndex; index < sheetData.length; index += 1) {
       const row = sheetData[index];
       if (!row || row.length === 0) continue;
 
       const typeCell = String(row[colMap.type] ?? '').trim();
       const itemName = String(row[colMap.itemName] ?? '').trim();
-      const quantity = Number.parseFloat(row[colMap.quantity]) || 0;
+      const quantity = parseBulkNumber(row[colMap.quantity]);
 
       if (!itemName || quantity <= 0) continue;
 
@@ -1150,17 +1157,17 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
           const excelDate = new Date((rawDate - 25569) * 86400 * 1000);
           dateStr = excelDate.toISOString().split('T')[0];
         } else {
-          dateStr = String(rawDate ?? '').trim();
+          dateStr = formatDate(String(rawDate ?? '').trim());
         }
       }
 
       rows.push({
-        type: typeCell === '출고' ? 'out' : 'in',
+        type: normalizeBulkTxType(typeCell),
         vendor: colMap.vendor >= 0 ? String(row[colMap.vendor] ?? '').trim() : '',
         itemName,
         itemCode: rawItemCode || matchedItem?.itemCode || '',
         quantity,
-        unitPrice: colMap.unitPrice >= 0 ? (Number.parseFloat(row[colMap.unitPrice]) || 0) : 0,
+        unitPrice: colMap.unitPrice >= 0 ? parseBulkNumber(row[colMap.unitPrice]) : 0,
         date: dateStr || new Date().toISOString().split('T')[0],
         note: colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
         matched: Boolean(matchedItem),
@@ -1251,6 +1258,90 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
 /**
  * 입고/출고 등록 모달
  */
+function normalizeBulkHeader(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[()\-_/]/g, '');
+}
+
+function emptyBulkColMap() {
+  return {
+    type: -1,
+    vendor: -1,
+    itemName: -1,
+    itemCode: -1,
+    quantity: -1,
+    unitPrice: -1,
+    date: -1,
+    note: -1,
+  };
+}
+
+function detectBulkInoutColumns(sheetData) {
+  const aliasMap = {
+    type: ['구분', '입출고', '거래구분', '유형', 'type', 'inout'],
+    vendor: ['거래처', '공급처', '고객처', 'vendor', 'supplier', 'customer'],
+    itemName: ['품목명', '상품명', '제품명', 'itemname', 'item', 'name'],
+    itemCode: ['품목코드', '상품코드', '코드', 'sku', 'itemcode'],
+    quantity: ['수량', 'qty', 'quantity', '입고수량', '출고수량'],
+    unitPrice: ['단가', '원가', '매입단가', '공급단가', 'unitprice', 'price', 'cost'],
+    date: ['날짜', '일자', '거래일자', '입출고일', 'date'],
+    note: ['비고', '메모', 'note', 'memo', 'remarks'],
+  };
+
+  const normalizedAliases = {};
+  Object.keys(aliasMap).forEach((key) => {
+    normalizedAliases[key] = aliasMap[key].map(normalizeBulkHeader);
+  });
+
+  let best = { score: -1, headerRowIndex: 0, colMap: emptyBulkColMap() };
+  const scanLimit = Math.min(Array.isArray(sheetData) ? sheetData.length : 0, 10);
+
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const row = Array.isArray(sheetData[rowIndex]) ? sheetData[rowIndex] : [];
+    const normalizedHeaders = row.map((cell) => normalizeBulkHeader(cell));
+    const colMap = emptyBulkColMap();
+
+    Object.keys(colMap).forEach((key) => {
+      colMap[key] = normalizedHeaders.findIndex((header) => {
+        if (!header) return false;
+        return normalizedAliases[key].some((alias) => header === alias || header.includes(alias) || alias.includes(header));
+      });
+    });
+
+    let score = 0;
+    if (colMap.type >= 0) score += 3;
+    if (colMap.itemName >= 0) score += 3;
+    if (colMap.quantity >= 0) score += 3;
+    if (colMap.unitPrice >= 0) score += 1;
+    if (colMap.date >= 0) score += 1;
+    if (colMap.vendor >= 0) score += 1;
+    if (colMap.note >= 0) score += 1;
+
+    if (score > best.score) {
+      best = { score, headerRowIndex: rowIndex, colMap };
+    }
+  }
+
+  return { colMap: best.colMap, headerRowIndex: best.headerRowIndex };
+}
+
+function parseBulkNumber(value) {
+  const normalized = String(value ?? '')
+    .replace(/[₩,\s]/g, '')
+    .trim();
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeBulkTxType(value) {
+  const normalized = normalizeBulkHeader(value);
+  if (['출고', '출', 'out', 'sale', 'sales', '판매', '매출'].includes(normalized)) return 'out';
+  return 'in';
+}
+
 function openTxModal(container, navigateTo, type, items) {
   const today = new Date().toISOString().split('T')[0];
   const state = getState();
