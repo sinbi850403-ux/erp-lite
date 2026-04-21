@@ -291,6 +291,18 @@ a {
   gap: 12px;
 }
 
+.react-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.react-form-actions {
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
 .react-input,
 .react-select,
 .react-field input {
@@ -308,6 +320,10 @@ a {
 .react-field input:focus {
   outline: 2px solid rgba(15, 118, 110, 0.16);
   border-color: #14b8a6;
+}
+
+.react-input--wide {
+  grid-column: span 2;
 }
 
 .react-chip-row {
@@ -410,6 +426,36 @@ a {
 .react-badge.is-warn {
   color: #9a3412;
   background: rgba(255, 237, 213, 0.95);
+}
+
+.react-inline-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.react-link-button,
+.react-secondary-button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.react-link-button {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.react-link-button.is-danger {
+  color: #b91c1c;
+}
+
+.react-secondary-button {
+  padding: 14px 16px;
+  border-radius: 16px;
+  color: #0f172a;
+  background: #e2e8f0;
+  font-weight: 700;
 }
 
 .react-segmented {
@@ -577,6 +623,10 @@ a {
   .react-toolbar {
     grid-template-columns: 1fr 1fr;
   }
+
+  .react-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -600,8 +650,13 @@ a {
 
   .react-grid--stats,
   .react-toolbar,
+  .react-form-grid,
   .react-grid--two,
   .react-grid--two-auth {
     grid-template-columns: 1fr;
+  }
+
+  .react-input--wide {
+    grid-column: auto;
   }
 }

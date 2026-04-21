@@ -1,25 +1,44 @@
+import { InventoryEditor } from '../features/inventory/components/InventoryEditor';
 import { InventoryFilters } from '../features/inventory/components/InventoryFilters';
 import { InventorySummary } from '../features/inventory/components/InventorySummary';
 import { InventoryTable } from '../features/inventory/components/InventoryTable';
 import { useInventoryPage } from '../features/inventory/hooks/useInventoryPage';
 
 export function InventoryPage() {
-  const { filter, options, rows, summary, setFilter } = useInventoryPage();
+  const {
+    draft,
+    editingIndex,
+    filter,
+    options,
+    rows,
+    summary,
+    setFilter,
+    saveItem,
+    deleteItem,
+    startCreate,
+    startEdit,
+  } = useInventoryPage();
 
   return (
     <section className="react-page">
       <article className="react-card">
-        <span className="react-chip">Page + features + domain</span>
-        <h2>Inventory is now shaped as a React page instead of a single legacy file.</h2>
+        <span className="react-chip">Inventory flow migrated</span>
+        <h2>Inventory now supports actual React-side create, edit, and delete flows.</h2>
         <p>
-          Filters, summary cards, and the main table are separated into React components while the
-          derived business view stays in domain selectors.
+          This page is no longer just a read-only placeholder. The editor writes to the shared
+          store, the table reflects updates immediately, and the page structure stays feature-first.
         </p>
       </article>
 
       <InventorySummary summary={summary} />
+      <InventoryEditor
+        initialValue={draft}
+        isEditing={editingIndex !== null}
+        onCancelEdit={startCreate}
+        onSubmit={saveItem}
+      />
       <InventoryFilters filter={filter} options={options} onChange={setFilter} />
-      <InventoryTable rows={rows} />
+      <InventoryTable rows={rows} onEdit={startEdit} onDelete={deleteItem} />
     </section>
   );
 }

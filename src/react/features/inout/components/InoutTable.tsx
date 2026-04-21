@@ -1,4 +1,5 @@
 type InoutRow = {
+  id?: string;
   type?: string;
   itemName?: string;
   itemCode?: string;
@@ -6,9 +7,10 @@ type InoutRow = {
   date?: string;
   vendor?: string;
   warehouse?: string;
+  _index?: number;
 };
 
-export function InoutTable({ rows }: { rows: InoutRow[] }) {
+export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (row: InoutRow) => void }) {
   return (
     <article className="react-card react-card--table">
       <div className="react-section-head">
@@ -30,6 +32,7 @@ export function InoutTable({ rows }: { rows: InoutRow[] }) {
               <th>Date</th>
               <th>Vendor</th>
               <th>Warehouse</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -47,11 +50,16 @@ export function InoutTable({ rows }: { rows: InoutRow[] }) {
                   <td>{row.date || '-'}</td>
                   <td>{row.vendor || '-'}</td>
                   <td>{row.warehouse || '-'}</td>
+                  <td>
+                    <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="react-empty-cell">
+                <td colSpan={8} className="react-empty-cell">
                   No transactions match the current filter.
                 </td>
               </tr>

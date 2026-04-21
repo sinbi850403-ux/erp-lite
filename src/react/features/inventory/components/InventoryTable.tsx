@@ -1,4 +1,5 @@
 type InventoryRow = {
+  _index?: number;
   itemName?: string;
   itemCode?: string;
   category?: string;
@@ -11,6 +12,8 @@ type InventoryRow = {
 
 type InventoryTableProps = {
   rows: InventoryRow[];
+  onEdit: (row: InventoryRow) => void;
+  onDelete: (row: InventoryRow) => void;
 };
 
 function formatAmount(value: unknown) {
@@ -18,7 +21,7 @@ function formatAmount(value: unknown) {
   return Number.isFinite(parsed) ? new Intl.NumberFormat('ko-KR').format(parsed) : '-';
 }
 
-export function InventoryTable({ rows }: InventoryTableProps) {
+export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) {
   return (
     <article className="react-card react-card--table">
       <div className="react-section-head">
@@ -40,6 +43,7 @@ export function InventoryTable({ rows }: InventoryTableProps) {
               <th>Warehouse</th>
               <th>Qty</th>
               <th>Value</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -53,11 +57,21 @@ export function InventoryTable({ rows }: InventoryTableProps) {
                   <td>{row.warehouse || '-'}</td>
                   <td>{row.quantity || '-'}</td>
                   <td>{formatAmount(row.totalPrice || row.supplyValue)}</td>
+                  <td>
+                    <div className="react-inline-actions">
+                      <button type="button" className="react-link-button" onClick={() => onEdit(row)}>
+                        Edit
+                      </button>
+                      <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
+                        Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="react-empty-cell">
+                <td colSpan={8} className="react-empty-cell">
                   No inventory rows match the current filter.
                 </td>
               </tr>

@@ -38,7 +38,8 @@ export function getInventoryOptions(state: AppStoreState) {
 export function getFilteredInventoryRows(state: AppStoreState, filter: InventoryFilterState) {
   const keyword = filter.keyword.trim().toLowerCase();
 
-  return [...(state.mappedData || [])]
+  return (state.mappedData || [])
+    .map((item, index) => ({ ...item, _index: index }))
     .filter((item) => {
       if (keyword) {
         const haystack = [item.itemName, item.itemCode, item.vendor, item.spec].join(' ').toLowerCase();

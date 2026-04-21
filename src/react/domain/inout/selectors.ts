@@ -34,7 +34,8 @@ export function getInoutOptions(state: AppStoreState) {
 export function getFilteredTransactions(state: AppStoreState, filter: InoutFilterState) {
   const keyword = filter.keyword.trim().toLowerCase();
 
-  return [...(state.transactions || [])]
+  return (state.transactions || [])
+    .map((tx, index) => ({ ...tx, _index: index }))
     .filter((tx) => {
       if (keyword) {
         const haystack = [tx.itemName, tx.itemCode, tx.vendor, tx.note].join(' ').toLowerCase();

@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { getFilteredTransactions, getInoutOptions, getInoutSummary } from '../../../domain/inout/selectors';
+import { createTransaction, removeTransaction, type InoutInput } from '../../../services/inout/inoutService';
 import { useStore } from '../../../services/store/StoreContext';
 
 export function useInoutPage() {
@@ -21,5 +22,14 @@ export function useInoutPage() {
   const options = useMemo(() => getInoutOptions(state), [state]);
   const rows = useMemo(() => getFilteredTransactions(state, effectiveFilter), [effectiveFilter, state]);
 
-  return { filter, options, rows, summary, setFilter };
+  function saveTransaction(value: InoutInput) {
+    createTransaction(value);
+  }
+
+  function deleteTransaction(row: { id?: string }) {
+    if (!row.id) return;
+    removeTransaction(row.id);
+  }
+
+  return { filter, options, rows, summary, setFilter, saveTransaction, deleteTransaction };
 }
