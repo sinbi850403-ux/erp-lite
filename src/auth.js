@@ -79,6 +79,21 @@ function getFallbackProfile(user) {
   };
 }
 
+function isProfileAuthLikeError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '').toUpperCase();
+  return (
+    message.includes('unauthorized') ||
+    message.includes('jwt') ||
+    message.includes('permission denied') ||
+    message.includes('row-level security') ||
+    message.includes('not authenticated') ||
+    message.includes('invalid token') ||
+    code === '401' ||
+    code === '403'
+  );
+}
+
 // ─── 스토리지 관련 ────────────────────────────────────────────────────────────
 
 function resolveProfileRole(role, email) {
@@ -144,6 +159,16 @@ async function loadProfile(user) {
   const fallback = getFallbackProfile(user);
 
   try {
+    const { data: sessionData } = await withTimeout(
+      supabase.auth.getSession(),
+      8000,
+      'profile-session-check',
+    );
+    const sessionUser = sessionData?.session?.user;
+    if (!sessionUser || sessionUser.id !== user.uid) {
+      return fallback;
+    }
+
     const { data, error } = await withTimeout(
       supabase.from('profiles').select('*').eq('id', user.uid).single(),
       15000,
@@ -151,6 +176,9 @@ async function loadProfile(user) {
     );
 
     if (error && error.code !== 'PGRST116') {
+      if (isProfileAuthLikeError(error)) {
+        return fallback;
+      }
       throw error;
     }
 
@@ -173,7 +201,9 @@ async function loadProfile(user) {
       }
       if (insertError) {
         console.warn('[Auth] profile bootstrap failed:', insertError.message);
-        window.dispatchEvent(new CustomEvent('invex:profile-load-failed'));
+        if (!isProfileAuthLikeError(insertError)) {
+          window.dispatchEvent(new CustomEvent('invex:profile-load-failed'));
+        }
         return fallback;
       }
 

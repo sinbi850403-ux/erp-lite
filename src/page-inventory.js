@@ -1482,6 +1482,7 @@ export function renderInventoryPage(container, navigateTo) {
   document.addEventListener('click', colPanelClickOutside);
   container.addEventListener('invex:page-unload', () => {
     document.removeEventListener('click', colPanelClickOutside);
+    setSyncCallback(null);
   }, { once: true });
 
   // 페이지당 행 수
@@ -1741,6 +1742,7 @@ export function renderInventoryPage(container, navigateTo) {
   // 입출고 변경 시 재고 현황 즉시 자동 반영
   // renderTable은 클로저 내 data를 쓰므로 전체 페이지를 재렌더링
   setSyncCallback(() => {
+    if (container.dataset.page !== 'inventory') return;
     renderInventoryPage(container, navigateTo);
   });
 
