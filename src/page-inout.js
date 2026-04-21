@@ -13,7 +13,7 @@ import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
 const PAGE_SIZE = 15;
-const BULK_INOUT_TEMPLATE_HEADERS = ['구분', '거래처', '품목명', '품목코드', '수량', '단가', '날짜', '비고'];
+const BULK_INOUT_TEMPLATE_HEADERS = ['구분', '거래처', '품목명', '품목코드', '수량', '원가', '판매가', '실판매가', '이익률', '날짜', '비고'];
 
 function safeAttr(value) {
   return String(value ?? '')
@@ -1046,8 +1046,8 @@ function openBulkUploadModal(container, navigateTo, items) {
     const today = new Date().toISOString().split('T')[0];
     const templateRows = [
       BULK_INOUT_TEMPLATE_HEADERS,
-      ['입고', '(주)삼성전자', '갤럭시 S25', 'SM-S925', 100, 1200000, today, '1차 입고'],
-      ['출고', '쿠팡', '갤럭시 S25', 'SM-S925', 30, 1200000, today, '쿠팡 출고'],
+      ['입고', '(주)삼성전자', '갤럭시 S25', 'SM-S925', 100, 1200000, 1450000, 1450000, 20.8, today, '1차 입고'],
+      ['출고', '쿠팡', '갤럭시 S25', 'SM-S925', 30, 1200000, 1450000, 1490000, 24.2, today, '쿠팡 출고'],
     ];
 
     downloadExcelSheets([{ name: '입출고_양식', rows: templateRows }], '입출고_일괄등록_양식');
@@ -1102,7 +1102,9 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       itemName: headers.findIndex((header) => header === '품목명'),
       itemCode: headers.findIndex((header) => header === '품목코드'),
       quantity: headers.findIndex((header) => header === '수량'),
-      unitPrice: headers.findIndex((header) => header === '단가'),
+      unitPrice: headers.findIndex((header) => header === '원가'),
+      sellingPrice: headers.findIndex((header) => header === '판매가'),
+      actualSellingPrice: headers.findIndex((header) => header === '실판매가'),
       date: headers.findIndex((header) => header === '날짜'),
       note: headers.findIndex((header) => header === '비고'),
     };
@@ -1153,6 +1155,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
         itemCode: rawItemCode || matchedItem?.itemCode || '',
         quantity,
         unitPrice: colMap.unitPrice >= 0 ? parseBulkNumber(row[colMap.unitPrice]) : 0,
+        sellingPrice: colMap.sellingPrice >= 0 ? parseBulkNumber(row[colMap.sellingPrice]) : 0,
+        actualSellingPrice: colMap.actualSellingPrice >= 0 ? parseBulkNumber(row[colMap.actualSellingPrice]) : 0,
         date: dateStr || new Date().toISOString().split('T')[0],
         note: colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
         matched: Boolean(matchedItem),
@@ -1183,7 +1187,9 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
               <th>거래처</th>
               <th>품목명</th>
               <th>수량</th>
-              <th>단가</th>
+              <th>원가</th>
+              <th>판매가</th>
+              <th>실판매가</th>
               <th>날짜</th>
               <th>상태</th>
             </tr>
@@ -1196,6 +1202,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
                 <td>${escapeHtml(row.itemName)}</td>
                 <td class="text-right">${row.quantity.toLocaleString('ko-KR')}</td>
                 <td class="text-right">${row.unitPrice ? `₩${Math.round(row.unitPrice).toLocaleString('ko-KR')}` : '-'}</td>
+                <td class="text-right">${row.sellingPrice ? `₩${Math.round(row.sellingPrice).toLocaleString('ko-KR')}` : '-'}</td>
+                <td class="text-right">${row.actualSellingPrice ? `₩${Math.round(row.actualSellingPrice).toLocaleString('ko-KR')}` : '-'}</td>
                 <td>${escapeHtml(row.date)}</td>
                 <td>${row.matched
                   ? '<span style="color:var(--success); font-size:11px;">기존 품목 매칭</span>'
@@ -1226,6 +1234,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
           itemCode: row.itemCode,
           quantity: row.quantity,
           unitPrice: row.unitPrice,
+          sellingPrice: row.sellingPrice,
+          actualSellingPrice: row.actualSellingPrice,
           date: row.date,
           note: row.note,
         });
@@ -1259,6 +1269,8 @@ function emptyBulkColMap() {
     itemCode: -1,
     quantity: -1,
     unitPrice: -1,
+    sellingPrice: -1,
+    actualSellingPrice: -1,
     date: -1,
     note: -1,
   };
@@ -1272,6 +1284,8 @@ function detectBulkInoutColumns(sheetData) {
     itemCode: ['품목코드', '상품코드', '코드', 'sku', 'itemcode'],
     quantity: ['수량', 'qty', 'quantity', '입고수량', '출고수량'],
     unitPrice: ['단가', '원가', '매입단가', '공급단가', 'unitprice', 'price', 'cost'],
+    sellingPrice: ['판매가', '판매단가', 'saleprice', 'sellingprice', 'sale', 'selling'],
+    actualSellingPrice: ['실판매가', '실판매단가', 'actualsellingprice', 'actualsaleprice', 'actualprice'],
     date: ['날짜', '일자', '거래일자', '입출고일', 'date'],
     note: ['비고', '메모', 'note', 'memo', 'remarks'],
   };
@@ -1301,6 +1315,8 @@ function detectBulkInoutColumns(sheetData) {
     if (colMap.itemName >= 0) score += 3;
     if (colMap.quantity >= 0) score += 3;
     if (colMap.unitPrice >= 0) score += 1;
+    if (colMap.sellingPrice >= 0) score += 1;
+    if (colMap.actualSellingPrice >= 0) score += 1;
     if (colMap.date >= 0) score += 1;
     if (colMap.vendor >= 0) score += 1;
     if (colMap.note >= 0) score += 1;
