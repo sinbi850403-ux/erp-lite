@@ -182,17 +182,45 @@ export const items = {
 
     const existingIdByName = new Map();
     const names = dedupedRows.map((row) => row.item_name).filter(Boolean);
-    const QUERY_BATCH = 500;
-    for (let i = 0; i < names.length; i += QUERY_BATCH) {
-      const nameBatch = names.slice(i, i + QUERY_BATCH);
-      if (!nameBatch.length) continue;
+    const QUERY_BATCH = 120;
+
+    const isBatchRequestTooLarge = (error) => {
+      const message = String(error?.message || '').toLowerCase();
+      return (
+        message.includes('bad request') ||
+        message.includes('uri too long') ||
+        message.includes('request-uri too large') ||
+        message.includes('payload too large') ||
+        message.includes('query')
+      );
+    };
+
+    const fetchExistingByNameBatch = async (nameBatch, offsetLabel = 0) => {
+      if (!nameBatch.length) return [];
       const { data, error } = await supabase
         .from('items')
         .select('id,item_name')
         .eq('user_id', userId)
         .in('item_name', nameBatch);
-      handleError(error, `기존 품목 ID 조회(${i}~${i + nameBatch.length})`);
-      (data || []).forEach((row) => {
+
+      if (!error) return data || [];
+
+      if (nameBatch.length > 1 && isBatchRequestTooLarge(error)) {
+        const mid = Math.ceil(nameBatch.length / 2);
+        const left = await fetchExistingByNameBatch(nameBatch.slice(0, mid), offsetLabel);
+        const right = await fetchExistingByNameBatch(nameBatch.slice(mid), offsetLabel + mid);
+        return [...left, ...right];
+      }
+
+      handleError(error, `기존 품목 ID 조회(${offsetLabel}~${offsetLabel + nameBatch.length})`);
+      return [];
+    };
+
+    for (let i = 0; i < names.length; i += QUERY_BATCH) {
+      const nameBatch = names.slice(i, i + QUERY_BATCH);
+      if (!nameBatch.length) continue;
+      const existingRows = await fetchExistingByNameBatch(nameBatch, i);
+      existingRows.forEach((row) => {
         const key = normalizeItemName(row.item_name);
         if (key && row.id) existingIdByName.set(key, row.id);
       });
