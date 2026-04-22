@@ -30,11 +30,7 @@ export function ConfirmDialog({
           <button type="button" className="react-secondary-button" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button
-            type="button"
-            className={danger ? 'react-auth-submit is-danger' : 'react-auth-submit'}
-            onClick={onConfirm}
-          >
+          <button type="button" className={danger ? 'react-auth-submit is-danger' : 'react-auth-submit'} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
@@ -42,4 +38,3 @@ export function ConfirmDialog({
     </div>
   );
 }
-

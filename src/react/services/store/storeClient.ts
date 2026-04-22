@@ -5,6 +5,8 @@ import {
   deleteTransaction,
   getState,
   recalcItemAmounts,
+  restoreItem,
+  restoreTransaction,
   restoreState,
   setState,
   updateItem,
@@ -54,12 +56,20 @@ export function deleteInventoryRecord(target: number | string) {
   return runLegacyMutation(['mappedData'], () => deleteItem(target));
 }
 
+export function restoreInventoryRecord(record: Record<string, unknown>, index = 0) {
+  return runLegacyMutation(['mappedData'], () => restoreItem(record, index));
+}
+
 export function createInoutRecord(record: Record<string, unknown>) {
   return runLegacyMutation(['transactions', 'mappedData'], () => addTransaction(record));
 }
 
 export function deleteInoutRecord(id: string) {
   return runLegacyMutation(['transactions', 'mappedData'], () => deleteTransaction(id));
+}
+
+export function restoreInoutRecord(record: Record<string, unknown>, index = 0) {
+  return runLegacyMutation(['transactions', 'mappedData'], () => restoreTransaction(record, index));
 }
 
 export function subscribeStore(listener: () => void) {

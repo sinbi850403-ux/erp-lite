@@ -602,10 +602,37 @@ a {
   gap: 8px;
 }
 
+.react-field--wide {
+  grid-column: 1 / -1;
+}
+
 .react-field span {
   font-size: 0.92rem;
   font-weight: 700;
   color: #334155;
+}
+
+.react-field-help {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.react-inline-feedback {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.react-inline-feedback.is-error {
+  color: #b91c1c;
+  background: rgba(254, 226, 226, 0.9);
+}
+
+.react-inline-feedback.is-success {
+  color: #166534;
+  background: rgba(220, 252, 231, 0.9);
 }
 
 .react-auth-text-button {

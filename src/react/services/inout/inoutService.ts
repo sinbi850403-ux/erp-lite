@@ -1,4 +1,4 @@
-import { createInoutRecord, deleteInoutRecord } from '../store/storeClient';
+import { createInoutRecord, deleteInoutRecord, restoreInoutRecord } from '../store/storeClient';
 
 export type InoutInput = {
   type: 'in' | 'out';
@@ -29,4 +29,8 @@ export function createTransaction(input: InoutInput) {
 export function removeTransaction(id: string) {
   const result = deleteInoutRecord(id);
   return result;
+}
+
+export function restoreRemovedTransaction(record: Record<string, unknown>, index = 0) {
+  return restoreInoutRecord(record, index);
 }

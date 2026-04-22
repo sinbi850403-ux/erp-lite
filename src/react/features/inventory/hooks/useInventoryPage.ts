@@ -9,9 +9,20 @@ import {
   createInventoryItem,
   editInventoryItem,
   removeInventoryItem,
+  restoreRemovedInventoryItem,
   type InventoryInput,
 } from '../../../services/inventory/inventoryService';
 import { useStore } from '../../../services/store/StoreContext';
+
+export type MutationResult = {
+  ok: boolean;
+  message?: string;
+};
+
+export type DeleteResult = MutationResult & {
+  deleted?: Record<string, unknown>;
+  index?: number;
+};
 
 const emptyDraft: InventoryInput = {
   itemName: '',
@@ -23,6 +34,15 @@ const emptyDraft: InventoryInput = {
   unit: 'EA',
   unitPrice: 0,
 };
+
+function validateInventoryInput(value: InventoryInput): string | null {
+  if (!value.itemName.trim()) return '품목명은 필수입니다.';
+  if (Number(value.quantity) < 0) return '수량은 0 이상이어야 합니다.';
+  if (Number(value.unitPrice) < 0) return '원가는 0 이상이어야 합니다.';
+  if (!Number.isFinite(Number(value.quantity))) return '수량은 숫자여야 합니다.';
+  if (!Number.isFinite(Number(value.unitPrice))) return '원가는 숫자여야 합니다.';
+  return null;
+}
 
 export function useInventoryPage() {
   const { state } = useStore();
@@ -40,10 +60,7 @@ export function useInventoryPage() {
   const [draft, setDraft] = useState<InventoryInput>(emptyDraft);
   const deferredKeyword = useDeferredValue(filter.keyword);
 
-  const effectiveFilter = useMemo(
-    () => ({ ...filter, keyword: deferredKeyword }),
-    [deferredKeyword, filter],
-  );
+  const effectiveFilter = useMemo(() => ({ ...filter, keyword: deferredKeyword }), [deferredKeyword, filter]);
 
   const summary = useMemo(() => getInventorySummary(state), [state]);
   const options = useMemo(() => getInventoryOptions(state), [state]);
@@ -90,7 +107,18 @@ export function useInventoryPage() {
     setDraft(emptyDraft);
   }
 
-  function startEdit(row: { id?: string; _index?: number; itemName?: string; itemCode?: string; category?: string; vendor?: string; warehouse?: string; quantity?: string | number; unit?: string; unitPrice?: string | number; }) {
+  function startEdit(row: {
+    id?: string;
+    _index?: number;
+    itemName?: string;
+    itemCode?: string;
+    category?: string;
+    vendor?: string;
+    warehouse?: string;
+    quantity?: string | number;
+    unit?: string;
+    unitPrice?: string | number;
+  }) {
     const nextTarget = row.id || row._index;
     if (typeof nextTarget !== 'number' && typeof nextTarget !== 'string') return;
     setEditingTarget(nextTarget);
@@ -106,44 +134,81 @@ export function useInventoryPage() {
     });
   }
 
-  function saveItem(value: InventoryInput) {
-    if (editingTarget === null) {
-      createInventoryItem(value);
-      setDraft(emptyDraft);
-      return;
-    }
+  function saveItem(value: InventoryInput): MutationResult {
+    const validationError = validateInventoryInput(value);
+    if (validationError) return { ok: false, message: validationError };
 
-    editInventoryItem(editingTarget, value);
-    setEditingTarget(null);
-    setDraft(emptyDraft);
-  }
+    try {
+      if (editingTarget === null) {
+        createInventoryItem(value);
+        setDraft(emptyDraft);
+        return { ok: true, message: '품목이 등록되었습니다.' };
+      }
 
-  function deleteItem(row: { id?: string; _index?: number }) {
-    const target = row.id || row._index;
-    if (typeof target !== 'number' && typeof target !== 'string') return;
-    removeInventoryItem(target);
-    if (editingTarget === target) {
+      editInventoryItem(editingTarget, value);
       setEditingTarget(null);
       setDraft(emptyDraft);
+      return { ok: true, message: '품목이 수정되었습니다.' };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.' };
     }
   }
 
-  const editorOptions = useMemo(() => ({
-    categories: options.categories,
-    units: [...new Set((state.mappedData || []).map((item) => String(item.unit || '').trim()).filter(Boolean))].sort(),
-    vendors: options.vendors,
-    warehouses: options.warehouses,
-    itemTemplates: (state.mappedData || []).map((item) => ({
-      id: String(item.id || item._id || ''),
-      itemName: String(item.itemName || ''),
-      itemCode: String(item.itemCode || ''),
-      category: String(item.category || ''),
-      unit: String(item.unit || 'EA'),
-      vendor: String(item.vendor || ''),
-      warehouse: String(item.warehouse || ''),
-      unitPrice: Number(item.unitPrice || 0),
-    })),
-  }), [options.categories, options.vendors, options.warehouses, state.mappedData]);
+  function deleteItem(row: { id?: string; _index?: number }): DeleteResult {
+    const target = row.id || row._index;
+    if (typeof target !== 'number' && typeof target !== 'string') {
+      return { ok: false, message: '삭제 대상 ID를 찾을 수 없습니다.' };
+    }
+
+    try {
+      const result = removeInventoryItem(target);
+      if (!result?.deleted) {
+        return { ok: false, message: '이미 삭제되었거나 삭제할 수 없는 항목입니다.' };
+      }
+      if (editingTarget === target) {
+        setEditingTarget(null);
+        setDraft(emptyDraft);
+      }
+      return {
+        ok: true,
+        message: '품목을 삭제했습니다.',
+        deleted: result.deleted as Record<string, unknown>,
+        index: result.index,
+      };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '삭제 중 오류가 발생했습니다.' };
+    }
+  }
+
+  function undoDeleteItem(deleted: Record<string, unknown>, index = 0): MutationResult {
+    try {
+      const restored = restoreRemovedInventoryItem(deleted, index);
+      if (!restored) return { ok: false, message: '삭제 취소에 실패했습니다.' };
+      return { ok: true, message: '삭제를 취소했습니다.' };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '삭제 취소 중 오류가 발생했습니다.' };
+    }
+  }
+
+  const editorOptions = useMemo(
+    () => ({
+      categories: options.categories,
+      units: [...new Set((state.mappedData || []).map((item) => String(item.unit || '').trim()).filter(Boolean))].sort(),
+      vendors: options.vendors,
+      warehouses: options.warehouses,
+      itemTemplates: (state.mappedData || []).map((item) => ({
+        id: String(item.id || item._id || ''),
+        itemName: String(item.itemName || ''),
+        itemCode: String(item.itemCode || ''),
+        category: String(item.category || ''),
+        unit: String(item.unit || 'EA'),
+        vendor: String(item.vendor || ''),
+        warehouse: String(item.warehouse || ''),
+        unitPrice: Number(item.unitPrice || 0),
+      })),
+    }),
+    [options.categories, options.vendors, options.warehouses, state.mappedData],
+  );
 
   return {
     draft,
@@ -158,6 +223,7 @@ export function useInventoryPage() {
     changeSort,
     saveItem,
     deleteItem,
+    undoDeleteItem,
     startCreate,
     startEdit,
   };

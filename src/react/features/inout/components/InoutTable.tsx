@@ -70,4 +70,3 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
     </article>
   );
 }
-

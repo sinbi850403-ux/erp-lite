@@ -1,7 +1,39 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { getFilteredTransactions, getInoutOptions, getInoutSummary } from '../../../domain/inout/selectors';
-import { createTransaction, removeTransaction, type InoutInput } from '../../../services/inout/inoutService';
+import {
+  createTransaction,
+  removeTransaction,
+  restoreRemovedTransaction,
+  type InoutInput,
+} from '../../../services/inout/inoutService';
 import { useStore } from '../../../services/store/StoreContext';
+
+type MutationResult = {
+  ok: boolean;
+  message?: string;
+};
+
+type DeleteResult = MutationResult & {
+  deleted?: Record<string, unknown>;
+  index?: number;
+};
+
+function isYyyyMmDd(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
+function validateInoutInput(value: InoutInput): string | null {
+  if (!value.itemName.trim()) return '품목명은 필수입니다.';
+  if (!value.date.trim()) return '거래일은 필수입니다.';
+  if (!isYyyyMmDd(value.date)) return '거래일 형식이 올바르지 않습니다. (YYYY-MM-DD)';
+  if (!Number.isFinite(Number(value.quantity)) || Number(value.quantity) <= 0) {
+    return '수량은 1 이상 숫자여야 합니다.';
+  }
+  if (!Number.isFinite(Number(value.unitPrice)) || Number(value.unitPrice) < 0) {
+    return '단가는 0 이상 숫자여야 합니다.';
+  }
+  return null;
+}
 
 export function useInoutPage() {
   const { state } = useStore();
@@ -13,10 +45,7 @@ export function useInoutPage() {
   });
   const deferredKeyword = useDeferredValue(filter.keyword);
 
-  const effectiveFilter = useMemo(
-    () => ({ ...filter, keyword: deferredKeyword }),
-    [deferredKeyword, filter],
-  );
+  const effectiveFilter = useMemo(() => ({ ...filter, keyword: deferredKeyword }), [deferredKeyword, filter]);
 
   const summary = useMemo(() => getInoutSummary(state), [state]);
   const options = useMemo(() => getInoutOptions(state), [state]);
@@ -25,18 +54,58 @@ export function useInoutPage() {
     () => ({
       items: state.mappedData || [],
       vendors: options.vendors,
+      warehouses: [...new Set([...(state.mappedData || []).map((item) => String(item.warehouse || '').trim()), ...(state.transactions || []).map((tx) => String(tx.warehouse || '').trim())].filter(Boolean))].sort(),
     }),
-    [options.vendors, state.mappedData],
+    [options.vendors, state.mappedData, state.transactions],
   );
 
-  function saveTransaction(value: InoutInput) {
-    createTransaction(value);
+  function saveTransaction(value: InoutInput): MutationResult {
+    const validationError = validateInoutInput(value);
+    if (validationError) return { ok: false, message: validationError };
+
+    try {
+      createTransaction(value);
+      return { ok: true, message: '입출고를 등록했습니다.' };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.' };
+    }
   }
 
-  function deleteTransaction(row: { id?: string }) {
-    if (!row.id) return;
-    removeTransaction(row.id);
+  function deleteTransaction(row: { id?: string }): DeleteResult {
+    if (!row.id) return { ok: false, message: '삭제 대상 ID를 찾을 수 없습니다.' };
+    try {
+      const result = removeTransaction(row.id);
+      if (!result?.deleted) return { ok: false, message: '이미 삭제되었거나 삭제할 수 없는 기록입니다.' };
+      return {
+        ok: true,
+        message: '입출고 기록을 삭제했습니다.',
+        deleted: result.deleted as Record<string, unknown>,
+        index: result.index,
+      };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '삭제 중 오류가 발생했습니다.' };
+    }
   }
 
-  return { filter, options, rows, summary, composerOptions, setFilter, saveTransaction, deleteTransaction };
+  function undoDeleteTransaction(deleted: Record<string, unknown>, index = 0): MutationResult {
+    try {
+      const restored = restoreRemovedTransaction(deleted, index);
+      if (!restored) return { ok: false, message: '삭제 취소에 실패했습니다.' };
+      return { ok: true, message: '삭제를 취소했습니다.' };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '삭제 취소 중 오류가 발생했습니다.' };
+    }
+  }
+
+  return {
+    filter,
+    options,
+    rows,
+    summary,
+    composerOptions,
+    setFilter,
+    saveTransaction,
+    deleteTransaction,
+    undoDeleteTransaction,
+  };
 }

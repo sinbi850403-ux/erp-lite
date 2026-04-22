@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { showToast } from '../../toast.js';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InventoryEditor } from '../features/inventory/components/InventoryEditor';
 import { InventoryFilters } from '../features/inventory/components/InventoryFilters';
@@ -20,6 +21,7 @@ export function InventoryPage() {
     changeSort,
     saveItem,
     deleteItem,
+    undoDeleteItem,
     startCreate,
     startEdit,
   } = useInventoryPage();
@@ -30,9 +32,21 @@ export function InventoryPage() {
   }
 
   function confirmDelete() {
-    if (pendingDeleteRow) {
-      deleteItem(pendingDeleteRow);
+    if (!pendingDeleteRow) return;
+    const result = deleteItem(pendingDeleteRow);
+    if (!result.ok || !result.deleted) {
+      showToast(result.message || '품목 삭제에 실패했습니다.', 'warning');
+      setPendingDeleteRow(null);
+      return;
     }
+
+    showToast(result.message || '품목을 삭제했습니다.', 'success', {
+      actionLabel: '실행 취소',
+      onAction: () => {
+        const undoResult = undoDeleteItem(result.deleted || {}, result.index || 0);
+        showToast(undoResult.message || '삭제 취소를 완료했습니다.', undoResult.ok ? 'success' : 'warning');
+      },
+    });
     setPendingDeleteRow(null);
   }
 
@@ -42,8 +56,8 @@ export function InventoryPage() {
         <span className="react-chip">재고 현황</span>
         <h2>품목 등록, 수정, 삭제를 현재 화면에서 바로 처리합니다.</h2>
         <p>
-          편집기에 입력하면 목록이 즉시 반영됩니다.
-          기존 품목 템플릿을 불러와 더 빠르게 등록할 수 있습니다.
+          입력한 내용은 목록에 즉시 반영됩니다.
+          기존 품목 템플릿을 불러와 빠르게 등록할 수 있습니다.
         </p>
       </article>
 
@@ -66,7 +80,7 @@ export function InventoryPage() {
         open={!!pendingDeleteRow}
         danger
         title="품목 삭제"
-        description={`"${pendingDeleteRow?.itemName || '선택 품목'}" 품목을 삭제할까요? 삭제 전에는 되돌리기 전까지 목록에서 사라집니다.`}
+        description={`"${pendingDeleteRow?.itemName || '선택 항목'}"을 삭제하면 목록에서 즉시 사라지고 재고 집계에도 반영됩니다.`}
         confirmLabel="삭제"
         cancelLabel="취소"
         onConfirm={confirmDelete}
@@ -77,4 +91,3 @@ export function InventoryPage() {
 }
 
 export default InventoryPage;
-

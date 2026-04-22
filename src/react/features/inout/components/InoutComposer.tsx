@@ -1,6 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import type { InoutInput } from '../../../services/inout/inoutService';
 
+type SubmitResult = {
+  ok: boolean;
+  message?: string;
+};
+
 type InoutComposerProps = {
   items: Array<{
     itemName?: string;
@@ -12,7 +17,8 @@ type InoutComposerProps = {
     unitPrice?: number | string;
   }>;
   vendors: string[];
-  onSubmit: (value: InoutInput) => void;
+  warehouses: string[];
+  onSubmit: (value: InoutInput) => SubmitResult;
 };
 
 const defaultForm: InoutInput = {
@@ -27,14 +33,12 @@ const defaultForm: InoutInput = {
   note: '',
 };
 
-export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) {
+export function InoutComposer({ items, vendors, warehouses, onSubmit }: InoutComposerProps) {
   const [form, setForm] = useState<InoutInput>(defaultForm);
   const [selectedItemKey, setSelectedItemKey] = useState('');
+  const [formMessage, setFormMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  const itemOptions = useMemo(
-    () => items.filter((item) => String(item.itemName || '').trim()),
-    [items],
-  );
+  const itemOptions = useMemo(() => items.filter((item) => String(item.itemName || '').trim()), [items]);
   const selectedItem = useMemo(
     () =>
       itemOptions.find(
@@ -43,21 +47,34 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
     [itemOptions, selectedItemKey],
   );
 
+  const mergedWarehouseOptions = useMemo(
+    () =>
+      [...new Set([...warehouses, ...itemOptions.map((item) => String(item.warehouse || '').trim()).filter(Boolean)])].sort(),
+    [itemOptions, warehouses],
+  );
+
   function update<K extends keyof InoutInput>(key: K, value: InoutInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (formMessage) setFormMessage(null);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.itemName.trim() || !form.date) return;
-    onSubmit(form);
+    const result = onSubmit(form);
+    if (!result.ok) {
+      setFormMessage({ type: 'error', text: result.message || '입력값을 확인해 주세요.' });
+      return;
+    }
+    setFormMessage({ type: 'success', text: result.message || '입출고를 등록했습니다.' });
     setForm(defaultForm);
     setSelectedItemKey('');
   }
 
   function handleSelectItem(nextKey: string) {
     setSelectedItemKey(nextKey);
-    const selected = itemOptions.find((item) => `${String(item.itemCode || '').trim()}::${String(item.itemName || '').trim()}` === nextKey);
+    const selected = itemOptions.find(
+      (item) => `${String(item.itemCode || '').trim()}::${String(item.itemName || '').trim()}` === nextKey,
+    );
     if (!selected) return;
 
     const unitPrice = Number(selected.unitPrice || 0);
@@ -65,8 +82,8 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
       ...current,
       itemName: String(selected.itemName || '').trim(),
       itemCode: String(selected.itemCode || '').trim(),
-      vendor: current.vendor || String(selected.vendor || '').trim(),
-      warehouse: current.warehouse || String(selected.warehouse || '').trim(),
+      vendor: String(selected.vendor || '').trim(),
+      warehouse: String(selected.warehouse || '').trim(),
       unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
     }));
   }
@@ -76,56 +93,130 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
       <div className="react-section-head">
         <div>
           <span className="react-card__eyebrow">입출고 등록</span>
-          <h3>입고/출고 내역 추가</h3>
+          <h3>입고/출고 이력 추가</h3>
         </div>
       </div>
 
       <form className="react-form-grid" onSubmit={handleSubmit}>
-        <select className="react-select" value={form.type} onChange={(e) => update('type', e.target.value as 'in' | 'out')}>
-          <option value="in">입고</option>
-          <option value="out">출고</option>
-        </select>
-        <select className="react-select" value={selectedItemKey} onChange={(e) => handleSelectItem(e.target.value)}>
-          <option value="">품목 선택</option>
-          {itemOptions.map((item) => {
-            const itemName = String(item.itemName || '').trim();
-            const itemCode = String(item.itemCode || '').trim();
-            const key = `${itemCode}::${itemName}`;
-            return (
-              <option key={key} value={key}>
-                {itemName}
-                {itemCode ? ` (${itemCode})` : ''}
+        <div className="react-field">
+          <span>유형</span>
+          <select className="react-select" value={form.type} onChange={(e) => update('type', e.target.value as 'in' | 'out')}>
+            <option value="in">입고</option>
+            <option value="out">출고</option>
+          </select>
+        </div>
+
+        <div className="react-field react-field--wide">
+          <span>품목 선택</span>
+          <select className="react-select" value={selectedItemKey} onChange={(e) => handleSelectItem(e.target.value)}>
+            <option value="">선택하면 거래처/창고/단가가 자동 채워집니다</option>
+            {itemOptions.map((item) => {
+              const itemName = String(item.itemName || '').trim();
+              const itemCode = String(item.itemCode || '').trim();
+              const key = `${itemCode}::${itemName}`;
+              return (
+                <option key={key} value={key}>
+                  {itemName}
+                  {itemCode ? ` (${itemCode})` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>품목명</span>
+          <input
+            className="react-input"
+            value={form.itemName}
+            onChange={(e) => update('itemName', e.target.value)}
+            placeholder="예: 아메리카노 원두 1kg"
+            required
+          />
+        </div>
+
+        <div className="react-field">
+          <span>품목코드</span>
+          <input className="react-input" value={form.itemCode} onChange={(e) => update('itemCode', e.target.value)} placeholder="예: BEAN-1KG" />
+        </div>
+
+        <div className="react-field">
+          <span>카테고리</span>
+          <input className="react-input" value={selectedItem?.category || ''} readOnly placeholder="품목 선택 시 자동 표시" />
+        </div>
+
+        <div className="react-field">
+          <span>단위</span>
+          <input className="react-input" value={selectedItem?.unit || ''} readOnly placeholder="품목 선택 시 자동 표시" />
+        </div>
+
+        <div className="react-field">
+          <span>거래처</span>
+          <select className="react-select" value={form.vendor} onChange={(e) => update('vendor', e.target.value)}>
+            <option value="">거래처 선택</option>
+            {vendors.map((vendor) => (
+              <option key={vendor} value={vendor}>
+                {vendor}
               </option>
-            );
-          })}
-        </select>
-        <input className="react-input" value={form.itemName} onChange={(e) => update('itemName', e.target.value)} placeholder="품목명" />
-        <input className="react-input" value={form.itemCode} onChange={(e) => update('itemCode', e.target.value)} placeholder="품목코드" />
-        <input
-          className="react-input"
-          value={selectedItem?.category || ''}
-          readOnly
-          placeholder="선택한 품목의 카테고리가 자동 표시됩니다"
-        />
-        <select className="react-select" value={form.vendor} onChange={(e) => update('vendor', e.target.value)}>
-          <option value="">거래처 선택</option>
-          {vendors.map((vendor) => (
-            <option key={vendor} value={vendor}>
-              {vendor}
-            </option>
-          ))}
-        </select>
-        <input className="react-input" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)} placeholder="창고" />
-        <input className="react-input" type="date" value={form.date} onChange={(e) => update('date', e.target.value)} />
-        <input
-          className="react-input"
-          type="number"
-          value={form.quantity}
-          onChange={(e) => update('quantity', Number(e.target.value))}
-          placeholder={`수량${selectedItem?.unit ? ` (${selectedItem.unit})` : ''}`}
-        />
-        <input className="react-input" type="number" value={form.unitPrice} onChange={(e) => update('unitPrice', Number(e.target.value))} placeholder="원가" />
-        <input className="react-input react-input--wide" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="비고" />
+            ))}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>창고</span>
+          <select className="react-select" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)}>
+            <option value="">창고 선택</option>
+            {mergedWarehouseOptions.map((warehouse) => (
+              <option key={warehouse} value={warehouse}>
+                {warehouse}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>거래일</span>
+          <input className="react-input" type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required />
+        </div>
+
+        <div className="react-field">
+          <span>수량</span>
+          <input
+            className="react-input"
+            type="number"
+            min={1}
+            step="1"
+            value={form.quantity}
+            onChange={(e) => update('quantity', Number(e.target.value))}
+            placeholder={`수량${selectedItem?.unit ? ` (${selectedItem.unit})` : ''}`}
+            required
+          />
+        </div>
+
+        <div className="react-field">
+          <span>단가</span>
+          <input
+            className="react-input"
+            type="number"
+            min={0}
+            step="1"
+            value={form.unitPrice}
+            onChange={(e) => update('unitPrice', Number(e.target.value))}
+            placeholder="0"
+            required
+          />
+        </div>
+
+        <div className="react-field react-field--wide">
+          <span>비고</span>
+          <input className="react-input react-input--wide" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="선택 사항" />
+        </div>
+
+        {formMessage ? (
+          <p className={formMessage.type === 'error' ? 'react-inline-feedback is-error' : 'react-inline-feedback is-success'}>
+            {formMessage.text}
+          </p>
+        ) : null}
 
         <div className="react-form-actions">
           <button type="submit" className="react-auth-submit">
@@ -136,4 +227,3 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
     </article>
   );
 }
-

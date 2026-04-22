@@ -2,6 +2,7 @@ import {
   createInventoryRecord,
   deleteInventoryRecord,
   recalcInventoryAmounts,
+  restoreInventoryRecord,
   updateInventoryRecord,
 } from '../store/storeClient';
 
@@ -52,4 +53,8 @@ export function editInventoryItem(target: number | string, input: InventoryInput
 export function removeInventoryItem(target: number | string) {
   const result = deleteInventoryRecord(target);
   return result;
+}
+
+export function restoreRemovedInventoryItem(record: Record<string, unknown>, index = 0) {
+  return restoreInventoryRecord(record, index);
 }

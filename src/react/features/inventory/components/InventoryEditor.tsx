@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import type { MutationResult } from '../hooks/useInventoryPage';
 import type { InventoryInput } from '../../../services/inventory/inventoryService';
 
 type InventoryEditorProps = {
@@ -19,7 +20,7 @@ type InventoryEditorProps = {
     unitPrice: number;
   }>;
   onCancelEdit: () => void;
-  onSubmit: (value: InventoryInput) => void;
+  onSubmit: (value: InventoryInput) => MutationResult;
 };
 
 const emptyForm: InventoryInput = {
@@ -46,20 +47,52 @@ export function InventoryEditor({
 }: InventoryEditorProps) {
   const [form, setForm] = useState<InventoryInput>(initialValue);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [formMessage, setFormMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  const normalizedTemplates = useMemo(
+    () =>
+      itemTemplates.map((item) => ({
+        ...item,
+        itemName: String(item.itemName || '').trim(),
+        itemCode: String(item.itemCode || '').trim(),
+      })),
+    [itemTemplates],
+  );
 
   useEffect(() => {
     setForm(initialValue);
     setSelectedTemplateKey('');
+    setFormMessage(null);
   }, [initialValue]);
 
   function update<K extends keyof InventoryInput>(key: K, value: InventoryInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (formMessage) setFormMessage(null);
+  }
+
+  function applyTemplateFields(template: (typeof normalizedTemplates)[number]) {
+    setForm((current) => ({
+      ...current,
+      itemName: template.itemName || current.itemName,
+      itemCode: template.itemCode || current.itemCode,
+      category: template.category || current.category,
+      unit: template.unit || current.unit || 'EA',
+      vendor: template.vendor || current.vendor,
+      warehouse: template.warehouse || current.warehouse,
+      unitPrice: Number.isFinite(Number(template.unitPrice)) ? Number(template.unitPrice) : current.unitPrice,
+    }));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.itemName.trim()) return;
-    onSubmit(form);
+
+    const result = onSubmit(form);
+    if (!result.ok) {
+      setFormMessage({ type: 'error', text: result.message || '입력값을 다시 확인해 주세요.' });
+      return;
+    }
+
+    setFormMessage({ type: 'success', text: result.message || (isEditing ? '품목이 수정되었습니다.' : '품목이 등록되었습니다.') });
     if (!isEditing) {
       setForm(emptyForm);
       setSelectedTemplateKey('');
@@ -68,19 +101,19 @@ export function InventoryEditor({
 
   function applyTemplate(nextKey: string) {
     setSelectedTemplateKey(nextKey);
-    const selected = itemTemplates.find((item) => `${item.id}::${item.itemCode}::${item.itemName}` === nextKey);
+    const selected = normalizedTemplates.find((item) => `${item.id}::${item.itemCode}::${item.itemName}` === nextKey);
     if (!selected) return;
+    applyTemplateFields(selected);
+  }
 
-    setForm((current) => ({
-      ...current,
-      itemName: selected.itemName || current.itemName,
-      itemCode: selected.itemCode || current.itemCode,
-      category: selected.category || current.category,
-      unit: selected.unit || current.unit || 'EA',
-      vendor: selected.vendor || current.vendor,
-      warehouse: selected.warehouse || current.warehouse,
-      unitPrice: Number.isFinite(Number(selected.unitPrice)) ? Number(selected.unitPrice) : current.unitPrice,
-    }));
+  function handleItemCodeBlur() {
+    if (!form.itemCode.trim()) return;
+    const matched = normalizedTemplates.find((item) => item.itemCode && item.itemCode === form.itemCode.trim());
+    if (!matched) return;
+    applyTemplateFields(matched);
+    if (!form.itemName.trim() && matched.itemName) {
+      update('itemName', matched.itemName);
+    }
   }
 
   return (
@@ -94,68 +127,128 @@ export function InventoryEditor({
 
       <form className="react-form-grid" onSubmit={handleSubmit}>
         {!isEditing ? (
-          <select className="react-select" value={selectedTemplateKey} onChange={(e) => applyTemplate(e.target.value)}>
-            <option value="">기존 품목 불러오기</option>
-            {itemTemplates.map((item) => {
-              const key = `${item.id}::${item.itemCode}::${item.itemName}`;
-              return (
-                <option key={key} value={key}>
-                  {item.itemName}
-                  {item.itemCode ? ` (${item.itemCode})` : ''}
-                </option>
-              );
-            })}
-          </select>
+          <div className="react-field react-field--wide">
+            <span>기존 품목 불러오기</span>
+            <select className="react-select" value={selectedTemplateKey} onChange={(e) => applyTemplate(e.target.value)}>
+              <option value="">선택하면 카테고리/단위/거래처/창고가 자동 채워집니다</option>
+              {normalizedTemplates.map((item) => {
+                const key = `${item.id}::${item.itemCode}::${item.itemName}`;
+                return (
+                  <option key={key} value={key}>
+                    {item.itemName}
+                    {item.itemCode ? ` (${item.itemCode})` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
         ) : null}
-        <input className="react-input" value={form.itemName} onChange={(e) => update('itemName', e.target.value)} placeholder="품목명" />
-        <input className="react-input" value={form.itemCode} onChange={(e) => update('itemCode', e.target.value)} placeholder="품목코드" />
-        <select className="react-select" value={form.category} onChange={(e) => update('category', e.target.value)}>
-          <option value="">카테고리 선택</option>
-          {categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-        <select className="react-select" value={form.vendor} onChange={(e) => update('vendor', e.target.value)}>
-          <option value="">거래처 선택</option>
-          {vendors.map((vendor) => (
-            <option key={vendor} value={vendor}>
-              {vendor}
-            </option>
-          ))}
-        </select>
-        <select className="react-select" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)}>
-          <option value="">창고 선택</option>
-          {warehouses.map((warehouse) => (
-            <option key={warehouse} value={warehouse}>
-              {warehouse}
-            </option>
-          ))}
-        </select>
-        <input
-          className="react-input"
-          type="number"
-          value={form.quantity}
-          onChange={(e) => update('quantity', Number(e.target.value))}
-          placeholder="수량"
-        />
-        <select className="react-select" value={form.unit} onChange={(e) => update('unit', e.target.value)}>
-          <option value="">단위 선택</option>
-          {units.map((unit) => (
-            <option key={unit} value={unit}>
-              {unit}
-            </option>
-          ))}
-          {!units.includes('EA') ? <option value="EA">EA</option> : null}
-        </select>
-        <input
-          className="react-input"
-          type="number"
-          value={form.unitPrice}
-          onChange={(e) => update('unitPrice', Number(e.target.value))}
-          placeholder="원가"
-        />
+
+        <div className="react-field">
+          <span>품목명</span>
+          <input
+            className="react-input"
+            value={form.itemName}
+            onChange={(e) => update('itemName', e.target.value)}
+            placeholder="예: 아메리카노 원두 1kg"
+            required
+          />
+        </div>
+
+        <div className="react-field">
+          <span>품목코드</span>
+          <input
+            className="react-input"
+            value={form.itemCode}
+            onChange={(e) => update('itemCode', e.target.value)}
+            onBlur={handleItemCodeBlur}
+            placeholder="예: BEAN-1KG"
+          />
+          <small className="react-field-help">기존 코드와 같으면 마스터 정보를 자동 반영합니다.</small>
+        </div>
+
+        <div className="react-field">
+          <span>카테고리</span>
+          <select className="react-select" value={form.category} onChange={(e) => update('category', e.target.value)}>
+            <option value="">카테고리 선택</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>거래처</span>
+          <select className="react-select" value={form.vendor} onChange={(e) => update('vendor', e.target.value)}>
+            <option value="">거래처 선택</option>
+            {vendors.map((vendor) => (
+              <option key={vendor} value={vendor}>
+                {vendor}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>창고</span>
+          <select className="react-select" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)}>
+            <option value="">창고 선택</option>
+            {warehouses.map((warehouse) => (
+              <option key={warehouse} value={warehouse}>
+                {warehouse}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>수량</span>
+          <input
+            className="react-input"
+            type="number"
+            min={0}
+            step="1"
+            value={form.quantity}
+            onChange={(e) => update('quantity', Number(e.target.value))}
+            placeholder="0"
+            required
+          />
+        </div>
+
+        <div className="react-field">
+          <span>단위</span>
+          <select className="react-select" value={form.unit} onChange={(e) => update('unit', e.target.value)}>
+            <option value="">단위 선택</option>
+            {units.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}
+              </option>
+            ))}
+            {!units.includes('EA') ? <option value="EA">EA</option> : null}
+          </select>
+        </div>
+
+        <div className="react-field">
+          <span>원가</span>
+          <input
+            className="react-input"
+            type="number"
+            min={0}
+            step="1"
+            value={form.unitPrice}
+            onChange={(e) => update('unitPrice', Number(e.target.value))}
+            placeholder="0"
+            required
+          />
+        </div>
+
+        {formMessage ? (
+          <p className={formMessage.type === 'error' ? 'react-inline-feedback is-error' : 'react-inline-feedback is-success'}>
+            {formMessage.text}
+          </p>
+        ) : null}
 
         <div className="react-form-actions">
           <button type="submit" className="react-auth-submit">
@@ -171,4 +264,3 @@ export function InventoryEditor({
     </article>
   );
 }
-

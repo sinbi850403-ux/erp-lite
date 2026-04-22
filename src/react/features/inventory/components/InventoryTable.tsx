@@ -11,14 +11,7 @@ type InventoryRow = {
   supplyValue?: string | number;
 };
 
-type InventorySortKey =
-  | 'itemName'
-  | 'itemCode'
-  | 'category'
-  | 'vendor'
-  | 'warehouse'
-  | 'quantity'
-  | 'amount';
+type InventorySortKey = 'itemName' | 'itemCode' | 'category' | 'vendor' | 'warehouse' | 'quantity' | 'amount';
 
 type InventoryTableProps = {
   rows: InventoryRow[];
@@ -78,13 +71,27 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
         <table>
           <thead>
             <tr>
-              <th><SortableHeader label="품목명" sortKey="itemName" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="코드" sortKey="itemCode" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="카테고리" sortKey="category" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="거래처" sortKey="vendor" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="창고" sortKey="warehouse" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="수량" sortKey="quantity" sort={sort} onSortChange={onSortChange} /></th>
-              <th><SortableHeader label="금액" sortKey="amount" sort={sort} onSortChange={onSortChange} /></th>
+              <th>
+                <SortableHeader label="품목명" sortKey="itemName" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="코드" sortKey="itemCode" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="카테고리" sortKey="category" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="거래처" sortKey="vendor" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="창고" sortKey="warehouse" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="수량" sortKey="quantity" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="금액" sortKey="amount" sort={sort} onSortChange={onSortChange} />
+              </th>
               <th>관리</th>
             </tr>
           </thead>
@@ -124,4 +131,3 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
     </article>
   );
 }
-
