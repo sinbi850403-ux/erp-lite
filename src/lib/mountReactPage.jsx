@@ -92,7 +92,7 @@ export function vanillaLoader(pageImportFn, renderFnName) {
   return async () => {
     const [pageMod, { VanillaBridge }] = await Promise.all([
       pageImportFn(),
-      import('../react/components/VanillaBridge.jsx'),
+      import('../react/components/VanillaBridge'),
     ]);
     const renderFn = pageMod[renderFnName];
     const Wrapped = ({ navigateTo: navFn }) =>
