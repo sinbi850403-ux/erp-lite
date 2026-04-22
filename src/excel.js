@@ -51,13 +51,37 @@ export async function readExcelFile(file) {
     const normalized = rows.map((row) => {
       const filled = row.slice();
       while (filled.length < maxCols) filled.push('');
-      return filled.map((cell) => (cell == null ? '' : cell));
+      return filled.map((cell) => normalizeExcelCell(cell));
     });
 
     sheets[worksheet.name] = normalized;
   });
 
   return { sheetNames, sheets };
+}
+
+function normalizeExcelCell(cell) {
+  if (cell == null) return '';
+  if (typeof cell === 'string' || typeof cell === 'number' || typeof cell === 'boolean') {
+    return cell;
+  }
+  if (cell instanceof Date) {
+    return cell.toISOString().slice(0, 10);
+  }
+  if (Array.isArray(cell)) {
+    return cell.map((part) => normalizeExcelCell(part)).join(' ').trim();
+  }
+  if (typeof cell === 'object') {
+    if (typeof cell.text === 'string') return cell.text;
+    if (Array.isArray(cell.richText)) {
+      return cell.richText.map((part) => String(part?.text ?? '')).join('');
+    }
+    if ('result' in cell && cell.result != null) return normalizeExcelCell(cell.result);
+    if (typeof cell.hyperlink === 'string' && typeof cell.text === 'string') return cell.text;
+    if (typeof cell.hyperlink === 'string') return cell.hyperlink;
+    if (typeof cell.formula === 'string' && cell.formula) return cell.formula;
+  }
+  return String(cell);
 }
 
 export async function downloadExcel(data, fileName = '내보내기') {
