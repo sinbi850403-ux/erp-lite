@@ -156,14 +156,15 @@ async function loadProfile(user) {
       // 프로필 미존재 → 신규 생성
       const newProfile = createBootstrapProfile(user);
 
-      let { error: insertError } = await supabase.from('profiles').upsert(newProfile, { onConflict: 'id' });
+      let { error: insertError } = await supabase.from('profiles').insert(newProfile);
       if (insertError) {
         const message = String(insertError?.message || '').toLowerCase();
         const isRlsOrPermission =
           message.includes('row-level security') ||
           message.includes('permission') ||
           message.includes('forbidden') ||
-          message.includes('not allowed');
+          message.includes('not allowed') ||
+          message.includes('401');
 
         console.warn('[Auth] profile bootstrap failed:', insertError.message);
         if (!isRlsOrPermission && !hasNotifiedProfileLoadFailure) {
@@ -382,10 +383,15 @@ export function initAuth(callback) {
   setTimeout(() => {
     if (authHydrationStarted || authHydrationComplete) return;
     const initSeq = applySessionSeq;
-    withTimeout(supabase.auth.getSession(), 8000, 'initial-session')
+    withTimeout(supabase.auth.getSession(), 12000, 'initial-session')
       .then(({ data }) => applySession(data?.session || null, initSeq))
       .catch((error) => {
-        console.warn('[Auth] Initial session recovery failed:', error.message);
+        const message = String(error?.message || '').toLowerCase();
+        if (message.includes('timeout')) {
+          console.info('[Auth] Initial session recovery timeout, continue with anonymous state');
+        } else {
+          console.warn('[Auth] Initial session recovery failed:', error.message);
+        }
         applySession(null, initSeq);
       })
       .finally(() => {
