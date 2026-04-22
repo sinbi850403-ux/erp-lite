@@ -54,3 +54,5 @@ export function InoutPage() {
     </section>
   );
 }
+
+export default InoutPage;

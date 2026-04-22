@@ -73,3 +73,5 @@ export function InventoryPage() {
     </section>
   );
 }
+
+export default InventoryPage;
