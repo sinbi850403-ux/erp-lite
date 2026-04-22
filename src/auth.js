@@ -138,8 +138,15 @@ function sanitizeSupabaseStorage() {
 
 // ─── 프로필 로드 ──────────────────────────────────────────────────────────────
 
-async function loadProfile(user) {
+async function loadProfile(user, session = null) {
   const fallback = createFallbackProfile(user);
+  const accessToken = String(session?.access_token || '').trim();
+
+  // Ctrl+F5 직후 hydration 경합에서 user만 있고 토큰이 없는 경우가 있어
+  // profiles 조회를 시도하면 401이 반복된다. 토큰이 없으면 즉시 fallback 처리.
+  if (!accessToken) {
+    return fallback;
+  }
 
   try {
     const { data, error } = await withTimeout(
@@ -207,7 +214,7 @@ async function applySession(session, seq) {
   }
 
   const user = toCompatUser(session.user);
-  const profile = await loadProfile(user);
+  const profile = await loadProfile(user, session);
 
   // 프로필 로딩이 끝나는 사이에 logout()이 호출됐으면 폐기
   if (seq !== applySessionSeq) {
