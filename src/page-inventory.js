@@ -124,7 +124,7 @@ export function renderInventoryPage(container, navigateTo) {
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title"><span class="title-icon">??</span> 재고 현황</h1>
+          <h1 class="page-title"><span class="title-icon">📦</span> 재고 현황</h1>
           <div class="page-desc">품목별 재고 수량과 금액을 관리합니다.</div>
         </div>
         <div class="page-actions">
@@ -133,14 +133,14 @@ export function renderInventoryPage(container, navigateTo) {
       </div>
       <div class="card">
         <div class="empty-state">
-          <div class="icon">??</div>
+          <div class="icon">📦</div>
           <div class="msg">아직 등록된 품목이 없습니다</div>
           <div class="sub">엑셀 파일을 업로드하거나 품목을 직접 등록해 주세요.</div>
           <div class="empty-state-actions">
-            <button class="btn btn-primary" id="btn-go-upload">?? 엑셀 업로드</button>
-            <button class="btn btn-outline" id="btn-add-item-empty">?? 직접 입력</button>
+            <button class="btn btn-primary" id="btn-go-upload">📂 엑셀 업로드</button>
+            <button class="btn btn-outline" id="btn-add-item-empty">✏️ 직접 입력</button>
           </div>
-          <div class="empty-state-tip">?? TIP: 기존 엑셀 파일(.xlsx)을 그대로 드래그하면 자동으로 인식합니다</div>
+          <div class="empty-state-tip">💡 TIP: 기존 엑셀 파일(.xlsx)을 그대로 드래그하면 자동으로 인식합니다</div>
         </div>
       </div>
     `;
@@ -215,13 +215,13 @@ export function renderInventoryPage(container, navigateTo) {
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1 class="page-title"><span class="title-icon">??</span> 재고 현황</h1>
-        <div class="page-desc">${state.fileName ? `?? ${state.fileName}` : ''} 총 ${data.length}개 품목</div>
+        <h1 class="page-title"><span class="title-icon">📦</span> 재고 현황</h1>
+        <div class="page-desc">${state.fileName ? `📄 ${state.fileName}` : ''} 총 ${data.length}개 품목</div>
       </div>
       <div class="page-actions">
-        ${canBulk ? `<button class="btn btn-outline" id="btn-rebuild-inventory" title="입출고 이력 기준으로 재고 수량 재계산">?? 재고 재계산</button>` : ''}
-        <button class="btn btn-outline" id="btn-export">?? 엑셀</button>
-        <button class="btn btn-outline" id="btn-export-pdf">?? PDF</button>
+        ${canBulk ? `<button class="btn btn-outline" id="btn-rebuild-inventory" title="입출고 이력 기준으로 재고 수량 재계산">🔄 재고 재계산</button>` : ''}
+        <button class="btn btn-outline" id="btn-export">📥 엑셀</button>
+        <button class="btn btn-outline" id="btn-export-pdf">📄 PDF</button>
         ${canCreate ? `<button class="btn btn-primary" id="btn-add-item">+ 품목 추가</button>` : ''}
       </div>
     </div>
@@ -306,7 +306,7 @@ export function renderInventoryPage(container, navigateTo) {
     <div class="toolbar">
       <input type="text" class="search-input" id="search-input"
         placeholder="스마트 검색: 품목명, 분류:식품, 창고:본사, 재고>=10, 부족, 품절" />
-      <button class="filter-toggle-btn" id="btn-filter-toggle">?? 상세 필터</button>
+      <button class="filter-toggle-btn" id="btn-filter-toggle">🔍 상세 필터</button>
       <button class="btn btn-ghost btn-sm" id="btn-filter-reset" title="필터 초기화">초기화</button>
       <div class="col-settings-wrap" style="position:relative;">
         <button class="btn btn-outline btn-sm" id="btn-col-settings" title="표시 열 선택">
@@ -991,7 +991,7 @@ export function renderInventoryPage(container, navigateTo) {
               <td class="editable-cell ${ALL_FIELDS.find(f => f.key === key)?.numeric ? 'text-right' : ''}"
                   data-label="${FIELD_LABELS[key] || key}"
                   data-field="${key}" data-item-id="${safeAttr(itemId)}">
-                ${key === 'itemName' && isLocked ? '<span title="잠금 품목 (수정 제한)" style="margin-right:4px;">??</span>' : ''}
+                ${key === 'itemName' && isLocked ? '<span title="잠금 품목 (수정 제한)" style="margin-right:4px;">🔒</span>' : ''}
                 ${formatCell(key, row[key])}
                 ${key === 'quantity' && isLow ? ' <span class="badge badge-danger" style="font-size:10px;">부족</span>' : ''}
               </td>
@@ -1885,12 +1885,12 @@ function openItemModal(container, navigateTo, editItemId = null) {
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">?? 품목 잠금 해제일</label>
+                    <label class="form-label">🔒 품목 잠금 해제일</label>
                     <input class="form-input" type="date" id="f-lockedUntil" value="${safeAttr(item.lockedUntil || '')}" />
                   </div>
                   <div class="form-group">
                     <div style="font-size:12px; color:var(--text-muted); margin-top:28px; line-height:1.6;">
-                      잠금 해제일까지 ?? 표시됩니다.<br>해당 날짜가 지나면 자동으로 잠금이 해제됩니다.
+                      잠금 해제일까지 🔒 표시됩니다.<br>해당 날짜가 지나면 자동으로 잠금이 해제됩니다.
                     </div>
                   </div>
                 </div>
@@ -1907,7 +1907,7 @@ function openItemModal(container, navigateTo, editItemId = null) {
             <div class="smart-summary-grid">
               <div class="smart-summary-item">
                 <div class="smart-summary-label">현재 재고 가치</div>
-                <div class="smart-summary-value" id="f-totalPriceLabel">\0</div>
+                <div class="smart-summary-value" id="f-totalPriceLabel">₩0</div>
                 <div class="smart-summary-note" id="item-price-note">수량과 원가를 입력하면 공급가액, 부가세, 합계가 자동 계산됩니다.</div>
                 <input type="hidden" id="f-supplyValue" value="${safeAttr(item.supplyValue ?? '')}" />
                 <input type="hidden" id="f-vat" value="${safeAttr(item.vat ?? '')}" />
@@ -1961,7 +1961,7 @@ function openItemModal(container, navigateTo, editItemId = null) {
     inputs.code.value = genItemCode();
   });
 
-  const formatMoney = (value) => `\${Math.round(value || 0).toLocaleString('ko-KR')}`;
+  const formatMoney = (value) => `₩${Math.round(value || 0).toLocaleString('ko-KR')}`;
 
   const refreshItemSummary = () => {
     const qty = parseFloat(inputs.quantity.value) || 0;
@@ -1974,7 +1974,7 @@ function openItemModal(container, navigateTo, editItemId = null) {
     overlay.querySelector('#f-supplyValue').value = supply;
     overlay.querySelector('#f-vat').value = vat;
     overlay.querySelector('#f-totalPrice').value = total;
-    overlay.querySelector('#f-totalPriceLabel').textContent = total > 0 ? formatMoney(total) : '\0';
+    overlay.querySelector('#f-totalPriceLabel').textContent = total > 0 ? formatMoney(total) : '₩0';
     overlay.querySelector('#item-price-note').textContent =
       total > 0
         ? `공급가액 ${formatMoney(supply)} / 부가세 ${formatMoney(vat)} / 합계 ${formatMoney(total)}`
