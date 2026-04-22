@@ -13,6 +13,7 @@ import {
   type InventoryInput,
 } from '../../../services/inventory/inventoryService';
 import { useStore } from '../../../services/store/StoreContext';
+import { validateInventoryInput } from '../../../services/validation/inputValidation';
 
 export type MutationResult = {
   ok: boolean;
@@ -34,15 +35,6 @@ const emptyDraft: InventoryInput = {
   unit: 'EA',
   unitPrice: 0,
 };
-
-function validateInventoryInput(value: InventoryInput): string | null {
-  if (!value.itemName.trim()) return '품목명은 필수입니다.';
-  if (Number(value.quantity) < 0) return '수량은 0 이상이어야 합니다.';
-  if (Number(value.unitPrice) < 0) return '원가는 0 이상이어야 합니다.';
-  if (!Number.isFinite(Number(value.quantity))) return '수량은 숫자여야 합니다.';
-  if (!Number.isFinite(Number(value.unitPrice))) return '원가는 숫자여야 합니다.';
-  return null;
-}
 
 export function useInventoryPage() {
   const { state } = useStore();

@@ -7,6 +7,7 @@ import {
   type InoutInput,
 } from '../../../services/inout/inoutService';
 import { useStore } from '../../../services/store/StoreContext';
+import { validateInoutInput } from '../../../services/validation/inputValidation';
 
 type MutationResult = {
   ok: boolean;
@@ -17,23 +18,6 @@ type DeleteResult = MutationResult & {
   deleted?: Record<string, unknown>;
   index?: number;
 };
-
-function isYyyyMmDd(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
-}
-
-function validateInoutInput(value: InoutInput): string | null {
-  if (!value.itemName.trim()) return '품목명은 필수입니다.';
-  if (!value.date.trim()) return '거래일은 필수입니다.';
-  if (!isYyyyMmDd(value.date)) return '거래일 형식이 올바르지 않습니다. (YYYY-MM-DD)';
-  if (!Number.isFinite(Number(value.quantity)) || Number(value.quantity) <= 0) {
-    return '수량은 1 이상 숫자여야 합니다.';
-  }
-  if (!Number.isFinite(Number(value.unitPrice)) || Number(value.unitPrice) < 0) {
-    return '단가는 0 이상 숫자여야 합니다.';
-  }
-  return null;
-}
 
 export function useInoutPage() {
   const { state } = useStore();
@@ -54,7 +38,14 @@ export function useInoutPage() {
     () => ({
       items: state.mappedData || [],
       vendors: options.vendors,
-      warehouses: [...new Set([...(state.mappedData || []).map((item) => String(item.warehouse || '').trim()), ...(state.transactions || []).map((tx) => String(tx.warehouse || '').trim())].filter(Boolean))].sort(),
+      warehouses: [
+        ...new Set(
+          [
+            ...(state.mappedData || []).map((item) => String(item.warehouse || '').trim()),
+            ...(state.transactions || []).map((tx) => String(tx.warehouse || '').trim()),
+          ].filter(Boolean),
+        ),
+      ].sort(),
     }),
     [options.vendors, state.mappedData, state.transactions],
   );

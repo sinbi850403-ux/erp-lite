@@ -1,4 +1,5 @@
 import { hasSessionAccessToken, shouldAttemptProfileLoad } from './auth/session-guards.js';
+import { AUTH_REGRESSION_CHECKLIST } from './auth/auth-regression-checklist.js';
 
 function assertEqual(name, actual, expected) {
   const pass = Object.is(actual, expected);
@@ -11,36 +12,53 @@ function assertEqual(name, actual, expected) {
   return pass;
 }
 
+function printChecklist() {
+  console.log('=== Auth Regression Checklist ===');
+  for (const item of AUTH_REGRESSION_CHECKLIST) {
+    const marker = item.automated ? '[auto]' : '[manual]';
+    console.log(`- ${item.id} ${marker} ${item.title}`);
+    console.log(`  -> ${item.expected}`);
+  }
+  console.log('');
+}
+
 function runAuthGuardRegressionTests() {
+  printChecklist();
   console.log('=== Auth Guard Regression Tests ===');
 
   const cases = [
     {
+      id: 'AUTH-001',
       name: 'ctrl+f5 race: user exists but access_token missing => skip profile bootstrap',
       actual: shouldAttemptProfileLoad({ uid: 'u-1' }, { user: { id: 'u-1' } }),
       expected: false,
     },
     {
+      id: 'AUTH-002',
       name: 'blank access_token => skip profile bootstrap',
       actual: shouldAttemptProfileLoad({ uid: 'u-1' }, { access_token: '   ' }),
       expected: false,
     },
     {
+      id: 'AUTH-003',
       name: 'valid access_token + uid => allow profile bootstrap',
       actual: shouldAttemptProfileLoad({ uid: 'u-1' }, { access_token: 'token-123' }),
       expected: true,
     },
     {
+      id: 'AUTH-002',
       name: 'missing uid => skip profile bootstrap',
       actual: shouldAttemptProfileLoad({}, { access_token: 'token-123' }),
       expected: false,
     },
     {
+      id: 'AUTH-002',
       name: 'access token helper returns false for undefined',
       actual: hasSessionAccessToken(undefined),
       expected: false,
     },
     {
+      id: 'AUTH-003',
       name: 'access token helper returns true for non-empty token',
       actual: hasSessionAccessToken({ access_token: 'abc' }),
       expected: true,
@@ -49,7 +67,7 @@ function runAuthGuardRegressionTests() {
 
   let passed = 0;
   for (const testCase of cases) {
-    if (assertEqual(testCase.name, testCase.actual, testCase.expected)) {
+    if (assertEqual(`${testCase.id} ${testCase.name}`, testCase.actual, testCase.expected)) {
       passed += 1;
     }
   }
@@ -63,4 +81,3 @@ function runAuthGuardRegressionTests() {
 }
 
 runAuthGuardRegressionTests();
-
