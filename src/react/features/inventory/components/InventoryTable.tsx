@@ -11,8 +11,22 @@ type InventoryRow = {
   supplyValue?: string | number;
 };
 
+type InventorySortKey =
+  | 'itemName'
+  | 'itemCode'
+  | 'category'
+  | 'vendor'
+  | 'warehouse'
+  | 'quantity'
+  | 'amount';
+
 type InventoryTableProps = {
   rows: InventoryRow[];
+  sort: {
+    key: InventorySortKey;
+    direction: 'asc' | 'desc';
+  };
+  onSortChange: (key: InventorySortKey) => void;
   onEdit: (row: InventoryRow) => void;
   onDelete: (row: InventoryRow) => void;
 };
@@ -22,7 +36,34 @@ function formatAmount(value: unknown) {
   return Number.isFinite(parsed) ? new Intl.NumberFormat('ko-KR').format(parsed) : '-';
 }
 
-export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) {
+function SortableHeader({
+  label,
+  sortKey,
+  sort,
+  onSortChange,
+}: {
+  label: string;
+  sortKey: InventorySortKey;
+  sort: InventoryTableProps['sort'];
+  onSortChange: InventoryTableProps['onSortChange'];
+}) {
+  const isActive = sort.key === sortKey;
+  const indicator = isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕';
+
+  return (
+    <button
+      type="button"
+      className={isActive ? 'react-sort-button is-active' : 'react-sort-button'}
+      onClick={() => onSortChange(sortKey)}
+      aria-label={`${label} 정렬`}
+    >
+      <span>{label}</span>
+      <span className="react-sort-indicator">{indicator}</span>
+    </button>
+  );
+}
+
+export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: InventoryTableProps) {
   return (
     <article className="react-card react-card--table">
       <div className="react-section-head">
@@ -37,13 +78,13 @@ export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) 
         <table>
           <thead>
             <tr>
-              <th>품목명</th>
-              <th>코드</th>
-              <th>카테고리</th>
-              <th>거래처</th>
-              <th>창고</th>
-              <th>수량</th>
-              <th>금액</th>
+              <th><SortableHeader label="품목명" sortKey="itemName" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="코드" sortKey="itemCode" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="카테고리" sortKey="category" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="거래처" sortKey="vendor" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="창고" sortKey="warehouse" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="수량" sortKey="quantity" sort={sort} onSortChange={onSortChange} /></th>
+              <th><SortableHeader label="금액" sortKey="amount" sort={sort} onSortChange={onSortChange} /></th>
               <th>관리</th>
             </tr>
           </thead>

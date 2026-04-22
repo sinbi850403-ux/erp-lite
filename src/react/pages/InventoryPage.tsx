@@ -13,9 +13,11 @@ export function InventoryPage() {
     editorOptions,
     filter,
     options,
+    sort,
     rows,
     summary,
     setFilter,
+    changeSort,
     saveItem,
     deleteItem,
     startCreate,
@@ -58,7 +60,7 @@ export function InventoryPage() {
         onSubmit={saveItem}
       />
       <InventoryFilters filter={filter} options={options} onChange={setFilter} />
-      <InventoryTable rows={rows} onEdit={startEdit} onDelete={requestDelete} />
+      <InventoryTable rows={rows} sort={sort} onSortChange={changeSort} onEdit={startEdit} onDelete={requestDelete} />
 
       <ConfirmDialog
         open={!!pendingDeleteRow}

@@ -7,6 +7,20 @@ export type InventoryFilterState = {
   focus: string;
 };
 
+export type InventorySortKey =
+  | 'itemName'
+  | 'itemCode'
+  | 'category'
+  | 'vendor'
+  | 'warehouse'
+  | 'quantity'
+  | 'amount';
+
+export type InventorySortState = {
+  key: InventorySortKey;
+  direction: 'asc' | 'desc';
+};
+
 function toNumber(value: unknown) {
   const parsed = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -39,7 +53,11 @@ export function getInventoryOptions(state: AppStoreState) {
   };
 }
 
-export function getFilteredInventoryRows(state: AppStoreState, filter: InventoryFilterState) {
+export function getFilteredInventoryRows(
+  state: AppStoreState,
+  filter: InventoryFilterState,
+  sort: InventorySortState = { key: 'amount', direction: 'desc' },
+) {
   const keyword = filter.keyword.trim().toLowerCase();
 
   return (state.mappedData || [])
@@ -61,5 +79,27 @@ export function getFilteredInventoryRows(state: AppStoreState, filter: Inventory
       if (filter.focus === 'missingVendor' && item.vendor) return false;
       return true;
     })
-    .sort((a, b) => toNumber(b.totalPrice || b.supplyValue) - toNumber(a.totalPrice || a.supplyValue));
+    .sort((a, b) => compareInventoryRows(a, b, sort));
+}
+
+function compareInventoryRows(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+  sort: InventorySortState,
+) {
+  const direction = sort.direction === 'asc' ? 1 : -1;
+
+  if (sort.key === 'quantity') {
+    return direction * (toNumber(a.quantity) - toNumber(b.quantity));
+  }
+
+  if (sort.key === 'amount') {
+    const aAmount = toNumber(a.totalPrice || a.supplyValue);
+    const bAmount = toNumber(b.totalPrice || b.supplyValue);
+    return direction * (aAmount - bAmount);
+  }
+
+  const aText = String(a[sort.key] || '').trim().toLowerCase();
+  const bText = String(b[sort.key] || '').trim().toLowerCase();
+  return direction * aText.localeCompare(bText, 'ko');
 }

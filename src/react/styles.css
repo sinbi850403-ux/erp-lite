@@ -404,6 +404,35 @@ a {
   color: #64748b;
 }
 
+.react-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.react-sort-button:hover {
+  color: #0f766e;
+}
+
+.react-sort-button.is-active {
+  color: #0f766e;
+}
+
+.react-sort-indicator {
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.9;
+}
+
 .react-empty-cell,
 .react-empty-note {
   color: #64748b;
@@ -813,6 +842,11 @@ html.dark-mode .react-field input:focus {
 html.dark-mode .react-data-table th {
   color: #8b949e;
   border-color: rgba(48, 54, 61, 0.8);
+}
+
+html.dark-mode .react-sort-button:hover,
+html.dark-mode .react-sort-button.is-active {
+  color: #2dd4bf;
 }
 
 html.dark-mode .react-data-table td {

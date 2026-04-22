@@ -1,5 +1,10 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { getFilteredInventoryRows, getInventoryOptions, getInventorySummary } from '../../../domain/inventory/selectors';
+import {
+  getFilteredInventoryRows,
+  getInventoryOptions,
+  getInventorySummary,
+  type InventorySortKey,
+} from '../../../domain/inventory/selectors';
 import {
   createInventoryItem,
   editInventoryItem,
@@ -27,6 +32,10 @@ export function useInventoryPage() {
     warehouse: '',
     focus: 'all',
   });
+  const [sort, setSort] = useState<{ key: InventorySortKey; direction: 'asc' | 'desc' }>({
+    key: 'amount',
+    direction: 'desc',
+  });
   const [editingTarget, setEditingTarget] = useState<number | string | null>(null);
   const [draft, setDraft] = useState<InventoryInput>(emptyDraft);
   const deferredKeyword = useDeferredValue(filter.keyword);
@@ -38,7 +47,23 @@ export function useInventoryPage() {
 
   const summary = useMemo(() => getInventorySummary(state), [state]);
   const options = useMemo(() => getInventoryOptions(state), [state]);
-  const rows = useMemo(() => getFilteredInventoryRows(state, effectiveFilter), [effectiveFilter, state]);
+  const rows = useMemo(() => getFilteredInventoryRows(state, effectiveFilter, sort), [effectiveFilter, sort, state]);
+
+  function changeSort(nextKey: InventorySortKey) {
+    setSort((current) => {
+      if (current.key === nextKey) {
+        return {
+          ...current,
+          direction: current.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+
+      return {
+        key: nextKey,
+        direction: nextKey === 'quantity' || nextKey === 'amount' ? 'desc' : 'asc',
+      };
+    });
+  }
 
   useEffect(() => {
     if (editingTarget === null) return;
@@ -126,9 +151,11 @@ export function useInventoryPage() {
     filter,
     editorOptions,
     options,
+    sort,
     rows,
     summary,
     setFilter,
+    changeSort,
     saveItem,
     deleteItem,
     startCreate,
