@@ -1,131 +1,134 @@
-import { getDashboardMetrics, getRecentTransactions, getWorkspaceReadiness } from '../domain/dashboard/selectors';
+import { getDashboardMetrics, getRecentTransactions } from '../domain/dashboard/selectors';
 import { useAuth } from '../features/auth/AuthContext';
-import { legacyRoutes } from '../legacy/routes';
 import { useStore } from '../services/store/StoreContext';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('ko-KR').format(value);
 }
 
-export function HomePage() {
+const QUICK_MENUS = [
+  { icon: '📦', label: '재고 현황', page: 'inventory' },
+  { icon: '↕️', label: '입출고 관리', page: 'inout' },
+  { icon: '📊', label: '고급 분석', page: 'dashboard' },
+  { icon: '🏢', label: '거래처 관리', page: 'vendors' },
+  { icon: '📑', label: '문서 생성', page: 'documents' },
+  { icon: '⚙️', label: '기본 설정', page: 'settings' },
+];
+
+type HomePageProps = {
+  navigateTo?: (page: string) => void;
+};
+
+export function HomePage({ navigateTo }: HomePageProps) {
   const { profile, user } = useAuth();
   const { isReady, state } = useStore();
   const metrics = getDashboardMetrics(state);
-  const readiness = getWorkspaceReadiness(state);
   const transactions = getRecentTransactions(state);
+
+  const displayName = profile?.name || user?.displayName || user?.email || '사용자';
+  const roleLabel = profile?.role || 'viewer';
+  const planLabel = profile?.plan || 'free';
 
   return (
     <section className="react-page">
+      {/* 환영 헤더 */}
       <article className="react-hero-card">
         <div className="react-hero-card__content">
           <div>
-            <span className="react-chip">Phase Complete</span>
-            <h2>React workspace is now the operational shell for the next migration steps.</h2>
+            <span className="react-chip">대시보드</span>
+            <h2>안녕하세요, {displayName}님!<br />오늘의 재고 현황을 확인하세요.</h2>
             <p>
-              The app shell, protected routes, auth facade, inventory domain, and inout domain now
-              live in React-friendly layers. The vanilla entry stays available while migration
-              continues page by page.
+              품목·입출고·거래처·분석 기능을 하나의 화면에서 관리합니다.
+              아래 빠른 메뉴를 눌러 바로 이동할 수 있습니다.
             </p>
           </div>
           <div className="react-hero-card__panel">
-            <span className="react-card__eyebrow">Current operator</span>
-            <strong>{profile?.name || user?.displayName || user?.email || 'Guest'}</strong>
-            <p>{profile ? `${profile.role || 'viewer'} / ${profile.plan || 'free'}` : 'No active session'}</p>
-            <small>{isReady ? 'Store restored' : 'Restoring store'}</small>
+            <span className="react-card__eyebrow">현재 로그인</span>
+            <strong>{displayName}</strong>
+            <p>{roleLabel} / {planLabel}</p>
+            <small>{isReady ? '데이터 로드 완료' : '데이터 로딩 중...'}</small>
           </div>
         </div>
       </article>
 
+      {/* KPI 통계 */}
       <div className="react-grid react-grid--stats">
         <article className="react-stat-card is-neutral">
-          <span>Inventory items</span>
+          <span>품목 수</span>
           <strong>{metrics.itemCount}</strong>
         </article>
         <article className="react-stat-card is-neutral">
-          <span>Transactions</span>
+          <span>입출고 건수</span>
           <strong>{metrics.transactionCount}</strong>
         </article>
-        <article className={metrics.lowStockCount ? 'react-stat-card is-warn' : 'react-stat-card is-good'}>
-          <span>Low stock alerts</span>
+        <article className={metrics.lowStockCount ? 'react-stat-card is-warn' : 'react-stat-card is-neutral'}>
+          <span>부족 재고</span>
           <strong>{metrics.lowStockCount}</strong>
         </article>
         <article className="react-stat-card is-neutral">
-          <span>Inventory value</span>
-          <strong>KRW {formatCurrency(metrics.inventoryValue)}</strong>
+          <span>재고 가치</span>
+          <strong>₩ {formatCurrency(metrics.inventoryValue)}</strong>
         </article>
-        <article className="react-stat-card is-good">
-          <span>Today flow</span>
+        <article className="react-stat-card is-neutral">
+          <span>오늘 입출고</span>
           <strong>{metrics.todayTransactions}</strong>
         </article>
         <article className="react-stat-card is-neutral">
-          <span>Vendor links</span>
+          <span>거래처 수</span>
           <strong>{metrics.vendorCount}</strong>
         </article>
       </div>
 
       <div className="react-grid react-grid--two">
+        {/* 빠른 메뉴 */}
         <article className="react-card">
           <div className="react-section-head">
             <div>
-              <span className="react-card__eyebrow">Readiness</span>
-              <h3>Migration outcome that already feels stable</h3>
+              <span className="react-card__eyebrow">빠른 메뉴</span>
+              <h3>자주 사용하는 화면</h3>
             </div>
           </div>
-          <div className="react-readiness-list">
-            {readiness.map((item) => (
-              <div key={item.label} className={`react-readiness-item is-${item.tone}`}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <p>{item.detail}</p>
-                </div>
-                <span>{item.value}</span>
-              </div>
+          <div className="react-quick-grid">
+            {QUICK_MENUS.map((item) => (
+              <button
+                key={item.page}
+                type="button"
+                className="react-quick-btn"
+                onClick={() => navigateTo?.(item.page)}
+              >
+                <span className="react-quick-btn__icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
             ))}
           </div>
         </article>
 
+        {/* 최근 입출고 */}
         <article className="react-card">
           <div className="react-section-head">
             <div>
-              <span className="react-card__eyebrow">Legacy bridge</span>
-              <h3>Keep the old app available while React expands</h3>
+              <span className="react-card__eyebrow">최근 입출고</span>
+              <h3>최근 입출고 내역</h3>
             </div>
           </div>
-          <div className="react-link-list">
-            {legacyRoutes.map((route) => (
-              <a key={route.href} className="react-link-card" href={route.href}>
-                <strong>{route.label}</strong>
-                <span>{route.href}</span>
-              </a>
-            ))}
+          <div className="react-activity-list">
+            {transactions.length ? (
+              transactions.map((tx, index) => (
+                <div key={`${tx.itemName || 'tx'}-${index}`} className="react-activity-item">
+                  <span className={tx.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
+                    {tx.type === 'in' ? '입고' : '출고'}
+                  </span>
+                  <strong>{tx.itemName || '품목명 없음'}</strong>
+                  <small>{tx.date || '-'}</small>
+                  <p>{tx.vendor || '거래처 없음'} / 수량 {tx.quantity || '-'}</p>
+                </div>
+              ))
+            ) : (
+              <p className="react-empty-note">입출고 내역이 없습니다.</p>
+            )}
           </div>
         </article>
       </div>
-
-      <article className="react-card">
-        <div className="react-section-head">
-          <div>
-            <span className="react-card__eyebrow">Recent activity</span>
-            <h3>Latest inbound and outbound changes</h3>
-          </div>
-        </div>
-        <div className="react-activity-list">
-          {transactions.length ? (
-            transactions.map((tx, index) => (
-              <div key={`${tx.itemName || 'tx'}-${index}`} className="react-activity-item">
-                <span className={tx.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
-                  {tx.type === 'in' ? 'Inbound' : 'Outbound'}
-                </span>
-                <strong>{tx.itemName || 'Unnamed item'}</strong>
-                <small>{tx.date || '-'}</small>
-                <p>{tx.vendor || 'No vendor'} / Qty {tx.quantity || '-'}</p>
-              </div>
-            ))
-          ) : (
-            <p className="react-empty-note">No transaction history yet. The React workspace is ready for the first operational flow.</p>
-          )}
-        </div>
-      </article>
     </section>
   );
 }

@@ -35,35 +35,7 @@ export function getRecentTransactions(state: AppStoreState) {
     .slice(0, 6);
 }
 
-export function getWorkspaceReadiness(state: AppStoreState) {
-  return [
-    {
-      label: 'Auth split',
-      value: 'Ready',
-      detail: 'React auth context and auth facade are active.',
-      tone: 'good',
-    },
-    {
-      label: 'Inventory domain',
-      value: state.mappedData?.length ? 'Active' : 'Empty',
-      detail: state.mappedData?.length
-        ? `${state.mappedData.length} inventory rows are available in the React shell.`
-        : 'Inventory data will appear after import or sync.',
-      tone: state.mappedData?.length ? 'good' : 'warn',
-    },
-    {
-      label: 'Inout domain',
-      value: state.transactions?.length ? 'Active' : 'Pending',
-      detail: state.transactions?.length
-        ? `${state.transactions.length} transactions are ready for React views.`
-        : 'No transaction history has been created yet.',
-      tone: state.transactions?.length ? 'good' : 'warn',
-    },
-    {
-      label: 'Legacy coexistence',
-      value: 'Kept',
-      detail: 'The vanilla entry remains available while React replaces pages gradually.',
-      tone: 'neutral',
-    },
-  ];
+/** @deprecated HomePage에서 더 이상 사용하지 않음 */
+export function getWorkspaceReadiness(_state: AppStoreState) {
+  return [];
 }
