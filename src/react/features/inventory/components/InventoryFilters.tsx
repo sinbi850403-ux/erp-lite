@@ -25,14 +25,14 @@ export function InventoryFilters({ filter, options, onChange }: InventoryFilters
           className="react-input"
           value={filter.keyword}
           onChange={(event) => onChange({ ...filter, keyword: event.target.value })}
-          placeholder="Search item, code, vendor"
+          placeholder="품목명·코드·거래처 검색"
         />
         <select
           className="react-select"
           value={filter.category}
           onChange={(event) => onChange({ ...filter, category: event.target.value })}
         >
-          <option value="">All categories</option>
+          <option value="">전체 카테고리</option>
           {options.categories.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -44,7 +44,7 @@ export function InventoryFilters({ filter, options, onChange }: InventoryFilters
           value={filter.warehouse}
           onChange={(event) => onChange({ ...filter, warehouse: event.target.value })}
         >
-          <option value="">All warehouses</option>
+          <option value="">전체 창고</option>
           {options.warehouses.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -55,9 +55,9 @@ export function InventoryFilters({ filter, options, onChange }: InventoryFilters
 
       <div className="react-chip-row">
         {[
-          { value: 'all', label: 'All items' },
-          { value: 'low', label: 'Low stock' },
-          { value: 'missingVendor', label: 'Missing vendor' },
+          { value: 'all', label: '전체' },
+          { value: 'low', label: '부족 재고' },
+          { value: 'missingVendor', label: '거래처 미설정' },
         ].map((chip) => (
           <button
             key={chip.value}

@@ -37,11 +37,11 @@ export function InventoryPage() {
   return (
     <section className="react-page">
       <article className="react-card">
-        <span className="react-chip">Inventory flow migrated</span>
-        <h2>Inventory now supports actual React-side create, edit, and delete flows.</h2>
+        <span className="react-chip">재고 현황</span>
+        <h2>품목 등록·수정·삭제를 이 화면에서 바로 처리합니다.</h2>
         <p>
-          This page is no longer just a read-only placeholder. The editor writes to the shared
-          store, the table reflects updates immediately, and the page structure stays feature-first.
+          편집기에서 저장하면 목록이 즉시 반영됩니다.
+          기존 품목을 템플릿으로 불러와 빠르게 추가할 수도 있습니다.
         </p>
       </article>
 

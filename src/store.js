@@ -544,6 +544,7 @@ export function setState(partial) {
  */
 export function resetState() {
   state = { ...DEFAULT_STATE };
+  _restorePromise = null; // 로그아웃 후 재로그인 시 재복원 허용
   ensureStableIds();
   window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
   saveToDB();
@@ -552,8 +553,21 @@ export function resetState() {
 /**
  * 앱 시작 시 상태 복원
  * 전략: Supabase에서 먼저 로드 → 실패 시 IndexedDB 폴백
+ *
+ * idempotency: 이미 진행 중인 복원이 있으면 동일 Promise를 반환 (React StoreProvider
+ * 가 페이지 이동마다 재마운트되어도 Supabase 중복 호출 방지)
  */
-export async function restoreState() {
+let _restorePromise = null;
+export function restoreState() {
+  if (_restorePromise) return _restorePromise;
+  _restorePromise = _doRestoreState().finally(() => {
+    // 로그아웃 후 재로그인 시 재복원할 수 있도록 완료 뒤 초기화
+    // (resetState() 호출 시 함께 초기화됨)
+  });
+  return _restorePromise;
+}
+
+async function _doRestoreState() {
   // 1. Supabase에서 데이터 로딩 시도
   if (isSupabaseConfigured) {
     try {

@@ -27,24 +27,24 @@ export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) 
     <article className="react-card react-card--table">
       <div className="react-section-head">
         <div>
-          <span className="react-card__eyebrow">Inventory Table</span>
-          <h3>Current inventory snapshot</h3>
+          <span className="react-card__eyebrow">재고 목록</span>
+          <h3>현재 재고 현황</h3>
         </div>
-        <strong>{rows.length} rows</strong>
+        <strong>{rows.length}건</strong>
       </div>
 
       <div className="react-data-table">
         <table>
           <thead>
             <tr>
-              <th>Item</th>
-              <th>Code</th>
-              <th>Category</th>
-              <th>Vendor</th>
-              <th>Warehouse</th>
-              <th>Qty</th>
-              <th>Value</th>
-              <th>Actions</th>
+              <th>품목명</th>
+              <th>코드</th>
+              <th>카테고리</th>
+              <th>거래처</th>
+              <th>창고</th>
+              <th>수량</th>
+              <th>금액</th>
+              <th>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -61,10 +61,10 @@ export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) 
                   <td>
                     <div className="react-inline-actions">
                       <button type="button" className="react-link-button" onClick={() => onEdit(row)}>
-                        Edit
+                        수정
                       </button>
                       <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
-                        Delete
+                        삭제
                       </button>
                     </div>
                   </td>
@@ -73,7 +73,7 @@ export function InventoryTable({ rows, onDelete, onEdit }: InventoryTableProps) 
             ) : (
               <tr>
                 <td colSpan={8} className="react-empty-cell">
-                  No inventory rows match the current filter.
+                  조건에 맞는 품목이 없습니다.
                 </td>
               </tr>
             )}
