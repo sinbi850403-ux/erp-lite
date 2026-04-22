@@ -16,6 +16,9 @@ let userProfile = null;
 let authChangeCallbacks = [];
 let authSubscription = null;
 let authInitialized = false;
+let authHydrationStarted = false;
+let authHydrationComplete = false;
+let hasNotifiedProfileLoadFailure = false;
 
 // ─── 이중 클릭 / 중복 요청 방지 플래그 ─────────────────────────────────────
 // isLoggingIn: 이메일 로그인 진행 중 이중 클릭 방지 (Google OAuth 에는 사용 X)
@@ -140,12 +143,12 @@ async function loadProfile(user) {
 
   try {
     const { data, error } = await withTimeout(
-      supabase.from('profiles').select('*').eq('id', user.uid).single(),
+      supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle(),
       15000,
       'load-profile',
     );
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       throw error;
     }
 
@@ -153,15 +156,20 @@ async function loadProfile(user) {
       // 프로필 미존재 → 신규 생성
       const newProfile = createBootstrapProfile(user);
 
-      let { error: insertError } = await supabase.from('profiles').insert(newProfile);
+      let { error: insertError } = await supabase.from('profiles').upsert(newProfile, { onConflict: 'id' });
       if (insertError) {
-        // 1회 재시도 (네트워크 순간 실패 대비)
-        await new Promise(r => setTimeout(r, 1500));
-        ({ error: insertError } = await supabase.from('profiles').insert(newProfile));
-      }
-      if (insertError) {
+        const message = String(insertError?.message || '').toLowerCase();
+        const isRlsOrPermission =
+          message.includes('row-level security') ||
+          message.includes('permission') ||
+          message.includes('forbidden') ||
+          message.includes('not allowed');
+
         console.warn('[Auth] profile bootstrap failed:', insertError.message);
-        window.dispatchEvent(new CustomEvent('invex:profile-load-failed'));
+        if (!isRlsOrPermission && !hasNotifiedProfileLoadFailure) {
+          hasNotifiedProfileLoadFailure = true;
+          window.dispatchEvent(new CustomEvent('invex:profile-load-failed'));
+        }
         return fallback;
       }
 
@@ -356,24 +364,34 @@ export function initAuth(callback) {
   authInitialized = true;
   sanitizeAuthStorage();
 
-  // 초기 세션 복구 — seq=0 으로 시작
-  const initSeq = applySessionSeq;
-  withTimeout(supabase.auth.getSession(), 8000, 'initial-session')
-    .then(({ data }) => applySession(data?.session || null, initSeq))
-    .catch((error) => {
-      console.warn('[Auth] Initial session recovery failed:', error.message);
-      applySession(null, initSeq);
-    });
-
-  // onAuthStateChange — 내부 에러를 반드시 캐치하여 Supabase 리스너가 죽지 않도록
-  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+  // onAuthStateChange — INITIAL_SESSION 이벤트를 단일 hydration 소스로 사용
+  const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
     try {
+      if (event === 'INITIAL_SESSION') {
+        authHydrationStarted = true;
+      }
       await applySession(session, applySessionSeq);
+      authHydrationComplete = true;
     } catch (err) {
       console.error('[Auth] onAuthStateChange handler error:', err);
     }
   });
   authSubscription = listener?.subscription || null;
+
+  // 일부 환경에서 INITIAL_SESSION이 지연/누락될 수 있어 1회 폴백만 수행
+  setTimeout(() => {
+    if (authHydrationStarted || authHydrationComplete) return;
+    const initSeq = applySessionSeq;
+    withTimeout(supabase.auth.getSession(), 8000, 'initial-session')
+      .then(({ data }) => applySession(data?.session || null, initSeq))
+      .catch((error) => {
+        console.warn('[Auth] Initial session recovery failed:', error.message);
+        applySession(null, initSeq);
+      })
+      .finally(() => {
+        authHydrationComplete = true;
+      });
+  }, 1200);
 }
 
 // ─── Google 로그인 ────────────────────────────────────────────────────────────

@@ -303,6 +303,7 @@ let _supabaseSyncTimer = null;
 let _dirtyKeys = new Set();
 let _waitingAuthResume = false;
 let _authResumeSubscription = null;
+let _sessionProbePromise = null;
 
 function getErrorMessage(error) {
   if (!error) return '';
@@ -340,13 +341,33 @@ function waitForAuthThenSync() {
   _authResumeSubscription = data?.subscription || null;
 }
 
+async function getActiveSessionSafe() {
+  if (_sessionProbePromise) return _sessionProbePromise;
+
+  _sessionProbePromise = supabase.auth
+    .getSession()
+    .then(({ data }) => data?.session || null)
+    .catch((error) => {
+      const message = getErrorMessage(error).toLowerCase();
+      if (!message.includes('lock')) {
+        console.warn('[Store] session check failed:', message || error);
+      }
+      return null;
+    })
+    .finally(() => {
+      _sessionProbePromise = null;
+    });
+
+  return _sessionProbePromise;
+}
+
 /**
  * 변경된 데이터만 Supabase에 동기화
  * 왜 전체가 아닌 부분 동기화? → 품목 10,000개를 매번 보내면 느림
  */
 async function syncToSupabase() {
   if (!isSupabaseConfigured || _dirtyKeys.size === 0) return;
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getActiveSessionSafe();
   if (!session?.user) {
     waitForAuthThenSync();
     return;

@@ -15,6 +15,7 @@ const DB_TIMEOUT_MS = 15_000;
 const USER_ID_CACHE_TTL_MS = 60_000;
 let _cachedUserId = null;
 let _cachedUserIdAt = 0;
+let _userIdInFlight = null;
 
 /**
  * Supabase 쿼리에 타임아웃을 적용하는 래퍼
@@ -72,19 +73,27 @@ async function getUserId() {
     return _cachedUserId;
   }
 
-  const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
-  if (session?.user?.id) {
-    _cachedUserId = session.user.id;
+  if (_userIdInFlight) return _userIdInFlight;
+
+  _userIdInFlight = (async () => {
+    const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
+    if (session?.user?.id) {
+      _cachedUserId = session.user.id;
+      _cachedUserIdAt = Date.now();
+      return _cachedUserId;
+    }
+
+    const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
+    if (!user) throw new Error('로그인이 필요합니다');
+
+    _cachedUserId = user.id;
     _cachedUserIdAt = Date.now();
     return _cachedUserId;
-  }
+  })().finally(() => {
+    _userIdInFlight = null;
+  });
 
-  const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
-  if (!user) throw new Error('로그인이 필요합니다');
-
-  _cachedUserId = user.id;
-  _cachedUserIdAt = Date.now();
-  return _cachedUserId;
+  return _userIdInFlight;
 }
 
 // ============================================================

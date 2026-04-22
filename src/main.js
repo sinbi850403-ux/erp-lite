@@ -717,11 +717,14 @@ async function initAppAfterAuth() {
   // Supabase health check는 백그라운드로 실행해 초기 화면 진입을 막지 않음
   if (isSupabaseConfigured) {
     Promise.race([
-      supabase.from('profiles').select('id').limit(1),
+      supabase.auth.getSession(),
       new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 3000)),
     ])
-      .then(({ error }) => {
+      .then(({ data, error }) => {
         if (error) throw error;
+        if (!data?.session?.user) {
+          throw new Error('no active session');
+        }
       })
       .catch((e) => {
         console.warn('[Health] Supabase 연결 불안정:', e.message);
