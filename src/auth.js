@@ -10,6 +10,7 @@ import { createBootstrapProfile, getFallbackProfile as createFallbackProfile, ma
 import { renderInlineLoginError as renderVanillaLoginError, renderLoginScreen as renderVanillaLoginScreen } from './auth/ui.js';
 import { purgeLegacyAuthStorage as purgeAuthStorage, sanitizeSupabaseStorage as sanitizeAuthStorage } from './auth/storage.js';
 import { withTimeout, TimeoutError } from './auth/async.js';
+import { shouldAttemptProfileLoad } from './auth/session-guards.js';
 
 let currentUser = null;
 let userProfile = null;
@@ -140,11 +141,10 @@ function sanitizeSupabaseStorage() {
 
 async function loadProfile(user, session = null) {
   const fallback = createFallbackProfile(user);
-  const accessToken = String(session?.access_token || '').trim();
 
   // Ctrl+F5 직후 hydration 경합에서 user만 있고 토큰이 없는 경우가 있어
   // profiles 조회를 시도하면 401이 반복된다. 토큰이 없으면 즉시 fallback 처리.
-  if (!accessToken) {
+  if (!shouldAttemptProfileLoad(user, session)) {
     return fallback;
   }
 
