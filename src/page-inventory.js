@@ -1,4 +1,4 @@
-/**
+﻿/**
  * page-inventory.js - 재고 현황 페이지
  * ?ㅻТ 湲곕뒫: ?섎룞 ?덈ぉ 異붽?/?몄쭛, ?덉쟾?ш퀬 寃쎄퀬, 寃???꾪꽣, ?섏씠吏?ㅼ씠?? ?묒? ?대낫?닿린
  * **컬럼 표시 설정**: 사용자가 보고 싶은 컬럼만 선택해서 볼 수 있음
@@ -584,9 +584,20 @@ export function renderInventoryPage(container, navigateTo) {
 
   function getItemKey(row) {
     if (!row) return '';
+    const stableId = String(row.id || row._id || '').trim();
+    if (stableId) return stableId;
     const code = String(row.itemCode || '').trim();
     const name = String(row.itemName || '').trim();
     return `${code}::${name}`;
+  }
+
+  function getItemId(row) {
+    return String(row?.id || row?._id || '').trim();
+  }
+
+  function getRowByItemId(itemId) {
+    if (!itemId) return null;
+    return (getState().mappedData || []).find(row => getItemId(row) === itemId) || null;
   }
 
   function escapeText(value) {
@@ -940,7 +951,8 @@ export function renderInventoryPage(container, navigateTo) {
         검색 결과가 없습니다.
       </td></tr>`;
     } else {
-      selectedIndexes = new Set([...selectedIndexes].filter(index => Number.isInteger(index) && index >= 0 && index < data.length));
+      const validItemIds = new Set(data.map(row => getItemId(row)).filter(Boolean));
+      selectedIndexes = new Set([...selectedIndexes].filter(id => validItemIds.has(id)));
 
       // ── 동일 품목명/코드 기준 그룹핑 ─────────────────────
       const invGroupOrder = [];
@@ -957,6 +969,7 @@ export function renderInventoryPage(container, navigateTo) {
       const _todayKey = new Date().toISOString().slice(0, 10);
       const renderInvRow = (row, isChild = false) => {
         const realIdx = data.indexOf(row);
+        const itemId = getItemId(row);
         const min = safetyStock[row.itemName];
         const qtyStr = typeof row.quantity === 'string' ? row.quantity.replace(/,/g, '') : row.quantity;
         const qty = parseFloat(qtyStr) || 0;
@@ -969,15 +982,15 @@ export function renderInventoryPage(container, navigateTo) {
 
         return `
           <tr class="${isDanger ? 'row-danger' : isLow ? 'row-warning' : ''} ${isFocused ? 'row-focused' : ''} ${isChild ? 'inv-child-row' : ''}"
-              data-idx="${realIdx}" data-row-key="${safeAttr(rowKey)}" style="${childStyle}">
+              data-item-id="${safeAttr(itemId)}" data-row-key="${safeAttr(rowKey)}" style="${childStyle}">
             <td data-label="" class="col-check">
-              <input type="checkbox" class="table-row-check inv-row-check" data-idx="${realIdx}" ${selectedIndexes.has(realIdx) ? 'checked' : ''} aria-label="행 선택" />
+              <input type="checkbox" class="table-row-check inv-row-check" data-item-id="${safeAttr(itemId)}" ${selectedIndexes.has(itemId) ? 'checked' : ''} aria-label="행 선택" />
             </td>
             <td class="col-num"></td>
             ${activeFields.map(key => `
               <td class="editable-cell ${ALL_FIELDS.find(f => f.key === key)?.numeric ? 'text-right' : ''}"
                   data-label="${FIELD_LABELS[key] || key}"
-                  data-field="${key}" data-idx="${realIdx}">
+                  data-field="${key}" data-item-id="${safeAttr(itemId)}">
                 ${key === 'itemName' && isLocked ? '<span title="잠금 품목 (수정 제한)" style="margin-right:4px;">🔒</span>' : ''}
                 ${formatCell(key, row[key])}
                 ${key === 'quantity' && isLow ? ' <span class="badge badge-danger" style="font-size:10px;">부족</span>' : ''}
@@ -992,8 +1005,8 @@ export function renderInventoryPage(container, navigateTo) {
               </button>
             </td>
             <td data-label="" class="col-actions">
-              ${canEdit   ? `<button class="btn-icon btn-edit" data-idx="${realIdx}" title="수정">수정</button>` : `<button class="btn-icon" title="권한 없음" disabled style="opacity:0.3;cursor:not-allowed;">수정</button>`}
-              ${canDelete ? `<button class="btn-icon btn-icon-danger btn-del" data-idx="${realIdx}" title="삭제">삭제</button>` : ''}
+              ${canEdit   ? `<button class="btn-icon btn-edit" data-item-id="${safeAttr(itemId)}" title="수정">수정</button>` : `<button class="btn-icon" title="권한 없음" disabled style="opacity:0.3;cursor:not-allowed;">수정</button>`}
+              ${canDelete ? `<button class="btn-icon btn-icon-danger btn-del" data-item-id="${safeAttr(itemId)}" title="삭제">삭제</button>` : ''}
             </td>
           </tr>
         `;
@@ -1076,16 +1089,16 @@ export function renderInventoryPage(container, navigateTo) {
     const selectAll = container.querySelector('#inv-select-all');
     if (!selectAll) return;
 
-    const pageIndexes = pageRows.map(row => data.indexOf(row)).filter(index => index >= 0);
-    if (pageIndexes.length === 0) {
+    const pageItemIds = pageRows.map(row => getItemId(row)).filter(Boolean);
+    if (pageItemIds.length === 0) {
       selectAll.checked = false;
       selectAll.indeterminate = false;
       return;
     }
 
-    const checkedCount = pageIndexes.filter(index => selectedIndexes.has(index)).length;
-    selectAll.checked = checkedCount === pageIndexes.length;
-    selectAll.indeterminate = checkedCount > 0 && checkedCount < pageIndexes.length;
+    const checkedCount = pageItemIds.filter(id => selectedIndexes.has(id)).length;
+    selectAll.checked = checkedCount === pageItemIds.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < pageItemIds.length;
   }
 
   function getCurrentPageRows() {
@@ -1107,15 +1120,6 @@ export function renderInventoryPage(container, navigateTo) {
     if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedCount === 0;
   }
 
-  function shiftSelectionAfterDelete(index) {
-    const next = new Set();
-    selectedIndexes.forEach(selectedIndex => {
-      if (selectedIndex === index) return;
-      next.add(selectedIndex > index ? selectedIndex - 1 : selectedIndex);
-    });
-    selectedIndexes = next;
-  }
-
   function applyBulkCategory() {
     if (selectedIndexes.size === 0) {
       showToast('선택된 품목이 없습니다.', 'warning');
@@ -1130,7 +1134,7 @@ export function renderInventoryPage(container, navigateTo) {
       return;
     }
 
-    [...selectedIndexes].forEach(index => updateItem(index, { category: trimmed }));
+    [...selectedIndexes].forEach(itemId => updateItem(itemId, { category: trimmed }));
     showToast(`${selectedIndexes.size}개 품목의 분류를 "${trimmed}"로 변경했습니다.`, 'success');
     renderTable();
     updateStats();
@@ -1143,8 +1147,7 @@ export function renderInventoryPage(container, navigateTo) {
     }
 
     const selectedRows = [...selectedIndexes]
-      .sort((a, b) => a - b)
-      .map(index => data[index])
+      .map(itemId => getRowByItemId(itemId))
       .filter(Boolean);
 
     const exportData = selectedRows.map(row => {
@@ -1164,10 +1167,11 @@ export function renderInventoryPage(container, navigateTo) {
       return;
     }
 
-    const sortedIndexes = [...selectedIndexes].sort((a, b) => b - a);
+    if (!confirm(`선택한 ${selectedIndexes.size}개 품목을 삭제할까요?`)) return;
+    const selectedIds = [...selectedIndexes];
     const removedItems = [];
-    sortedIndexes.forEach(index => {
-      const removed = deleteItem(index);
+    selectedIds.forEach(itemId => {
+      const removed = deleteItem(itemId);
       if (removed?.deleted) removedItems.push({ index: removed.index, item: removed.deleted });
     });
 
@@ -1254,10 +1258,11 @@ export function renderInventoryPage(container, navigateTo) {
     selectAll?.addEventListener('change', () => {
       const rowChecks = container.querySelectorAll('.inv-row-check');
       rowChecks.forEach((check) => {
-        const idx = parseInt(check.dataset.idx, 10);
+        const itemId = String(check.dataset.itemId || '').trim();
         check.checked = selectAll.checked;
-        if (selectAll.checked) selectedIndexes.add(idx);
-        else selectedIndexes.delete(idx);
+        if (!itemId) return;
+        if (selectAll.checked) selectedIndexes.add(itemId);
+        else selectedIndexes.delete(itemId);
       });
       refreshBulkActions();
       updateSelectAllState(getCurrentPageRows());
@@ -1265,9 +1270,10 @@ export function renderInventoryPage(container, navigateTo) {
 
     container.querySelectorAll('.inv-row-check').forEach(check => {
       check.addEventListener('change', () => {
-        const idx = parseInt(check.dataset.idx, 10);
-        if (check.checked) selectedIndexes.add(idx);
-        else selectedIndexes.delete(idx);
+        const itemId = String(check.dataset.itemId || '').trim();
+        if (!itemId) return;
+        if (check.checked) selectedIndexes.add(itemId);
+        else selectedIndexes.delete(itemId);
         refreshBulkActions();
         updateSelectAllState(getCurrentPageRows());
       });
@@ -1294,9 +1300,9 @@ export function renderInventoryPage(container, navigateTo) {
     // ?몃씪???몄쭛
     container.querySelectorAll('.editable-cell').forEach(cell => {
       cell.addEventListener('dblclick', () => {
-        const idx = parseInt(cell.dataset.idx);
+        const itemId = String(cell.dataset.itemId || '').trim();
         const field = cell.dataset.field;
-        const currentValue = data[idx]?.[field] ?? '';
+        const currentValue = getRowByItemId(itemId)?.[field] ?? '';
         if (cell.querySelector('input')) return;
 
         const input = document.createElement('input');
@@ -1310,17 +1316,20 @@ export function renderInventoryPage(container, navigateTo) {
 
         const save = () => {
           const newVal = input.value;
-          updateItem(idx, { [field]: newVal });
+          updateItem(itemId, { [field]: newVal });
           // ?⑷퀎 ?ш퀎??(留ㅼ엯?④? ?먮뒗 ?먮ℓ?④? 蹂寃???
           // 수량·단가·판매가 변경 시 금액 재계산 (VAT 비율은 기존 품목 설정 유지)
           if (field === 'quantity' || field === 'unitPrice' || field === 'salePrice') {
-            const current = { ...data[idx] };
-            recalcItemAmounts(current); // supplyValue, vat, totalPrice 정확히 재계산
-            updateItem(idx, {
-              supplyValue: current.supplyValue,
-              vat: current.vat,
-              totalPrice: current.totalPrice,
-            });
+            const latest = getRowByItemId(itemId);
+            if (latest) {
+              const current = { ...latest };
+              recalcItemAmounts(current); // supplyValue, vat, totalPrice 정확히 재계산
+              updateItem(itemId, {
+                supplyValue: current.supplyValue,
+                vat: current.vat,
+                totalPrice: current.totalPrice,
+              });
+            }
           }
           renderTable();
           updateStats();
@@ -1341,14 +1350,17 @@ export function renderInventoryPage(container, navigateTo) {
           return;
         }
         try {
-          const idx = parseInt(btn.dataset.idx);
-          const name = data[idx]?.itemName || `${idx + 1}번 품목`;
-          const removed = deleteItem(idx);
+          const itemId = String(btn.dataset.itemId || '').trim();
+          const row = getRowByItemId(itemId);
+          const name = row?.itemName || '선택 품목';
+          if (!itemId) return;
+          if (!confirm(`"${name}" 품목을 삭제할까요?`)) return;
+          const removed = deleteItem(itemId);
           if (!removed?.deleted) {
             showToast('삭제할 품목을 찾지 못했습니다.', 'warning');
             return;
           }
-          shiftSelectionAfterDelete(idx);
+          selectedIndexes.delete(itemId);
           renderTable();
           updateStats();
           showToast(`"${name}" 품목을 삭제했습니다.`, 'info', 5000, {
@@ -1378,8 +1390,8 @@ export function renderInventoryPage(container, navigateTo) {
           return;
         }
         try {
-          const idx = parseInt(btn.dataset.idx);
-          openItemModal(container, navigateTo, idx);
+          const itemId = String(btn.dataset.itemId || '').trim();
+          openItemModal(container, navigateTo, itemId || null);
         } catch (err) {
           handlePageError(err, { page: 'inventory', action: 'open-edit-modal' });
         }
@@ -1754,10 +1766,12 @@ export function renderInventoryPage(container, navigateTo) {
 
 // === 품목 추가/편집 모달 ===
 
-function openItemModal(container, navigateTo, editIdx = null) {
+function openItemModal(container, navigateTo, editItemId = null) {
   const state = getState();
-  const isEdit = editIdx !== null;
-  const item = isEdit ? (state.mappedData[editIdx] || {}) : {};
+  const isEdit = !!editItemId;
+  const item = isEdit
+    ? ((state.mappedData || []).find(row => getItemId(row) === String(editItemId).trim()) || {})
+    : {};
 
   /* ── 마스터 데이터 조회 ── */
   const vendors   = (state.vendorMaster || []).filter(v => v.type === 'supplier' || v.type === 'both');
@@ -2090,7 +2104,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       // 수정 시 기존 VAT 비율 유지, 신규는 기본 10%
       if (isEdit) {
         // 기존 품목 VAT 비율 추론하여 유지
-        const prevItem = getState().mappedData[editIdx] || {};
+        const prevItem = getRowByItemId(String(editItemId).trim()) || {};
         const prevSv = parseFloat(prevItem.supplyValue) || 0;
         const prevVat = parseFloat(prevItem.vat) || 0;
         const vatRate = (prevSv > 0 && prevVat / prevSv < 0.05) ? 0 : 0.1;
@@ -2104,7 +2118,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       }
 
       if (isEdit) {
-        updateItem(editIdx, newItem);
+        updateItem(String(editItemId).trim(), newItem);
         showToast(`"${name}" 품목을 수정했습니다.`, 'success');
       } else {
         addItem(newItem);

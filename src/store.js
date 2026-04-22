@@ -1,4 +1,4 @@
-/**
+﻿/**
  * store.js - 앱 전체 데이터 저장소
  *
  * 저장 전략 (하이브리드):
@@ -114,6 +114,117 @@ const DEFAULT_STATE = {
 };
 
 let state = { ...DEFAULT_STATE };
+
+function createStableId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeText(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeDateString(value) {
+  const text = normalizeText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+}
+
+function ensureStableIds() {
+  let changed = false;
+
+  if (!Array.isArray(state.mappedData)) state.mappedData = [];
+  state.mappedData.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const stableId = normalizeText(item.id ?? item._id) || createStableId('itm');
+    if (item.id !== stableId) {
+      item.id = stableId;
+      changed = true;
+    }
+  });
+
+  if (!Array.isArray(state.transactions)) state.transactions = [];
+  state.transactions.forEach((tx) => {
+    if (!tx || typeof tx !== 'object') return;
+    const stableId = normalizeText(tx.id ?? tx._id) || createStableId('tx');
+    if (tx.id !== stableId) {
+      tx.id = stableId;
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+function validateItemPayload(item) {
+  const itemName = normalizeText(item.itemName);
+  if (!itemName) throw new Error('품목명은 필수입니다.');
+
+  const quantity = toNum(item.quantity);
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error('수량은 0 이상의 숫자여야 합니다.');
+  }
+
+  const unitPrice = toNum(item.unitPrice);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    throw new Error('원가는 0 이상의 숫자여야 합니다.');
+  }
+
+  const salePrice = toNum(item.salePrice);
+  if (!Number.isFinite(salePrice) || salePrice < 0) {
+    throw new Error('판매가는 0 이상의 숫자여야 합니다.');
+  }
+
+  if (item.lockedUntil && !normalizeDateString(item.lockedUntil)) {
+    throw new Error('잠금 해제일 형식이 올바르지 않습니다. (YYYY-MM-DD)');
+  }
+}
+
+function normalizeAndValidateTransaction(inputTx) {
+  const tx = { ...inputTx };
+  const type = tx.type === 'in' || tx.type === 'out' ? tx.type : '';
+  if (!type) throw new Error('입출고 구분(type)은 in 또는 out 이어야 합니다.');
+
+  const itemName = normalizeText(tx.itemName);
+  if (!itemName) throw new Error('입출고 품목명은 필수입니다.');
+
+  const quantity = toNum(tx.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error('입출고 수량은 1 이상의 숫자여야 합니다.');
+  }
+
+  const unitPrice = toNum(tx.unitPrice);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    throw new Error('입출고 원가는 0 이상의 숫자여야 합니다.');
+  }
+
+  const date = normalizeDateString(tx.date);
+  if (!date) throw new Error('입출고 날짜는 YYYY-MM-DD 형식이어야 합니다.');
+
+  return {
+    ...tx,
+    type,
+    itemName,
+    itemCode: normalizeText(tx.itemCode),
+    vendor: normalizeText(tx.vendor),
+    warehouse: normalizeText(tx.warehouse),
+    note: tx.note == null ? '' : String(tx.note),
+    quantity,
+    unitPrice,
+    date,
+  };
+}
+
+function resolveItemIndex(target) {
+  if (Number.isInteger(target)) {
+    return target >= 0 && target < state.mappedData.length ? target : -1;
+  }
+  const id = normalizeText(
+    typeof target === 'object' && target !== null
+      ? (target.id ?? target._id)
+      : target
+  );
+  if (!id) return -1;
+  return state.mappedData.findIndex(item => normalizeText(item?.id) === id);
+}
 
 // === IndexedDB 관련 (오프라인 캐시) ===
 const DB_NAME = 'invex-db';
@@ -373,6 +484,7 @@ function scheduleSyncToSupabase(changedKeys) {
 // === Public API ===
 
 export function getState() {
+  ensureStableIds();
   return state;
 }
 
@@ -391,6 +503,7 @@ export function setState(partial) {
   const changedKeys = Object.keys(partial);
 
   state = { ...state, ...partial };
+  ensureStableIds();
   window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys } }));
   // 비동기로 로컬 저장 — 실패 시 invex:idb-failed 이벤트 dispatch
   saveToDB().catch(e => {
@@ -410,6 +523,7 @@ export function setState(partial) {
  */
 export function resetState() {
   state = { ...DEFAULT_STATE };
+  ensureStableIds();
   window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
   saveToDB();
 }
@@ -436,6 +550,7 @@ export async function restoreState() {
       }
 
       state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData };
+      ensureStableIds();
       window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
       // 로컬 캐시도 업데이트
       saveToDB();
@@ -450,6 +565,7 @@ export async function restoreState() {
   const saved = await loadFromDB();
   if (saved) {
     state = { ...DEFAULT_STATE, ...saved };
+    ensureStableIds();
     window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
     return;
   }
@@ -460,6 +576,7 @@ export async function restoreState() {
     if (fallback) {
       const parsed = JSON.parse(fallback);
       state = { ...DEFAULT_STATE, ...parsed };
+      ensureStableIds();
       window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
     }
   } catch (_) { /* 무시 */ }
@@ -514,32 +631,33 @@ export function recalcItemAmounts(item) {
  * @param {object} tx - {type:'in'|'out', itemName, quantity, date, note, unitPrice}
  */
 export function addTransaction(tx) {
+  const validatedTx = normalizeAndValidateTransaction(tx);
   const newTx = {
-    id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    id: createStableId('tx'),
     createdAt: new Date().toISOString(),
-    ...tx,
+    ...validatedTx,
   };
   state.transactions = [newTx, ...state.transactions];
 
   // 재고 데이터에 수량 반영
   const item = state.mappedData.find(d =>
-    String(d.itemName || '').trim() === String(tx.itemName || '').trim() ||
-    (d.itemCode && tx.itemCode && String(d.itemCode).trim() === String(tx.itemCode).trim())
+    String(d.itemName || '').trim() === validatedTx.itemName ||
+    (d.itemCode && validatedTx.itemCode && String(d.itemCode).trim() === validatedTx.itemCode)
   );
   if (item) {
-    const qty = toNum(tx.quantity);
+    const qty = validatedTx.quantity;
     const currentQty = toNum(item.quantity);
-    if (tx.type === 'in') {
+    if (validatedTx.type === 'in') {
       item.quantity = currentQty + qty;
     } else {
       item.quantity = Math.max(0, currentQty - qty);
     }
 
     // 단가 업데이트: 입고 시 가중평균 단가 적용 (costMethod 설정 기반)
-    const txPrice = toNum(tx.unitPrice);
+    const txPrice = validatedTx.unitPrice;
     const itemPrice = toNum(item.unitPrice);
     if (txPrice > 0) {
-      if (tx.type === 'in') {
+      if (validatedTx.type === 'in') {
         const costMethod = state.costMethod || 'weighted-avg';
         if (costMethod === 'weighted-avg' && itemPrice > 0) {
           // 가중평균: (이전재고 × 이전단가 + 입고량 × 입고단가) / 신규합계
@@ -560,14 +678,15 @@ export function addTransaction(tx) {
     recalcItemAmounts(item);
   } else {
     // 기존에 없는 품목 → 재고 마스터에 신규 자동 생성
-    const qty = tx.type === 'in' ? toNum(tx.quantity) : 0;
-    const price = toNum(tx.unitPrice);
+    const qty = validatedTx.type === 'in' ? validatedTx.quantity : 0;
+    const price = validatedTx.unitPrice;
     const supplyValue = qty * price;
     const vat = Math.floor(supplyValue * 0.1);
 
     const newItem = {
-      itemName: tx.itemName,
-      itemCode: tx.itemCode || '',
+      id: createStableId('itm'),
+      itemName: validatedTx.itemName,
+      itemCode: validatedTx.itemCode || '',
       category: '미분류',
       quantity: qty,
       unit: 'EA',
@@ -576,8 +695,8 @@ export function addTransaction(tx) {
       supplyValue: supplyValue,
       vat: vat,
       totalPrice: supplyValue + vat,
-      warehouse: tx.warehouse || '',
-      note: '입출고 등록에 의한 자동 생성',
+      warehouse: validatedTx.warehouse || '',
+      note: '입출고 등록 자동 생성',
       safetyStock: 0,
     };
 
@@ -615,8 +734,11 @@ export function updateTransactionPrices(id, fields) {
   return true;
 }
 
-export function deleteTransaction(id) {
-  const index = state.transactions.findIndex(t => t.id === id);
+export function deleteTransaction(idOrTx) {
+  const normalizedId = normalizeText(
+    typeof idOrTx === 'object' && idOrTx !== null ? (idOrTx.id ?? idOrTx._id) : idOrTx
+  );
+  const index = state.transactions.findIndex(t => normalizeText(t.id) === normalizedId);
   if (index === -1) return null;
   const target = state.transactions[index];
 
@@ -671,30 +793,45 @@ export function setSafetyStock(itemName, minQty) {
  */
 export function addItem(item) {
   if (!state.mappedData) state.mappedData = [];
-  state.mappedData.push(item);
+  const nextItem = {
+    ...item,
+    id: normalizeText(item?.id ?? item?._id) || createStableId('itm'),
+  };
+  validateItemPayload(nextItem);
+  state.mappedData.push(nextItem);
   saveToDB();
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['mappedData']);
   }
+  return nextItem;
 }
 
 /**
  * 품목 수정
  */
-export function updateItem(index, item) {
-  if (state.mappedData[index]) {
-    state.mappedData[index] = { ...state.mappedData[index], ...item };
-    saveToDB();
-    if (isSupabaseConfigured) {
-      scheduleSyncToSupabase(['mappedData']);
-    }
+export function updateItem(target, item) {
+  const index = resolveItemIndex(target);
+  if (index < 0 || !state.mappedData[index]) return false;
+  const merged = {
+    ...state.mappedData[index],
+    ...item,
+  };
+  merged.id = normalizeText(merged.id ?? merged._id) || createStableId('itm');
+  validateItemPayload(merged);
+  state.mappedData[index] = merged;
+  saveToDB();
+  if (isSupabaseConfigured) {
+    scheduleSyncToSupabase(['mappedData']);
   }
+  return true;
 }
 
 /**
  * 품목 삭제
  */
-export function deleteItem(index) {
+export function deleteItem(target) {
+  const index = resolveItemIndex(target);
+  if (index < 0) return null;
   const deleted = state.mappedData[index];
   if (!deleted) return null;
   state.mappedData.splice(index, 1);
@@ -718,15 +855,20 @@ export function deleteItem(index) {
 export function restoreItem(item, index = 0) {
   if (!item) return null;
   if (!Array.isArray(state.mappedData)) state.mappedData = [];
+  const nextItem = {
+    ...item,
+    id: normalizeText(item?.id ?? item?._id) || createStableId('itm'),
+  };
+  validateItemPayload(nextItem);
   const safeIndex = Number.isInteger(index)
     ? Math.max(0, Math.min(index, state.mappedData.length))
     : 0;
-  state.mappedData.splice(safeIndex, 0, item);
+  state.mappedData.splice(safeIndex, 0, nextItem);
   saveToDB();
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['mappedData']);
   }
-  return item;
+  return nextItem;
 }
 
 /**
@@ -734,23 +876,28 @@ export function restoreItem(item, index = 0) {
  */
 export function restoreTransaction(tx, index = 0) {
   if (!tx) return null;
+  const validatedTx = normalizeAndValidateTransaction(tx);
   if (!Array.isArray(state.transactions)) state.transactions = [];
   const safeIndex = Number.isInteger(index)
     ? Math.max(0, Math.min(index, state.transactions.length))
     : 0;
   // 복원된 건은 다시 동기화 필요
-  tx._synced = false;
-  state.transactions.splice(safeIndex, 0, tx);
+  const restoreTx = {
+    ...validatedTx,
+    id: normalizeText(tx.id ?? tx._id) || createStableId('tx'),
+    _synced: false,
+  };
+  state.transactions.splice(safeIndex, 0, restoreTx);
 
   // 재고 수량도 복원 (deleteTransaction에서 조정한 수량을 원복)
   const item = (state.mappedData || []).find(d =>
-    String(d.itemName || '').trim() === String(tx.itemName || '').trim() ||
-    (d.itemCode && tx.itemCode && String(d.itemCode).trim() === String(tx.itemCode).trim())
+    String(d.itemName || '').trim() === String(restoreTx.itemName || '').trim() ||
+    (d.itemCode && restoreTx.itemCode && String(d.itemCode).trim() === String(restoreTx.itemCode).trim())
   );
   if (item) {
-    const qty = toNum(tx.quantity);
+    const qty = toNum(restoreTx.quantity);
     const currentQty = toNum(item.quantity);
-    if (tx.type === 'in') {
+    if (restoreTx.type === 'in') {
       item.quantity = currentQty + qty;
     } else {
       item.quantity = Math.max(0, currentQty - qty);
@@ -762,7 +909,7 @@ export function restoreTransaction(tx, index = 0) {
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['transactions', 'mappedData']);
   }
-  return tx;
+  return restoreTx;
 }
 
 /**

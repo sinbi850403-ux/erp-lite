@@ -1,4 +1,4 @@
-/**
+﻿/**
  * page-inout.js - 입출고 관리 페이지
  * 역할: 입고/출고 기록 등록, 이력 조회, 재고 자동 반영
  * 핵심: 입출고를 기록하면 재고 현황의 수량이 자동으로 증감됨
@@ -718,13 +718,19 @@ export function renderInoutPage(container, navigateTo) {
           return;
         }
         try {
-          const removed = deleteTransaction(btn.dataset.id);
+          const txId = String(btn.dataset.id || '').trim();
+          if (!txId) {
+            showToast('삭제할 기록 ID를 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.', 'warning');
+            return;
+          }
+          if (!confirm('선택한 입출고 기록을 삭제할까요?')) return;
+          const removed = deleteTransaction(txId);
           if (!removed || !removed.deleted) {
             showToast('삭제할 기록을 찾지 못했습니다.', 'warning');
             return;
           }
           const itemName = removed.deleted.itemName || '선택 기록';
-          selectedTxIds.delete(btn.dataset.id);
+          selectedTxIds.delete(txId);
           renderInoutPage(container, navigateTo);
           showToast(`"${itemName}" 기록을 삭제했습니다.`, 'info', 5000, {
             actionLabel: '실행 취소',
