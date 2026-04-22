@@ -15,24 +15,24 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
     <article className="react-card react-card--table">
       <div className="react-section-head">
         <div>
-          <span className="react-card__eyebrow">Transactions</span>
-          <h3>Inbound and outbound log</h3>
+          <span className="react-card__eyebrow">입출고 이력</span>
+          <h3>입고/출고 기록</h3>
         </div>
-        <strong>{rows.length} rows</strong>
+        <strong>{rows.length}건</strong>
       </div>
 
       <div className="react-data-table">
         <table>
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Item</th>
-              <th>Code</th>
-              <th>Qty</th>
-              <th>Date</th>
-              <th>Vendor</th>
-              <th>Warehouse</th>
-              <th>Actions</th>
+              <th>유형</th>
+              <th>품목</th>
+              <th>코드</th>
+              <th>수량</th>
+              <th>날짜</th>
+              <th>거래처</th>
+              <th>창고</th>
+              <th>작업</th>
             </tr>
           </thead>
           <tbody>
@@ -41,7 +41,7 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
                 <tr key={row.id || `${row.itemCode || row.itemName || 'tx'}-${index}`}>
                   <td>
                     <span className={row.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
-                      {row.type === 'in' ? 'Inbound' : 'Outbound'}
+                      {row.type === 'in' ? '입고' : '출고'}
                     </span>
                   </td>
                   <td>{row.itemName || '-'}</td>
@@ -52,7 +52,7 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
                   <td>{row.warehouse || '-'}</td>
                   <td>
                     <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
-                      Delete
+                      삭제
                     </button>
                   </td>
                 </tr>
@@ -60,7 +60,7 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
             ) : (
               <tr>
                 <td colSpan={8} className="react-empty-cell">
-                  No transactions match the current filter.
+                  현재 필터 조건에 맞는 입출고 기록이 없습니다.
                 </td>
               </tr>
             )}

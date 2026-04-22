@@ -24,23 +24,23 @@ export function InoutFilters({ filter, options, onChange }: InoutFiltersProps) {
           className="react-input"
           value={filter.keyword}
           onChange={(event) => onChange({ ...filter, keyword: event.target.value })}
-          placeholder="Search item, code, vendor"
+          placeholder="품목명, 코드, 거래처 검색"
         />
         <select
           className="react-select"
           value={filter.type}
           onChange={(event) => onChange({ ...filter, type: event.target.value })}
         >
-          <option value="">All types</option>
-          <option value="in">Inbound</option>
-          <option value="out">Outbound</option>
+          <option value="">전체 유형</option>
+          <option value="in">입고</option>
+          <option value="out">출고</option>
         </select>
         <select
           className="react-select"
           value={filter.vendor}
           onChange={(event) => onChange({ ...filter, vendor: event.target.value })}
         >
-          <option value="">All vendors</option>
+          <option value="">전체 거래처</option>
           {options.vendors.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -51,11 +51,11 @@ export function InoutFilters({ filter, options, onChange }: InoutFiltersProps) {
 
       <div className="react-chip-row">
         {[
-          { value: 'all', label: 'All flows' },
-          { value: 'today', label: 'Today' },
-          { value: 'in', label: 'Inbound' },
-          { value: 'out', label: 'Outbound' },
-          { value: 'missingVendor', label: 'Missing vendor' },
+          { value: 'all', label: '전체 흐름' },
+          { value: 'today', label: '오늘' },
+          { value: 'in', label: '입고' },
+          { value: 'out', label: '출고' },
+          { value: 'missingVendor', label: '거래처 미입력' },
         ].map((chip) => (
           <button
             key={chip.value}

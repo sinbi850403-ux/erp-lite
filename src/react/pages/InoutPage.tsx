@@ -24,11 +24,11 @@ export function InoutPage() {
   return (
     <section className="react-page">
       <article className="react-card">
-        <span className="react-chip">Inout flow migrated</span>
-        <h2>Inout now handles actual React-side registration and deletion flows.</h2>
+        <span className="react-chip">입출고 흐름 React 전환 완료</span>
+        <h2>입출고 등록/삭제가 React 화면에서 바로 동작합니다.</h2>
         <p>
-          The composer writes transactions to the shared store, inventory quantities update through
-          the existing store logic, and the React page now owns real operational behavior.
+          등록 폼에서 입력한 거래는 공용 스토어에 즉시 반영되고, 기존 재고 계산 로직과 연동되어
+          수량이 바로 갱신됩니다. 이제 입출고의 실제 운영 흐름을 React 화면이 직접 담당합니다.
         </p>
       </article>
 
@@ -45,7 +45,7 @@ export function InoutPage() {
         open={!!pendingDeleteRow}
         danger
         title="입출고 기록 삭제"
-        description={`"${pendingDeleteRow?.itemName || '선택 기록'}" 기록을 삭제할까요? 재고 수량에도 즉시 반영됩니다.`}
+        description={`"${pendingDeleteRow?.itemName || '선택한 기록'}" 기록을 삭제할까요? 재고와 수량에도 즉시 반영됩니다.`}
         confirmLabel="삭제"
         cancelLabel="취소"
         onConfirm={confirmDelete}

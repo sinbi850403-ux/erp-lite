@@ -75,18 +75,18 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
     <article className="react-card">
       <div className="react-section-head">
         <div>
-          <span className="react-card__eyebrow">Transaction composer</span>
-          <h3>Create inbound or outbound entry</h3>
+          <span className="react-card__eyebrow">입출고 등록</span>
+          <h3>입고/출고 내역 추가</h3>
         </div>
       </div>
 
       <form className="react-form-grid" onSubmit={handleSubmit}>
         <select className="react-select" value={form.type} onChange={(e) => update('type', e.target.value as 'in' | 'out')}>
-          <option value="in">Inbound</option>
-          <option value="out">Outbound</option>
+          <option value="in">입고</option>
+          <option value="out">출고</option>
         </select>
         <select className="react-select" value={selectedItemKey} onChange={(e) => handleSelectItem(e.target.value)}>
-          <option value="">Select item</option>
+          <option value="">품목 선택</option>
           {itemOptions.map((item) => {
             const itemName = String(item.itemName || '').trim();
             const itemCode = String(item.itemCode || '').trim();
@@ -98,37 +98,37 @@ export function InoutComposer({ items, vendors, onSubmit }: InoutComposerProps) 
             );
           })}
         </select>
-        <input className="react-input" value={form.itemName} onChange={(e) => update('itemName', e.target.value)} placeholder="Item name" />
-        <input className="react-input" value={form.itemCode} onChange={(e) => update('itemCode', e.target.value)} placeholder="Item code" />
+        <input className="react-input" value={form.itemName} onChange={(e) => update('itemName', e.target.value)} placeholder="품목명" />
+        <input className="react-input" value={form.itemCode} onChange={(e) => update('itemCode', e.target.value)} placeholder="품목코드" />
         <input
           className="react-input"
           value={selectedItem?.category || ''}
           readOnly
-          placeholder="Category auto-filled from item"
+          placeholder="선택한 품목 기준 카테고리 자동표시"
         />
         <select className="react-select" value={form.vendor} onChange={(e) => update('vendor', e.target.value)}>
-          <option value="">Select vendor</option>
+          <option value="">거래처 선택</option>
           {vendors.map((vendor) => (
             <option key={vendor} value={vendor}>
               {vendor}
             </option>
           ))}
         </select>
-        <input className="react-input" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)} placeholder="Warehouse" />
+        <input className="react-input" value={form.warehouse} onChange={(e) => update('warehouse', e.target.value)} placeholder="창고" />
         <input className="react-input" type="date" value={form.date} onChange={(e) => update('date', e.target.value)} />
         <input
           className="react-input"
           type="number"
           value={form.quantity}
           onChange={(e) => update('quantity', Number(e.target.value))}
-          placeholder={`Quantity${selectedItem?.unit ? ` (${selectedItem.unit})` : ''}`}
+          placeholder={`수량${selectedItem?.unit ? ` (${selectedItem.unit})` : ''}`}
         />
-        <input className="react-input" type="number" value={form.unitPrice} onChange={(e) => update('unitPrice', Number(e.target.value))} placeholder="Unit price" />
-        <input className="react-input react-input--wide" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Note" />
+        <input className="react-input" type="number" value={form.unitPrice} onChange={(e) => update('unitPrice', Number(e.target.value))} placeholder="단가" />
+        <input className="react-input react-input--wide" value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="비고" />
 
         <div className="react-form-actions">
           <button type="submit" className="react-auth-submit">
-            Save transaction
+            거래 등록
           </button>
         </div>
       </form>
