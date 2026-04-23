@@ -1,4 +1,5 @@
 import type { AppStoreState } from '../../services/store/storeClient';
+import { isSameLocalDate, normalizeYyyyMmDd, toLocalDateTimestamp } from '../../utils/date';
 
 export type InoutFilterState = {
   keyword: string;
@@ -7,14 +8,37 @@ export type InoutFilterState = {
   quick: string;
 };
 
-function isToday(dateValue: unknown) {
-  return String(dateValue || '').slice(0, 10) === new Date().toISOString().slice(0, 10);
+export type InoutSortKey = 'date' | 'type' | 'itemName' | 'itemCode' | 'quantity' | 'vendor' | 'warehouse';
+
+export type InoutSortState = {
+  key: InoutSortKey;
+  direction: 'asc' | 'desc';
+};
+
+const DEFAULT_SORT: InoutSortState = {
+  key: 'date',
+  direction: 'desc',
+};
+
+function toNumber(value: unknown) {
+  const parsed = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getComparableTxValue(tx: Record<string, unknown>, key: InoutSortKey) {
+  if (key === 'date') {
+    const source = normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt;
+    return toLocalDateTimestamp(source);
+  }
+  if (key === 'quantity') return toNumber(tx.quantity);
+  if (key === 'type') return tx.type === 'in' ? 0 : 1;
+  return String(tx[key] || '').trim().toLowerCase();
 }
 
 export function getInoutSummary(state: AppStoreState) {
   const transactions = state.transactions || [];
-  const todayInbound = transactions.filter((tx) => tx.type === 'in' && isToday(tx.date)).length;
-  const todayOutbound = transactions.filter((tx) => tx.type === 'out' && isToday(tx.date)).length;
+  const todayInbound = transactions.filter((tx) => tx.type === 'in' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
+  const todayOutbound = transactions.filter((tx) => tx.type === 'out' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
   const missingVendor = transactions.filter((tx) => !String(tx.vendor || '').trim()).length;
 
   return {
@@ -33,8 +57,9 @@ export function getInoutOptions(state: AppStoreState) {
   };
 }
 
-export function getFilteredTransactions(state: AppStoreState, filter: InoutFilterState) {
+export function getFilteredTransactions(state: AppStoreState, filter: InoutFilterState, sort: InoutSortState = DEFAULT_SORT) {
   const keyword = filter.keyword.trim().toLowerCase();
+  const direction = sort.direction === 'asc' ? 1 : -1;
 
   return (state.transactions || [])
     .map((tx, index) => ({ ...tx, _index: index }))
@@ -46,11 +71,24 @@ export function getFilteredTransactions(state: AppStoreState, filter: InoutFilte
 
       if (filter.type && tx.type !== filter.type) return false;
       if (filter.vendor && tx.vendor !== filter.vendor) return false;
-      if (filter.quick === 'today' && !isToday(tx.date)) return false;
+      if (filter.quick === 'today' && !isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)) return false;
       if (filter.quick === 'missingVendor' && String(tx.vendor || '').trim()) return false;
       if (filter.quick === 'in' && tx.type !== 'in') return false;
       if (filter.quick === 'out' && tx.type !== 'out') return false;
       return true;
     })
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    .sort((a, b) => {
+      const av = getComparableTxValue(a as Record<string, unknown>, sort.key);
+      const bv = getComparableTxValue(b as Record<string, unknown>, sort.key);
+
+      if (typeof av === 'number' && typeof bv === 'number') {
+        const delta = av - bv;
+        if (delta !== 0) return delta * direction;
+      } else {
+        const delta = String(av).localeCompare(String(bv), 'ko-KR', { numeric: true, sensitivity: 'base' });
+        if (delta !== 0) return delta * direction;
+      }
+
+      return Number(a._index || 0) - Number(b._index || 0);
+    });
 }

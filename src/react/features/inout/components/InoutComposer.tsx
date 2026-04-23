@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import type { InoutInput } from '../../../services/inout/inoutService';
+import { toLocalDateKey } from '../../../utils/date';
 
 type SubmitResult = {
   ok: boolean;
@@ -29,7 +30,7 @@ const defaultForm: InoutInput = {
   warehouse: '',
   quantity: 0,
   unitPrice: 0,
-  date: new Date().toISOString().slice(0, 10),
+  date: toLocalDateKey(),
   note: '',
 };
 
@@ -112,7 +113,7 @@ export function InoutComposer({ items, vendors, warehouses, onSubmit }: InoutCom
     setForm((current) => ({
       ...defaultForm,
       type: current.type,
-      date: new Date().toISOString().slice(0, 10),
+      date: toLocalDateKey(),
     }));
     setSelectedItemKey('');
   }

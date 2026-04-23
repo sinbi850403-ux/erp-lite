@@ -1,5 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react';
-import { getFilteredTransactions, getInoutOptions, getInoutSummary } from '../../../domain/inout/selectors';
+import {
+  getFilteredTransactions,
+  getInoutOptions,
+  getInoutSummary,
+  type InoutSortKey,
+} from '../../../domain/inout/selectors';
 import {
   createTransaction,
   removeTransaction,
@@ -27,13 +32,17 @@ export function useInoutPage() {
     vendor: '',
     quick: 'all',
   });
+  const [sort, setSort] = useState<{ key: InoutSortKey; direction: 'asc' | 'desc' }>({
+    key: 'date',
+    direction: 'desc',
+  });
   const deferredKeyword = useDeferredValue(filter.keyword);
 
   const effectiveFilter = useMemo(() => ({ ...filter, keyword: deferredKeyword }), [deferredKeyword, filter]);
 
   const summary = useMemo(() => getInoutSummary(state), [state]);
   const options = useMemo(() => getInoutOptions(state), [state]);
-  const rows = useMemo(() => getFilteredTransactions(state, effectiveFilter), [effectiveFilter, state]);
+  const rows = useMemo(() => getFilteredTransactions(state, effectiveFilter, sort), [effectiveFilter, sort, state]);
   const composerOptions = useMemo(
     () => ({
       items: state.mappedData || [],
@@ -66,6 +75,21 @@ export function useInoutPage() {
     }
   }
 
+  function changeSort(nextKey: InoutSortKey) {
+    setSort((current) => {
+      if (current.key === nextKey) {
+        return {
+          ...current,
+          direction: current.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+      return {
+        key: nextKey,
+        direction: nextKey === 'date' || nextKey === 'quantity' ? 'desc' : 'asc',
+      };
+    });
+  }
+
   function deleteTransaction(row: { id?: string }): DeleteResult {
     if (!row.id) return { ok: false, message: '삭제 대상 ID를 찾을 수 없습니다.' };
     try {
@@ -95,10 +119,12 @@ export function useInoutPage() {
   return {
     filter,
     options,
+    sort,
     rows,
     summary,
     composerOptions,
     setFilter,
+    changeSort,
     saveTransaction,
     deleteTransaction,
     undoDeleteTransaction,

@@ -1,5 +1,8 @@
 import { useState } from 'react';
 
+import type { InoutSortKey } from '../../../domain/inout/selectors';
+import { formatLocalDateLabel, normalizeYyyyMmDd } from '../../../utils/date';
+
 const PAGE_SIZE = 20;
 
 type InoutRow = {
@@ -9,12 +12,50 @@ type InoutRow = {
   itemCode?: string;
   quantity?: string | number;
   date?: string;
+  createdAt?: string;
   vendor?: string;
   warehouse?: string;
   _index?: number;
 };
 
-export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (row: InoutRow) => void }) {
+type InoutTableProps = {
+  rows: InoutRow[];
+  sort: {
+    key: InoutSortKey;
+    direction: 'asc' | 'desc';
+  };
+  onSortChange: (key: InoutSortKey) => void;
+  onDelete: (row: InoutRow) => void;
+};
+
+function SortableHeader({
+  label,
+  sortKey,
+  sort,
+  onSortChange,
+}: {
+  label: string;
+  sortKey: InoutSortKey;
+  sort: InoutTableProps['sort'];
+  onSortChange: InoutTableProps['onSortChange'];
+}) {
+  const isActive = sort.key === sortKey;
+  const indicator = isActive ? (sort.direction === 'asc' ? '▲' : '▼') : '↕';
+
+  return (
+    <button
+      type="button"
+      className={isActive ? 'react-sort-button is-active' : 'react-sort-button'}
+      onClick={() => onSortChange(sortKey)}
+      aria-label={`${label} 정렬`}
+    >
+      <span>{label}</span>
+      <span className="react-sort-indicator">{indicator}</span>
+    </button>
+  );
+}
+
+export function InoutTable({ rows, sort, onSortChange, onDelete }: InoutTableProps) {
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
   const visibleRows = rows.slice(0, displayCount);
@@ -34,38 +75,57 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
         <table>
           <thead>
             <tr>
-              <th>유형</th>
-              <th>품목</th>
-              <th>코드</th>
-              <th>수량</th>
-              <th>날짜</th>
-              <th>거래처</th>
-              <th>창고</th>
+              <th>
+                <SortableHeader label="유형" sortKey="type" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="품목" sortKey="itemName" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="코드" sortKey="itemCode" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="수량" sortKey="quantity" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="날짜" sortKey="date" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="거래처" sortKey="vendor" sort={sort} onSortChange={onSortChange} />
+              </th>
+              <th>
+                <SortableHeader label="창고" sortKey="warehouse" sort={sort} onSortChange={onSortChange} />
+              </th>
               <th>작업</th>
             </tr>
           </thead>
           <tbody>
             {visibleRows.length ? (
-              visibleRows.map((row, index) => (
-                <tr key={row.id ?? `${String(row.date || '')}-${String(row.itemCode || row.itemName || '')}-${index}`}>
-                  <td>
-                    <span className={row.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
-                      {row.type === 'in' ? '입고' : '출고'}
-                    </span>
-                  </td>
-                  <td>{row.itemName || '-'}</td>
-                  <td>{row.itemCode || '-'}</td>
-                  <td>{row.quantity || '-'}</td>
-                  <td>{row.date || '-'}</td>
-                  <td>{row.vendor || '-'}</td>
-                  <td>{row.warehouse || '-'}</td>
-                  <td>
-                    <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
-                      삭제
-                    </button>
-                  </td>
-                </tr>
-              ))
+              visibleRows.map((row, index) => {
+                const dateLabel = normalizeYyyyMmDd(row.date)
+                  ? formatLocalDateLabel(row.date)
+                  : formatLocalDateLabel(row.createdAt);
+                return (
+                  <tr key={row.id ?? `${String(row.date || '')}-${String(row.itemCode || row.itemName || '')}-${index}`}>
+                    <td>
+                      <span className={row.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
+                        {row.type === 'in' ? '입고' : '출고'}
+                      </span>
+                    </td>
+                    <td>{row.itemName || '-'}</td>
+                    <td>{row.itemCode || '-'}</td>
+                    <td>{row.quantity || '-'}</td>
+                    <td>{dateLabel}</td>
+                    <td>{row.vendor || '-'}</td>
+                    <td>{row.warehouse || '-'}</td>
+                    <td>
+                      <button type="button" className="react-link-button is-danger" onClick={() => onDelete(row)}>
+                        삭제
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={8} className="react-empty-cell">

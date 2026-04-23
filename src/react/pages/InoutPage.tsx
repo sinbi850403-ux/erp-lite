@@ -16,10 +16,12 @@ export function InoutPage() {
   const {
     filter,
     options,
+    sort,
     rows,
     summary,
     composerOptions,
     setFilter,
+    changeSort,
     saveTransaction,
     deleteTransaction,
     undoDeleteTransaction,
@@ -68,7 +70,7 @@ export function InoutPage() {
         onSubmit={saveTransaction}
       />
       <InoutFilters filter={filter} options={options} onChange={setFilter} />
-      <InoutTable rows={rows} onDelete={requestDelete} />
+      <InoutTable rows={rows} sort={sort} onSortChange={changeSort} onDelete={requestDelete} />
 
       <ConfirmDialog
         open={!!pendingDeleteRow}

@@ -1,5 +1,6 @@
 import type { InoutInput } from '../inout/inoutService';
 import type { InventoryInput } from '../inventory/inventoryService';
+import { isValidYyyyMmDd } from '../../utils/date';
 
 type InventoryMasterItem = {
   itemName?: string;
@@ -69,7 +70,7 @@ export function findInventoryMasterItem(
 }
 
 export function isYyyyMmDd(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+  return isValidYyyyMmDd(value);
 }
 
 export function validateInventoryInput(
