@@ -309,10 +309,13 @@ export const items = {
    * 여러 품목 일괄 삭제
    */
   async bulkRemove(itemIds) {
+    if (!itemIds || itemIds.length === 0) return;
+    const userId = await getUserId();
     const { error } = await supabase
       .from('items')
       .delete()
-      .in('id', itemIds);
+      .in('id', itemIds)
+      .eq('user_id', userId);
     handleError(error, '품목 일괄 삭제');
   },
 
@@ -410,6 +413,22 @@ export const vendors = {
       .single();
     handleError(error, '거래처 생성');
     return data;
+  },
+
+  /**
+   * 거래처 일괄 생성 (upsert — 이름 중복 시 업데이트)
+   * store.js 동기화에서 N+1 쿼리 문제 해결용
+   */
+  async bulkUpsert(vendorArray) {
+    if (!vendorArray || vendorArray.length === 0) return [];
+    const userId = await getUserId();
+    const rows = vendorArray.map(v => ({ ...v, user_id: userId }));
+    const { data, error } = await supabase
+      .from('vendors')
+      .upsert(rows, { onConflict: 'user_id,name', ignoreDuplicates: false })
+      .select();
+    handleError(error, '거래처 일괄 저장');
+    return data || [];
   },
 
   async update(vendorId, updates) {

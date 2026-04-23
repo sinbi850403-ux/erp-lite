@@ -35,7 +35,3 @@ export function getRecentTransactions(state: AppStoreState) {
     .slice(0, 6);
 }
 
-/** @deprecated HomePage에서 더 이상 사용하지 않음 */
-export function getWorkspaceReadiness(_state: AppStoreState) {
-  return [];
-}

@@ -116,7 +116,7 @@ export function HomePage({ navigateTo }: HomePageProps) {
           <div className="react-activity-list">
             {transactions.length ? (
               transactions.map((tx, index) => (
-                <div key={`${tx.itemName || 'tx'}-${index}`} className="react-activity-item">
+                <div key={tx.id ?? `${String(tx.date || '')}-${String(tx.itemName || '')}-${index}`} className="react-activity-item">
                   <span className={tx.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
                     {tx.type === 'in' ? '입고' : '출고'}
                   </span>

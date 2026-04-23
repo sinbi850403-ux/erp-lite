@@ -428,7 +428,7 @@ async function syncToSupabase() {
       }
     }
 
-    // 거래처 동기화
+    // 거래처 동기화 — bulkUpsert로 N+1 쿼리 제거 (거래처 수만큼 API 호출하던 문제 수정)
     if (keysToSync.has('vendorMaster')) {
       const vendors = (state.vendorMaster || []).map(v => ({
         name: v.name,
@@ -441,9 +441,10 @@ async function syncToSupabase() {
         address: v.address,
         memo: v.memo,
       }));
-      for (const vendor of vendors) {
+      if (vendors.length > 0) {
         promises.push(
-          managedQuery(() => db.vendors.create(vendor)).catch(() => { /* 중복 무시 */ })
+          managedQuery(() => db.vendors.bulkUpsert(vendors))
+            .catch(err => { console.warn('[Sync] 거래처 일괄 저장 실패:', err.message); failedKeys.add('vendorMaster'); })
         );
       }
     }

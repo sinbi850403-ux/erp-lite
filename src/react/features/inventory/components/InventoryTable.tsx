@@ -98,7 +98,7 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
           <tbody>
             {rows.length ? (
               rows.slice(0, 16).map((row, index) => (
-                <tr key={row.id || `${row.itemCode || row.itemName || 'item'}-${index}`}>
+                <tr key={row.id ?? `${String(row.itemCode || row.itemName || '')}-${index}`}>
                   <td>{row.itemName || '-'}</td>
                   <td>{row.itemCode || '-'}</td>
                   <td>{row.category || '-'}</td>
