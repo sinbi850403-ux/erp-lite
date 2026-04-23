@@ -94,9 +94,14 @@ function compareInventoryRows(
   }
 
   if (sort.key === 'amount') {
-    const aAmount = toNumber(a.totalPrice || a.supplyValue);
-    const bAmount = toNumber(b.totalPrice || b.supplyValue);
-    return direction * (aAmount - bAmount);
+    const getAmt = (row: typeof a) => {
+      const total = toNumber(row.totalPrice);
+      if (total > 0) return total;
+      const supply = toNumber(row.supplyValue);
+      if (supply > 0) return supply;
+      return Math.round(toNumber(row.quantity) * toNumber(row.unitPrice));
+    };
+    return direction * (getAmt(a) - getAmt(b));
   }
 
   const aText = String(a[sort.key] || '').trim().toLowerCase();

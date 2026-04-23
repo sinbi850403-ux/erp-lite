@@ -9,6 +9,7 @@ type InventoryRow = {
   vendor?: string;
   warehouse?: string;
   quantity?: string | number;
+  unitPrice?: string | number;
   totalPrice?: string | number;
   supplyValue?: string | number;
 };
@@ -26,10 +27,23 @@ type InventoryTableProps = {
   onDelete: (row: InventoryRow) => void;
 };
 
-function formatAmount(value: unknown) {
-  const parsed = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
-  // Math.round: 부동소수점 오류 제거 (예: 2,799,999.545 → 2,800,000)
-  return Number.isFinite(parsed) ? new Intl.NumberFormat('ko-KR').format(Math.round(parsed)) : '-';
+function toNum(v: unknown) {
+  const n = Number.parseFloat(String(v ?? '').replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** totalPrice → supplyValue → quantity×unitPrice 순으로 폴백 */
+function getRowAmount(row: InventoryRow) {
+  const total = toNum(row.totalPrice);
+  if (total > 0) return total;
+  const supply = toNum(row.supplyValue);
+  if (supply > 0) return supply;
+  // totalPrice/supplyValue가 없으면 수량×단가로 계산
+  return Math.round(toNum(row.quantity) * toNum(row.unitPrice));
+}
+
+function formatAmount(amount: number) {
+  return amount > 0 ? new Intl.NumberFormat('ko-KR').format(amount) : '-';
 }
 
 function SortableHeader({
@@ -115,7 +129,7 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
                   <td>{row.vendor || '-'}</td>
                   <td>{row.warehouse || '-'}</td>
                   <td>{row.quantity || '-'}</td>
-                  <td>{formatAmount(row.totalPrice || row.supplyValue)}</td>
+                  <td>{formatAmount(getRowAmount(row))}</td>
                   <td>
                     <div className="react-inline-actions">
                       <button type="button" className="react-link-button" onClick={() => onEdit(row)}>
