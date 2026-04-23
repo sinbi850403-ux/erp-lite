@@ -517,6 +517,17 @@ a {
   font-weight: 700;
 }
 
+.react-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
+.react-load-more .react-secondary-button {
+  font-size: 0.875rem;
+  padding: 10px 24px;
+}
+
 .react-segmented {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

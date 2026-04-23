@@ -1,3 +1,7 @@
+import { useState } from 'react';
+
+const PAGE_SIZE = 20;
+
 type InoutRow = {
   id?: string;
   type?: string;
@@ -11,6 +15,11 @@ type InoutRow = {
 };
 
 export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (row: InoutRow) => void }) {
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+
+  const visibleRows = rows.slice(0, displayCount);
+  const hasMore = rows.length > displayCount;
+
   return (
     <article className="react-card react-card--table">
       <div className="react-section-head">
@@ -36,8 +45,8 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              rows.slice(0, 16).map((row, index) => (
+            {visibleRows.length ? (
+              visibleRows.map((row, index) => (
                 <tr key={row.id ?? `${String(row.date || '')}-${String(row.itemCode || row.itemName || '')}-${index}`}>
                   <td>
                     <span className={row.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
@@ -67,6 +76,18 @@ export function InoutTable({ rows, onDelete }: { rows: InoutRow[]; onDelete: (ro
           </tbody>
         </table>
       </div>
+
+      {hasMore ? (
+        <div className="react-load-more">
+          <button
+            type="button"
+            className="react-secondary-button"
+            onClick={() => setDisplayCount((prev) => prev + PAGE_SIZE)}
+          >
+            더보기 ({rows.length - displayCount}건 남음)
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }

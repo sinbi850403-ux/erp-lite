@@ -432,10 +432,12 @@ export const vendors = {
   },
 
   async update(vendorId, updates) {
+    const userId = await getUserId();
     const { data, error } = await supabase
       .from('vendors')
       .update(updates)
       .eq('id', vendorId)
+      .eq('user_id', userId)
       .select()
       .single();
     handleError(error, '거래처 수정');
@@ -443,10 +445,12 @@ export const vendors = {
   },
 
   async remove(vendorId) {
+    const userId = await getUserId();
     const { error } = await supabase
       .from('vendors')
       .delete()
-      .eq('id', vendorId);
+      .eq('id', vendorId)
+      .eq('user_id', userId);
     handleError(error, '거래처 삭제');
   },
 };

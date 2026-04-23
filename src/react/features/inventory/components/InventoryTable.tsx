@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 type InventoryRow = {
   id?: string;
   _index?: number;
@@ -56,7 +58,14 @@ function SortableHeader({
   );
 }
 
+const PAGE_SIZE = 20;
+
 export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: InventoryTableProps) {
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+
+  const visibleRows = rows.slice(0, displayCount);
+  const hasMore = rows.length > displayCount;
+
   return (
     <article className="react-card react-card--table">
       <div className="react-section-head">
@@ -96,8 +105,8 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              rows.slice(0, 16).map((row, index) => (
+            {visibleRows.length ? (
+              visibleRows.map((row, index) => (
                 <tr key={row.id ?? `${String(row.itemCode || row.itemName || '')}-${index}`}>
                   <td>{row.itemName || '-'}</td>
                   <td>{row.itemCode || '-'}</td>
@@ -128,6 +137,18 @@ export function InventoryTable({ rows, sort, onSortChange, onDelete, onEdit }: I
           </tbody>
         </table>
       </div>
+
+      {hasMore ? (
+        <div className="react-load-more">
+          <button
+            type="button"
+            className="react-secondary-button"
+            onClick={() => setDisplayCount((prev) => prev + PAGE_SIZE)}
+          >
+            더보기 ({rows.length - displayCount}건 남음)
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }
