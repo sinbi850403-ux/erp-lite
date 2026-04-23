@@ -1122,11 +1122,12 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
     });
     const dataStartIndex = Math.max(1, detected.headerRowIndex + 1);
 
-    if (colMap.type === -1 || colMap.itemName === -1 || colMap.quantity === -1) {
-      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "구분", "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
+    if (colMap.itemName === -1 || colMap.quantity === -1) {
+      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
       return;
     }
 
+    const detectedHeaders = (sheetData[detected.headerRowIndex] || []).map((header) => normalizeBulkHeader(header));
     const rows = [];
     for (let index = dataStartIndex; index < sheetData.length; index += 1) {
       const row = sheetData[index];
@@ -1134,11 +1135,28 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
 
       const typeCell = String(row[colMap.type] ?? '').trim();
       const itemName = String(row[colMap.itemName] ?? '').trim();
-      const quantity = parseBulkNumber(row[colMap.quantity]);
+      const parsedQuantity = parseBulkNumber(row[colMap.quantity]);
+      let type = normalizeBulkTxType(typeCell);
+      let quantity = parsedQuantity;
+
+      if (colMap.type < 0) {
+        if (parsedQuantity < 0) {
+          type = 'out';
+          quantity = Math.abs(parsedQuantity);
+        } else if (parsedQuantity > 0) {
+          type = 'in';
+        }
+      }
 
       if (!itemName || quantity <= 0) continue;
 
-      const rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      let rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      if (!rawItemCode) {
+        const fallbackCodeIndex = detectedHeaders.findIndex((header) =>
+          header.includes('품목코드') || header.includes('상품코드') || header.includes('제품코드') || header.includes('itemcode') || header === 'sku' || header.endsWith('코드')
+        );
+        if (fallbackCodeIndex >= 0) rawItemCode = String(row[fallbackCodeIndex] ?? '').trim();
+      }
       const matchedItem = items.find((item) =>
         item.itemName === itemName || (rawItemCode && item.itemCode && item.itemCode === rawItemCode)
       );
@@ -1155,7 +1173,7 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       }
 
       rows.push({
-        type: normalizeBulkTxType(typeCell),
+        type,
         vendor: colMap.vendor >= 0 ? String(row[colMap.vendor] ?? '').trim() : '',
         itemName,
         itemCode: rawItemCode || matchedItem?.itemCode || '',
@@ -1287,7 +1305,7 @@ function detectBulkInoutColumns(sheetData) {
     type: ['구분', '입출고', '거래구분', '유형', 'type', 'inout'],
     vendor: ['거래처', '공급처', '고객처', 'vendor', 'supplier', 'customer'],
     itemName: ['품목명', '상품명', '제품명', 'itemname', 'item', 'name'],
-    itemCode: ['품목코드', '상품코드', '코드', 'sku', 'itemcode'],
+    itemCode: ['품목코드', '품목 코드', '상품코드', '제품코드', '자재코드', '품번', '코드', 'sku', 'itemcode'],
     quantity: ['수량', 'qty', 'quantity', '입고수량', '출고수량'],
     unitPrice: ['단가', '원가', '매입단가', '공급단가', 'unitprice', 'price', 'cost'],
     sellingPrice: ['판매가', '판매단가', 'saleprice', 'sellingprice', 'sale', 'selling'],
@@ -1345,7 +1363,8 @@ function parseBulkNumber(value) {
 
 function normalizeBulkTxType(value) {
   const normalized = normalizeBulkHeader(value);
-  if (['출고', '출', 'out', 'sale', 'sales', '판매', '매출'].includes(normalized)) return 'out';
+  if (['입고', '입', 'in', 'inbound', 'purchase', 'buy', '매입'].includes(normalized)) return 'in';
+  if (['출고', '출', 'out', 'outbound', 'sale', 'sales', '판매', '매출'].includes(normalized)) return 'out';
   return 'in';
 }
 

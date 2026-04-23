@@ -25,20 +25,32 @@ function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeType(value: unknown) {
+  const type = String(value ?? '').trim().toLowerCase();
+  if (type === 'in' || type === '입고' || type === '입') return 'in';
+  if (type === 'out' || type === '출고' || type === '출') return 'out';
+  return '';
+}
+
 function getComparableTxValue(tx: Record<string, unknown>, key: InoutSortKey) {
   if (key === 'date') {
     const source = normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt;
     return toLocalDateTimestamp(source);
   }
   if (key === 'quantity') return toNumber(tx.quantity);
-  if (key === 'type') return tx.type === 'in' ? 0 : 1;
+  if (key === 'type') {
+    const normalized = normalizeType(tx.type);
+    if (normalized === 'in') return 0;
+    if (normalized === 'out') return 1;
+    return 2;
+  }
   return String(tx[key] || '').trim().toLowerCase();
 }
 
 export function getInoutSummary(state: AppStoreState) {
   const transactions = state.transactions || [];
-  const todayInbound = transactions.filter((tx) => tx.type === 'in' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
-  const todayOutbound = transactions.filter((tx) => tx.type === 'out' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
+  const todayInbound = transactions.filter((tx) => normalizeType(tx.type) === 'in' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
+  const todayOutbound = transactions.filter((tx) => normalizeType(tx.type) === 'out' && isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)).length;
   const missingVendor = transactions.filter((tx) => !String(tx.vendor || '').trim()).length;
 
   return {
@@ -69,12 +81,12 @@ export function getFilteredTransactions(state: AppStoreState, filter: InoutFilte
         if (!haystack.includes(keyword)) return false;
       }
 
-      if (filter.type && tx.type !== filter.type) return false;
+      if (filter.type && normalizeType(tx.type) !== filter.type) return false;
       if (filter.vendor && tx.vendor !== filter.vendor) return false;
       if (filter.quick === 'today' && !isSameLocalDate(normalizeYyyyMmDd(tx.date) ? tx.date : tx.createdAt)) return false;
       if (filter.quick === 'missingVendor' && String(tx.vendor || '').trim()) return false;
-      if (filter.quick === 'in' && tx.type !== 'in') return false;
-      if (filter.quick === 'out' && tx.type !== 'out') return false;
+      if (filter.quick === 'in' && normalizeType(tx.type) !== 'in') return false;
+      if (filter.quick === 'out' && normalizeType(tx.type) !== 'out') return false;
       return true;
     })
     .sort((a, b) => {

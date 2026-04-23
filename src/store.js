@@ -128,6 +128,25 @@ function normalizeDateString(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
 }
 
+function toLocalDateKey(value) {
+  const direct = normalizeDateString(value);
+  if (direct) return direct;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeTxType(value) {
+  const raw = normalizeText(value).toLowerCase();
+  if (!raw) return '';
+  if (['in', '입고', '입', 'inbound', 'purchase', 'buy', '매입'].includes(raw)) return 'in';
+  if (['out', '출고', '출', 'outbound', 'sale', 'sales', '판매', '매출'].includes(raw)) return 'out';
+  return '';
+}
+
 function ensureStableIds() {
   let changed = false;
 
@@ -148,6 +167,27 @@ function ensureStableIds() {
     if (tx.id !== stableId) {
       tx.id = stableId;
       changed = true;
+    }
+
+    const normalizedType = normalizeTxType(tx.type);
+    if (normalizedType && tx.type !== normalizedType) {
+      tx.type = normalizedType;
+      changed = true;
+    }
+
+    const normalizedDate = toLocalDateKey(tx.date) || toLocalDateKey(tx.createdAt);
+    if (normalizedDate && tx.date !== normalizedDate) {
+      tx.date = normalizedDate;
+      changed = true;
+    }
+
+    if (!normalizeText(tx.itemCode) && normalizeText(tx.itemName)) {
+      const matchedItem = state.mappedData.find((item) => normalizeText(item?.itemName) === normalizeText(tx.itemName));
+      const fallbackCode = normalizeText(matchedItem?.itemCode);
+      if (fallbackCode) {
+        tx.itemCode = fallbackCode;
+        changed = true;
+      }
     }
   });
 

@@ -55,6 +55,13 @@ function SortableHeader({
   );
 }
 
+function getTypeMeta(rawType?: string) {
+  const type = String(rawType || '').toLowerCase();
+  if (type === 'in') return { label: '입고', className: 'react-badge is-good' };
+  if (type === 'out') return { label: '출고', className: 'react-badge is-warn' };
+  return { label: '미지정', className: 'react-badge' };
+}
+
 export function InoutTable({ rows, sort, onSortChange, onDelete }: InoutTableProps) {
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
@@ -105,12 +112,11 @@ export function InoutTable({ rows, sort, onSortChange, onDelete }: InoutTablePro
                 const dateLabel = normalizeYyyyMmDd(row.date)
                   ? formatLocalDateLabel(row.date)
                   : formatLocalDateLabel(row.createdAt);
+                const typeMeta = getTypeMeta(row.type);
                 return (
                   <tr key={row.id ?? `${String(row.date || '')}-${String(row.itemCode || row.itemName || '')}-${index}`}>
                     <td>
-                      <span className={row.type === 'in' ? 'react-badge is-good' : 'react-badge is-warn'}>
-                        {row.type === 'in' ? '입고' : '출고'}
-                      </span>
+                      <span className={typeMeta.className}>{typeMeta.label}</span>
                     </td>
                     <td>{row.itemName || '-'}</td>
                     <td>{row.itemCode || '-'}</td>
