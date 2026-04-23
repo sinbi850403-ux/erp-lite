@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured, getSupabaseDebugInfo } from './supabase-client.js';
 import { showToast } from './toast.js';
+import { flushPendingSync } from './store.js';
 import {
   ACTION_MIN_ROLE as AUTH_ACTION_MIN_ROLE,
   PAGE_MIN_ROLE as AUTH_PAGE_MIN_ROLE,
@@ -629,6 +630,13 @@ export async function resetPassword(email) {
  */
 export async function logout() {
   if (!isSupabaseConfigured) return false;
+
+  // 로그아웃 전 대기 중인 데이터 동기화 완료 (2초 디바운스 중 세션 소멸로 인한 데이터 유실 방지)
+  try {
+    await flushPendingSync();
+  } catch (e) {
+    console.warn('[Auth] 로그아웃 전 동기화 실패 (계속 진행):', e.message);
+  }
 
   // 진행 중인 applySession 결과를 무효화
   applySessionSeq += 1;

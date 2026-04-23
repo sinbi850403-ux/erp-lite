@@ -568,6 +568,20 @@ async function syncToSupabase() {
 }
 
 /**
+ * 대기 중인 Supabase 동기화를 즉시 실행
+ * 로그아웃 직전에 호출해 2초 디바운스 중 세션이 사라지기 전에 데이터를 저장한다.
+ */
+export async function flushPendingSync() {
+  if (_supabaseSyncTimer) {
+    clearTimeout(_supabaseSyncTimer);
+    _supabaseSyncTimer = null;
+  }
+  if (_dirtyKeys.size > 0) {
+    await syncToSupabase();
+  }
+}
+
+/**
  * 디바운스된 Supabase 동기화 트리거
  * 왜 2초? → setState가 0.1초 간격으로 연속 호출될 수 있어서 묶어서 처리
  */
@@ -639,8 +653,9 @@ let _restorePromise = null;
 export function restoreState() {
   if (_restorePromise) return _restorePromise;
   _restorePromise = _doRestoreState().finally(() => {
-    // 로그아웃 후 재로그인 시 재복원할 수 있도록 완료 뒤 초기화
-    // (resetState() 호출 시 함께 초기화됨)
+    // Promise 완료 후 null로 초기화 → 재로그인 시 새로 패치 허용
+    // (진행 중엔 동일 Promise 반환해 중복 호출 방지, 완료 후엔 재사용 불가)
+    _restorePromise = null;
   });
   return _restorePromise;
 }
@@ -659,18 +674,26 @@ async function _doRestoreState() {
         // 로그인 후 복원 과정에서 DEFAULT_STATE로 날아가지 않는다.
         const localData = await loadFromDB();
 
-        // Supabase 거래내역이 비어 있으면 로컬 캐시 거래내역을 우선 보존한다.
-        // (네트워크/권한 이슈로 cloud transactions가 0건일 때 이력이 사라지는 문제 방지)
+        // Supabase가 빈 배열을 반환해도 IndexedDB 데이터를 보존한다.
+        // (sync 미완료/네트워크 오류 상태에서 로그아웃 후 재로그인 시 데이터 유실 방지)
         const localTransactions = Array.isArray(localData?.transactions) ? localData.transactions : [];
         const cloudTransactions = Array.isArray(cloudData?.transactions) ? cloudData.transactions : [];
         const mergedTransactions = cloudTransactions.length > 0 ? cloudTransactions : localTransactions;
+
+        // 품목 데이터도 동일 전략 적용 (Supabase 빈 배열이면 IndexedDB 우선)
+        const localMappedData = Array.isArray(localData?.mappedData) ? localData.mappedData : [];
+        const cloudMappedData = Array.isArray(cloudData?.mappedData) ? cloudData.mappedData : [];
+        const mergedMappedData = cloudMappedData.length > 0 ? cloudMappedData : localMappedData;
 
         // Supabase에서 온 거래내역에는 _synced 표시
         if (cloudTransactions.length > 0) {
           mergedTransactions.forEach(tx => { tx._synced = true; });
         }
 
-        state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData, transactions: mergedTransactions };
+        state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData,
+          mappedData: mergedMappedData,
+          transactions: mergedTransactions,
+        };
         let bootstrappedTransactions = false;
         if ((!state.transactions || state.transactions.length === 0) && (state.mappedData || []).length > 0) {
           state.transactions = buildBootstrapTransactionsFromItems(state.mappedData);
