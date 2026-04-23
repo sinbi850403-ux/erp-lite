@@ -139,12 +139,20 @@ function toLocalDateKey(value) {
   return `${y}-${m}-${d}`;
 }
 
-function normalizeTxType(value) {
+function normalizeTxType(value, tx = null) {
   const raw = normalizeText(value).toLowerCase();
-  if (!raw) return '';
   if (['in', '입고', '입', 'inbound', 'purchase', 'buy', '매입'].includes(raw)) return 'in';
   if (['out', '출고', '출', 'outbound', 'sale', 'sales', '판매', '매출'].includes(raw)) return 'out';
-  return '';
+
+  const note = normalizeText(tx?.note).toLowerCase();
+  if (['out', '출고', '출', '매출', '판매'].some((keyword) => note.includes(keyword))) return 'out';
+  if (['in', '입고', '입', '매입', '초기재고'].some((keyword) => note.includes(keyword))) return 'in';
+
+  const quantity = Number.parseFloat(String(tx?.quantity ?? '').replace(/,/g, '').trim());
+  if (Number.isFinite(quantity) && quantity < 0) return 'out';
+  // type이 비어 있거나 이상값이면 기본은 입고로 보정한다.
+  // (기존에는 화면/삭제 로직에서 사실상 출고처럼 취급되어 오동작 가능)
+  return 'in';
 }
 
 function ensureStableIds() {
@@ -169,8 +177,8 @@ function ensureStableIds() {
       changed = true;
     }
 
-    const normalizedType = normalizeTxType(tx.type);
-    if (normalizedType && tx.type !== normalizedType) {
+    const normalizedType = normalizeTxType(tx.type, tx);
+    if (tx.type !== normalizedType) {
       tx.type = normalizedType;
       changed = true;
     }
@@ -444,8 +452,11 @@ async function syncToSupabase() {
         .map(tx => ({
           type: tx.type,
           item_name: tx.itemName,
+          item_code: tx.itemCode || null,
           quantity: tx.quantity,
           unit_price: tx.unitPrice || 0,
+          selling_price: tx.sellingPrice || 0,
+          actual_selling_price: tx.actualSellingPrice || 0,
           date: tx.date,
           vendor: tx.vendor,
           warehouse: tx.warehouse,
