@@ -191,6 +191,24 @@ async function handleFile(file, navigateTo) {
         if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
       }
     });
+    const openingDate = getTodayLocalKey();
+    const openingTransactions = mappedData
+      .map((row) => {
+        const qty = parseFloat(String(row.quantity ?? '').replace(/,/g, '').trim());
+        if (!Number.isFinite(qty) || qty <= 0) return null;
+        return {
+          type: 'in',
+          vendor: String(row.vendor || '').trim(),
+          itemName: String(row.itemName || '').trim(),
+          itemCode: String(row.itemCode || '').trim(),
+          quantity: qty,
+          unitPrice: parseFloat(String(row.unitPrice ?? '').replace(/,/g, '').trim()) || 0,
+          date: openingDate,
+          warehouse: String(row.warehouse || '').trim(),
+          note: '업로드 초기재고',
+        };
+      })
+      .filter(Boolean);
 
     resetState();
     if (isSupabaseConfigured && supabase) {
@@ -217,8 +235,13 @@ async function handleFile(file, navigateTo) {
       allSheets: result.sheets,
       columnMapping: mapping,
       mappedData,
+      transactions: openingTransactions,
       safetyStock: uploadSafetyStock,
       lastUploadDiff: uploadDiff,
+      inoutViewPrefs: {
+        filter: { keyword: '', type: '', date: '', vendor: '', itemCode: '', quick: 'all' },
+        sort: { key: 'date', direction: 'desc' },
+      },
     });
 
     showToast(
@@ -241,6 +264,14 @@ async function handleFile(file, navigateTo) {
  * 엑셀 헤더를 분석해 ERP 필드에 자동 매핑
  * @returns {object} { fieldKey: columnIndex, ... }
  */
+function getTodayLocalKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function buildUploadDiff(previousRows, nextRows, fileName = '') {
   const previousMap = new Map();
   previousRows.forEach((row, index) => {
