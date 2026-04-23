@@ -8,6 +8,7 @@ import { readExcelFile } from './excel.js';
 import { setState, resetState, getState } from './store.js';
 import { showToast } from './toast.js';
 import { downloadTemplate, getTemplateList } from './excel-templates.js';
+import { isSupabaseConfigured, supabase } from './supabase-client.js';
 
 // ERP 필드 정의 (page-mapping.js와 동일)
 const ERP_FIELDS = [
@@ -192,6 +193,21 @@ async function handleFile(file, navigateTo) {
     });
 
     resetState();
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId) {
+          const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('user_id', userId);
+          if (error) throw error;
+        }
+      } catch (error) {
+        console.warn('[Upload] 원격 입출고 초기화 실패:', error?.message || error);
+      }
+    }
     setState({
       rawData,
       sheetNames: result.sheetNames,
