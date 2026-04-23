@@ -142,7 +142,7 @@ export function AuthPage() {
           {mode === 'login' ? (
             <form className="react-auth-form" onSubmit={handleEmailLogin}>
               <label className="react-field">
-                <span>Email</span>
+                <span>이메일</span>
                 <input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} />
               </label>
               <label className="react-field">
@@ -167,7 +167,7 @@ export function AuthPage() {
                 <input type="text" value={form.name} onChange={(event) => updateField('name', event.target.value)} />
               </label>
               <label className="react-field">
-                <span>Email</span>
+                <span>이메일</span>
                 <input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} />
               </label>
               <label className="react-field">
