@@ -70,8 +70,8 @@ export function renderMappingPage(container, navigateTo) {
                     <td>${escapeHtml(row?.vendor ?? '')}</td>
                     <td>${escapeHtml(row?.quantity ?? '')}</td>
                     <td>${escapeHtml(row?.unit ?? '')}</td>
-                    <td>${escapeHtml(row?.unitPrice ?? '')}</td>
-                    <td>${escapeHtml(row?.salePrice ?? '')}</td>
+                    <td>${row?.unitPrice != null && row.unitPrice !== '' ? Math.round(Number(row.unitPrice)).toLocaleString('ko-KR') : ''}</td>
+                    <td>${row?.salePrice != null && row.salePrice !== '' ? Math.round(Number(row.salePrice)).toLocaleString('ko-KR') : ''}</td>
                     <td>${escapeHtml(row?.warehouse ?? '')}</td>
                   </tr>
                 `).join('')}

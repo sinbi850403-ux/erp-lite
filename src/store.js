@@ -788,7 +788,8 @@ export function recalcItemAmounts(item) {
     return;
   }
   const vatRate = inferVatRate(item);
-  item.supplyValue = qty * price;
+  // Math.round: 부동소수점 오류 제거 (한국 원화는 원 단위, 소수점 없음)
+  item.supplyValue = Math.round(qty * price);
   item.vat = Math.floor(item.supplyValue * vatRate);
   item.totalPrice = item.supplyValue + item.vat;
 }

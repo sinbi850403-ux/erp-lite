@@ -28,7 +28,8 @@ type InventoryTableProps = {
 
 function formatAmount(value: unknown) {
   const parsed = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
-  return Number.isFinite(parsed) ? new Intl.NumberFormat('ko-KR').format(parsed) : '-';
+  // Math.round: 부동소수점 오류 제거 (예: 2,799,999.545 → 2,800,000)
+  return Number.isFinite(parsed) ? new Intl.NumberFormat('ko-KR').format(Math.round(parsed)) : '-';
 }
 
 function SortableHeader({
