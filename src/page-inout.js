@@ -965,10 +965,9 @@ export function renderInoutPage(container, navigateTo) {
     showToast('이력을 엑셀로 내보냈습니다.', 'success');
   });
 
-  // 엑셀 일괄 등록
+  // 엑셀 대량 업로드 (모달 열기)
   container.querySelector('#btn-bulk-upload')?.addEventListener('click', () => {
-    // 사용자가 '엑셀로 대량업로드 할 수 있게' 라고 요청했으므로 bulk 페이지로 직접 이동하도록 연결
-    navigateTo('bulk');
+    openBulkUploadModal(container, navigateTo, items);
   });
 
   //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
