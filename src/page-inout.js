@@ -1040,31 +1040,31 @@ function openBulkUploadModal(container, navigateTo, items) {
   });
 
   overlay.querySelector('#bulk-download-template').addEventListener('click', () => {
+    const date = new Date().toISOString().split('T')[0];
+    const inQty = 100;
+    const unitPrice = 1200000;
+    const supplyValue = inQty * unitPrice;
+    const vat = Math.floor(supplyValue * 0.1);
+    const totalAmount = supplyValue + vat;
     const template = [
       {
-        구분: '입고',
+        자산: '완제품',
+        입고일자: date,
+        상품코드: 'SM-S925',
         거래처: '(주)삼성전자',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 100,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '1차 입고',
-      },
-      {
-        구분: '출고',
-        거래처: '쿠팡',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 30,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '쿠팡 출고',
+        품명: '갤럭시 S25',
+        규격: '256GB',
+        단위: 'EA',
+        입고수량: inQty,
+        단가: unitPrice,
+        공급가액: supplyValue,
+        부가세: vat,
+        합계금액: totalAmount,
       },
     ];
 
-    downloadExcel(template, '입출고_일괄등록_양식');
-    showToast('입출고 일괄등록 양식을 내려받았습니다. 내용을 입력한 뒤 다시 업로드해 주세요.', 'success');
+    downloadExcel(template, '입고관리_일괄등록_양식');
+    showToast('입고관리 양식을 내려받았습니다. 내용을 입력한 뒤 다시 업로드해 주세요.', 'success');
   });
 
   const dropzone = overlay.querySelector('#bulk-dropzone');
@@ -1118,6 +1118,7 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       unitPrice: headers.findIndex((h) => ['단가'].includes(h)),
       date: headers.findIndex((h) => ['날짜', '입고일자', '출고일자'].includes(h)),
       note: headers.findIndex((h) => ['비고'].includes(h)),
+      spec: headers.findIndex((h) => ['규격'].includes(h)),
       quantityIn: headers.findIndex((h) => ['입고수량'].includes(h)),
       quantityOut: headers.findIndex((h) => ['출고수량'].includes(h)),
     };
@@ -1134,7 +1135,10 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
 
       const typeCell = colMap.type >= 0 ? String(row[colMap.type] ?? '').trim().toLowerCase() : '';
       const itemName = String(row[colMap.itemName] ?? '').trim();
-      const quantity = Number.parseFloat(row[colMap.quantity]) || 0;
+      const quantityRaw = colMap.quantity >= 0 ? row[colMap.quantity] : '';
+      const inQuantityRaw = colMap.quantityIn >= 0 ? row[colMap.quantityIn] : '';
+      const outQuantityRaw = colMap.quantityOut >= 0 ? row[colMap.quantityOut] : '';
+      const quantity = Number.parseFloat(quantityRaw) || Number.parseFloat(inQuantityRaw) || Number.parseFloat(outQuantityRaw) || 0;
 
       if (!itemName || quantity <= 0) continue;
 
@@ -1169,7 +1173,10 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
         quantity,
         unitPrice: colMap.unitPrice >= 0 ? (Number.parseFloat(row[colMap.unitPrice]) || 0) : 0,
         date: dateStr || new Date().toISOString().split('T')[0],
-        note: colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
+        note: [
+          colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
+          colMap.spec >= 0 ? String(row[colMap.spec] ?? '').trim() : '',
+        ].filter(Boolean).join(' | '),
         matched: Boolean(matchedItem),
       });
     }
