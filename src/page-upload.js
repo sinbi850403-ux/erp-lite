@@ -8,6 +8,7 @@ import { readExcelFile } from './excel.js';
 import { setState, resetState, getState } from './store.js';
 import { showToast } from './toast.js';
 import { downloadTemplate, getTemplateList } from './excel-templates.js';
+import { isSupabaseConfigured, supabase } from './supabase-client.js';
 
 // ERP 필드 정의 (page-mapping.js와 동일)
 const ERP_FIELDS = [
@@ -17,6 +18,7 @@ const ERP_FIELDS = [
   { key: 'quantity',   label: '수량' },
   { key: 'unit',       label: '단위' },
   { key: 'unitPrice',  label: '단가' },
+  { key: 'salePrice',  label: '판매가(소가)' },
   { key: 'supplyValue',label: '공급가액' },
   { key: 'vat',        label: '부가세' },
   { key: 'totalPrice', label: '합계금액' },
@@ -32,7 +34,8 @@ const MAPPING_KEYWORDS = {
   category:   ['분류', '카테고리', 'category', '유형', '종류', '구분'],
   quantity:   ['수량', 'qty', 'quantity', '재고', '개수', '입고수량', '출고수량', '현재고'],
   unit:       ['단위', 'unit', 'uom'],
-  unitPrice:  ['단가', 'price', '가격', '원가'],
+  unitPrice:  ['단가', 'price', '가격', '원가', '매입가'],
+  salePrice:  ['판매가', '소가', '판매단가', '소비자가', '출고단가', 'sale', 'selling', 'retail'],
   supplyValue:['공급가액', '공급가', '금액'],
   vat:        ['부가세', '세액', 'vat', 'tax'],
   totalPrice: ['합계', 'total', '합계금액', '총액', '총금액'],
@@ -188,8 +191,41 @@ async function handleFile(file, navigateTo) {
         if(!isNaN(val)) uploadSafetyStock[row.itemName] = val;
       }
     });
+    const openingDate = getTodayLocalKey();
+    const openingTransactions = mappedData
+      .map((row) => {
+        const qty = parseFloat(String(row.quantity ?? '').replace(/,/g, '').trim());
+        if (!Number.isFinite(qty) || qty <= 0) return null;
+        return {
+          type: 'in',
+          vendor: String(row.vendor || '').trim(),
+          itemName: String(row.itemName || '').trim(),
+          itemCode: String(row.itemCode || '').trim(),
+          quantity: qty,
+          unitPrice: parseFloat(String(row.unitPrice ?? '').replace(/,/g, '').trim()) || 0,
+          date: openingDate,
+          warehouse: String(row.warehouse || '').trim(),
+          note: '업로드 초기재고',
+        };
+      })
+      .filter(Boolean);
 
     resetState();
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId) {
+          const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('user_id', userId);
+          if (error) throw error;
+        }
+      } catch (error) {
+        console.warn('[Upload] 원격 입출고 초기화 실패:', error?.message || error);
+      }
+    }
     setState({
       rawData,
       sheetNames: result.sheetNames,
@@ -199,8 +235,13 @@ async function handleFile(file, navigateTo) {
       allSheets: result.sheets,
       columnMapping: mapping,
       mappedData,
+      transactions: openingTransactions,
       safetyStock: uploadSafetyStock,
       lastUploadDiff: uploadDiff,
+      inoutViewPrefs: {
+        filter: { keyword: '', type: '', date: '', vendor: '', itemCode: '', quick: 'all' },
+        sort: { key: 'date', direction: 'desc' },
+      },
     });
 
     showToast(
@@ -223,6 +264,14 @@ async function handleFile(file, navigateTo) {
  * 엑셀 헤더를 분석해 ERP 필드에 자동 매핑
  * @returns {object} { fieldKey: columnIndex, ... }
  */
+function getTodayLocalKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function buildUploadDiff(previousRows, nextRows, fileName = '') {
   const previousMap = new Map();
   previousRows.forEach((row, index) => {
@@ -315,7 +364,7 @@ function buildMappedData(dataRows, mapping) {
       ERP_FIELDS.forEach(field => {
         const ci = mapping[field.key];
         let val = ci !== undefined ? (row[ci] ?? '') : '';
-        if (['quantity', 'unitPrice', 'supplyValue', 'vat', 'totalPrice', 'safetyStock'].includes(field.key)) {
+        if (['quantity', 'unitPrice', 'salePrice', 'supplyValue', 'vat', 'totalPrice', 'safetyStock'].includes(field.key)) {
           if (typeof val === 'string') {
             const clean = val.replace(/,/g, '').trim();
             if (clean !== '' && !isNaN(clean)) {

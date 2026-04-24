@@ -6,6 +6,9 @@ import { showToast } from './toast.js';
 import { destroyAllCharts, renderProfitTrendChart, renderVendorProfitChart } from './charts.js';
 import { jsPDF } from 'jspdf';
 import { applyKoreanFont } from './pdf-font.js';
+import { enableLocalReportSort } from './report-local-sort.js';
+
+const PROFIT_MONTHS = Array.from({ length: 12 }, (_, idx) => idx + 1);
 
 export function renderProfitPage(container, navigateTo) {
   destroyAllCharts();
@@ -34,18 +37,43 @@ export function renderProfitPage(container, navigateTo) {
   const vendorLossOnly = viewPrefs.vendorLossOnly === true;
   const vendorType = viewPrefs.vendorType || 'all';
 
+  const plannerPrefs = readProfitMonthlyPlannerPrefs();
+  const currentYear = new Date().getFullYear();
+  const plannerYear = Number(plannerPrefs.year) || currentYear;
+  const currentMonth = new Date().getMonth() + 1;
+  const plannerMonthRaw = Number(plannerPrefs.month);
+  const plannerMonth = PROFIT_MONTHS.includes(plannerMonthRaw)
+    ? plannerMonthRaw
+    : (plannerYear === currentYear ? currentMonth : 1);
+  const salesPlan = normalizeMonthlyMap(plannerPrefs.salesPlan);
+  const costPlan = normalizeMonthlyMap(plannerPrefs.costPlan);
+  const sgnaPlan = normalizeMonthlyMap(plannerPrefs.sgnaPlan);
+  const sgnaActual = normalizeMonthlyMap(plannerPrefs.sgnaActual);
+  const monthlyPlanner = buildMonthlyPlannerData(transactions, items, plannerYear, {
+    salesPlan,
+    costPlan,
+    sgnaPlan,
+    sgnaActual,
+  });
+  const plannerSnapshot = getMonthlyPlannerSnapshot(monthlyPlanner, plannerMonth);
+
   const rawRows = items
     .map((item) => {
       const quantity = toNumber(item.quantity);
       const unitCost = toNumber(item.unitPrice || item.unitCost);
       const salePrice = toNumber(getSalePrice(item));
+      const discountAmount = getItemMetric(item, ['discountAmount', 'discount', 'discountValue', 'discount_price', '할인금액']);
+      const sgnaExpense = getItemMetric(item, ['sgnaExpense', 'sgna', 'sellingGeneralAdminExpense', 'operatingExpense', '판관비', '판매관리비']);
       const hasSalePrice = toNumber(item.salePrice) > 0;
+      const grossSalesAmount = Math.round(quantity * salePrice);
+      const totalRevenue = Math.max(0, Math.round(grossSalesAmount - discountAmount)); // 매출금액
       const totalCost = Math.round(quantity * unitCost);
-      const totalRevenue = Math.round(quantity * salePrice);
-      const profit = totalRevenue - totalCost;
-      const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;   // 매출총이익률
-      const marginRate = totalCost > 0 ? (profit / totalCost) * 100 : 0;         // 마진율
+      const grossProfit = totalRevenue - totalCost; // 매출총이익
+      const operatingProfit = grossProfit - Math.round(sgnaExpense); // 영업이익
+      const profit = operatingProfit; // 기존 로직 호환용
+      const profitRate = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;      // 매출총이익률
       const costRatio = totalRevenue > 0 ? (totalCost / totalRevenue) * 100 : 0; // 매출원가율
+      const operatingProfitRate = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0; // 영업이익율
 
       return {
         name: item.itemName || '(미분류 품목)',
@@ -55,12 +83,17 @@ export function renderProfitPage(container, navigateTo) {
         unitCost,
         salePrice,
         hasSalePrice,
+        grossSalesAmount,
+        discountAmount,
+        sgnaExpense,
         totalCost,
         totalRevenue,
+        grossProfit,
+        operatingProfit,
         profit,
         profitRate,
-        marginRate,
         costRatio,
+        operatingProfitRate,
       };
     })
     .filter((row) => row.quantity > 0 || row.totalCost > 0);
@@ -74,16 +107,27 @@ export function renderProfitPage(container, navigateTo) {
     } else {
       const g = groupMap.get(key);
       const combinedQty = g.quantity + row.quantity;
+      const combinedGrossSalesAmount = g.grossSalesAmount + row.grossSalesAmount;
+      const combinedDiscountAmount = g.discountAmount + row.discountAmount;
+      const combinedSgnaExpense = g.sgnaExpense + row.sgnaExpense;
       const combinedCost = g.totalCost + row.totalCost;
       const combinedRevenue = g.totalRevenue + row.totalRevenue;
+      const combinedGrossProfit = combinedRevenue - combinedCost;
+      const combinedOperatingProfit = combinedGrossProfit - combinedSgnaExpense;
       g.quantity = combinedQty;
+      g.grossSalesAmount = combinedGrossSalesAmount;
+      g.discountAmount = combinedDiscountAmount;
+      g.sgnaExpense = combinedSgnaExpense;
       g.totalCost = combinedCost;
       g.totalRevenue = combinedRevenue;
-      g.profit = combinedRevenue - combinedCost;
+      g.grossProfit = combinedGrossProfit;
+      g.operatingProfit = combinedOperatingProfit;
+      g.profit = combinedOperatingProfit;
       g.unitCost = combinedQty > 0 ? Math.round(combinedCost / combinedQty) : 0;
-      g.profitRate = combinedRevenue > 0 ? (g.profit / combinedRevenue) * 100 : 0;
-      g.marginRate = combinedCost > 0 ? (g.profit / combinedCost) * 100 : 0;
+      g.salePrice = combinedQty > 0 ? Math.round(combinedGrossSalesAmount / combinedQty) : 0;
+      g.profitRate = combinedRevenue > 0 ? (combinedGrossProfit / combinedRevenue) * 100 : 0;
       g.costRatio = combinedRevenue > 0 ? (combinedCost / combinedRevenue) * 100 : 0;
+      g.operatingProfitRate = combinedRevenue > 0 ? (combinedOperatingProfit / combinedRevenue) * 100 : 0;
       g.hasSalePrice = g.hasSalePrice || row.hasSalePrice;
       if (!g.salePrice && row.salePrice) g.salePrice = row.salePrice;
     }
@@ -94,19 +138,23 @@ export function renderProfitPage(container, navigateTo) {
   const topProfit = sortedByProfit.slice(0, 5);
   const riskRows = [...rows]
     .filter((row) => row.hasSalePrice)
-    .sort((a, b) => a.profitRate - b.profitRate)
+    .sort((a, b) => a.operatingProfitRate - b.operatingProfitRate)
     .slice(0, 5);
 
+  const totalGrossSales = sumBy(rows, (row) => row.grossSalesAmount);
+  const totalDiscount = sumBy(rows, (row) => row.discountAmount);
+  const totalSgnaExpense = sumBy(rows, (row) => row.sgnaExpense);
   const totalCost = sumBy(rows, (row) => row.totalCost);
   const totalRevenue = sumBy(rows, (row) => row.totalRevenue);
-  const totalProfit = totalRevenue - totalCost;
-  const avgProfitRate = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;  // 매출총이익률
-  const avgMarginRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;         // 마진율(수익률)
+  const totalGrossProfit = totalRevenue - totalCost;
+  const totalProfit = totalGrossProfit - totalSgnaExpense; // 영업이익
+  const avgProfitRate = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0; // 매출총이익률
   const totalCostRatio = totalRevenue > 0 ? (totalCost / totalRevenue) * 100 : 0;    // 매출원가율
+  const totalOperatingProfitRate = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0; // 영업이익율
 
   const salePriceCount = rows.filter((row) => row.hasSalePrice).length;
   const salePriceRate = rows.length > 0 ? (salePriceCount / rows.length) * 100 : 0;
-  const lowMarginCount = rows.filter((row) => row.hasSalePrice && row.profitRate < 10).length;
+  const lowMarginCount = rows.filter((row) => row.hasSalePrice && row.operatingProfitRate < 10).length;
   const lossCount = rows.filter((row) => row.profit < 0).length;
 
   const categorySummary = summarizeByCategory(rows).slice(0, 5);
@@ -234,26 +282,37 @@ export function renderProfitPage(container, navigateTo) {
 
     <div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
       <div class="stat-card">
-        <div class="stat-label">총 예상 매출</div>
+        <div class="stat-label">매출금액</div>
         <div class="stat-value text-accent">${formatMoney(totalRevenue)}</div>
+        <div class="stat-change">총판매 ${formatMoney(totalGrossSales)} - 할인 ${formatMoney(totalDiscount)}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">총 원가</div>
+        <div class="stat-label">매출원가</div>
         <div class="stat-value">${formatMoney(totalCost)}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">총 예상 이익</div>
+        <div class="stat-label">매출총이익</div>
+        <div class="stat-value ${totalGrossProfit >= 0 ? 'text-success' : 'text-danger'}">${formatSignedMoney(totalGrossProfit)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">영업이익</div>
         <div class="stat-value ${totalProfit >= 0 ? 'text-success' : 'text-danger'}">${formatSignedMoney(totalProfit)}</div>
+        <div class="stat-change">판관비 ${formatMoney(totalSgnaExpense)} 반영</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">매출총이익률</div>
         <div class="stat-value ${avgProfitRate >= 0 ? 'text-success' : 'text-danger'}">${formatPercent(avgProfitRate)}</div>
-        <div class="stat-change">(판매가-원가) / 판매가</div>
+        <div class="stat-change">매출총이익 / 매출금액</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">매출원가율</div>
         <div class="stat-value ${totalCostRatio <= 80 ? 'text-success' : 'text-danger'}">${formatPercent(totalCostRatio)}</div>
-        <div class="stat-change">원가 / 매출 · 수익률 ${formatPercent(avgMarginRate)}</div>
+        <div class="stat-change">매출원가 / 매출금액</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">영업이익율</div>
+        <div class="stat-value ${totalOperatingProfitRate >= 0 ? 'text-success' : 'text-danger'}">${formatPercent(totalOperatingProfitRate)}</div>
+        <div class="stat-change">영업이익 / 매출금액</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">판매가 입력률</div>
@@ -265,6 +324,113 @@ export function renderProfitPage(container, navigateTo) {
         <div class="stat-value ${lowMarginCount + lossCount > 0 ? 'text-danger' : 'text-success'}">${lowMarginCount + lossCount}건</div>
         <div class="stat-change">저마진 ${lowMarginCount}건 · 손실 ${lossCount}건</div>
       </div>
+    </div>
+
+    <details class="card card-compact" style="margin-top:12px;">
+      <summary style="cursor:pointer; font-weight:700; list-style:none;">
+        📘 계산식 보기 (이익률/원가율 기준)
+      </summary>
+      <div style="margin-top:10px; font-size:13px; color:var(--text-secondary); line-height:1.8;">
+        <div>매출금액 = (판매단가 × 수량) - 할인금액</div>
+        <div>매출원가 = 원가단가 × 수량</div>
+        <div>매출총이익 = 매출금액 - 매출원가</div>
+        <div>매출총이익률 = 매출총이익 / 매출금액 × 100</div>
+        <div>매출원가율 = 매출원가 / 매출금액 × 100</div>
+        <div>영업이익 = 매출총이익 - 판관비</div>
+        <div>영업이익율 = 영업이익 / 매출금액 × 100</div>
+        <div style="margin-top:8px; color:var(--text-muted);">
+          할인금액/판관비가 입력되지 않은 품목은 0원으로 계산합니다.
+        </div>
+      </div>
+    </details>
+
+    <div class="card card-compact" style="margin-top:12px;">
+      <div class="card-title" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+        <span>월별 계획/실적/차이 (영업이익 자동 계산)</span>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span style="font-size:12px; color:var(--text-muted);">기준연도</span>
+          <select class="filter-select" id="profit-planner-year">
+            ${[plannerYear - 1, plannerYear, plannerYear + 1].map((y) => `<option value="${y}" ${y === plannerYear ? 'selected' : ''}>${y}년</option>`).join('')}
+          </select>
+          <select class="filter-select" id="profit-planner-month">
+            ${PROFIT_MONTHS.map((month) => `<option value="${month}" ${month === plannerMonth ? 'selected' : ''}>${month}월</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="chart-help-text" style="margin-bottom:8px;">
+        입력: 매출금액/매출원가/판관비(계획), 판관비(실적) · 자동계산: 매출총이익/영업이익/영업이익율
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:10px;">
+        <div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px;">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">매출총이익 (${plannerMonth}월)</div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+            <span style="font-size:14px;">실적 ${formatMoney(plannerSnapshot.actual.grossProfit)}</span>
+            <span style="font-size:12px; color:${plannerSnapshot.diff.grossProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatSignedMoney(plannerSnapshot.diff.grossProfit)}</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px;">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">영업이익 (${plannerMonth}월)</div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+            <span style="font-size:14px;">실적 ${formatMoney(plannerSnapshot.actual.operatingProfit)}</span>
+            <span style="font-size:12px; color:${plannerSnapshot.diff.operatingProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatSignedMoney(plannerSnapshot.diff.operatingProfit)}</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px;">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">영업이익율 (${plannerMonth}월)</div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+            <span style="font-size:14px;">실적 ${formatPercent(plannerSnapshot.actual.operatingProfitRate)}</span>
+            <span style="font-size:12px; color:${plannerSnapshot.diff.operatingProfitRate >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatSignedPercent(plannerSnapshot.diff.operatingProfitRate)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrapper" style="border:none; overflow:auto;">
+        <table class="data-table" style="min-width:720px;">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th class="text-right">계획</th>
+              <th class="text-right">실적</th>
+              <th class="text-right">차이</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderMonthlyPlannerCompactRow('매출금액', plannerSnapshot, 'sales', { editablePlan: true, planKey: 'salesPlan' })}
+            ${renderMonthlyPlannerCompactRow('매출원가', plannerSnapshot, 'cost', { editablePlan: true, planKey: 'costPlan' })}
+            ${renderMonthlyPlannerCompactRow('매출총이익', plannerSnapshot, 'grossProfit')}
+            ${renderMonthlyPlannerCompactRow('판관비', plannerSnapshot, 'sgna', { editablePlan: true, editableActual: true, planKey: 'sgnaPlan', actualKey: 'sgnaActual' })}
+            ${renderMonthlyPlannerCompactRow('영업이익', plannerSnapshot, 'operatingProfit')}
+            ${renderMonthlyPlannerCompactRow('영업이익율', plannerSnapshot, 'operatingProfitRate', { percent: true })}
+          </tbody>
+        </table>
+      </div>
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer; color:var(--text-secondary); font-size:12px;">전체 12개월 표 펼치기</summary>
+        <div class="table-wrapper" style="border:none; overflow:auto; margin-top:8px;">
+          <table class="data-table" style="min-width:1500px;">
+            <thead>
+              <tr>
+                <th rowspan="2">구분</th>
+                ${PROFIT_MONTHS.map((month) => `<th colspan="3" class="text-center">${month}월</th>`).join('')}
+              </tr>
+              <tr>
+                ${PROFIT_MONTHS.map(() => `
+                  <th class="text-right">계획</th>
+                  <th class="text-right">실적</th>
+                  <th class="text-right">차이</th>
+                `).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${renderMonthlyPlannerRow('매출금액', monthlyPlanner, 'sales', { editablePlan: true, planKey: 'salesPlan' })}
+              ${renderMonthlyPlannerRow('매출원가', monthlyPlanner, 'cost', { editablePlan: true, planKey: 'costPlan' })}
+              ${renderMonthlyPlannerRow('매출총이익', monthlyPlanner, 'grossProfit')}
+              ${renderMonthlyPlannerRow('판관비', monthlyPlanner, 'sgna', { editablePlan: true, editableActual: true, planKey: 'sgnaPlan', actualKey: 'sgnaActual' })}
+              ${renderMonthlyPlannerRow('영업이익', monthlyPlanner, 'operatingProfit')}
+              ${renderMonthlyPlannerRow('영업이익율', monthlyPlanner, 'operatingProfitRate', { percent: true })}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
 
     <div class="tabs">
@@ -288,7 +454,7 @@ export function renderProfitPage(container, navigateTo) {
                 <div style="font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(
                   row.name,
                 )}</div>
-                <div style="font-size:11px; color:var(--text-muted);">${formatPercent(row.profitRate)} · ${row.quantity.toLocaleString(
+                <div style="font-size:11px; color:var(--text-muted);">영업이익율 ${formatPercent(row.operatingProfitRate)} · ${row.quantity.toLocaleString(
               'ko-KR',
             )}개</div>
               </div>
@@ -314,8 +480,8 @@ export function renderProfitPage(container, navigateTo) {
                 )}</div>
               </div>
               <div style="font-size:12px; font-weight:700; color:${
-                row.profitRate < 10 ? 'var(--danger)' : 'var(--warning)'
-              }">${formatPercent(row.profitRate)}</div>
+                row.operatingProfitRate < 10 ? 'var(--danger)' : 'var(--warning)'
+              }">${formatPercent(row.operatingProfitRate)}</div>
             </div>
           `,
               '판매가가 입력된 품목이 없습니다.',
@@ -364,10 +530,11 @@ export function renderProfitPage(container, navigateTo) {
                 <th class="text-right">원가</th>
                 <th class="text-right">판매가</th>
                 <th class="text-right">개당 이익</th>
-                <th class="text-right">총 이익</th>
+                <th class="text-right">매출총이익</th>
+                <th class="text-right">영업이익</th>
                 <th class="text-right">매출총이익률</th>
                 <th class="text-right">매출원가율</th>
-                <th class="text-right">수익률(마진)</th>
+                <th class="text-right">영업이익율</th>
                 <th class="text-center">상태</th>
               </tr>
             </thead>
@@ -376,7 +543,7 @@ export function renderProfitPage(container, navigateTo) {
                 sortedByProfit.length === 0
                   ? `
               <tr>
-                <td colspan="10" style="text-align:center; color:var(--text-muted); padding:28px 0;">
+                <td colspan="13" style="text-align:center; color:var(--text-muted); padding:28px 0;">
                   손익을 계산할 재고 데이터가 없습니다.
                 </td>
               </tr>
@@ -384,9 +551,9 @@ export function renderProfitPage(container, navigateTo) {
                   : sortedByProfit
                       .map((row, index) => {
                         const perUnitProfit = row.salePrice - row.unitCost;
-                        const tone = getTone(row.profitRate);
+                        const tone = getTone(row.operatingProfitRate);
                         return `
-                <tr class="${row.profit < 0 ? 'row-danger' : row.profitRate < 10 ? 'row-warning' : ''}">
+                <tr class="${row.profit < 0 ? 'row-danger' : row.operatingProfitRate < 10 ? 'row-warning' : ''}">
                   <td class="col-num">${index + 1}</td>
                   <td>
                     <strong>${escapeHtml(row.name)}</strong>
@@ -400,14 +567,15 @@ export function renderProfitPage(container, navigateTo) {
                     ${!row.hasSalePrice ? '<span style="font-size:10px; color:var(--warning); margin-left:4px;">추정</span>' : ''}
                   </td>
                   <td class="text-right ${perUnitProfit >= 0 ? 'type-in' : 'type-out'}">${formatSignedMoney(perUnitProfit)}</td>
-                  <td class="text-right ${row.profit >= 0 ? 'type-in' : 'type-out'}">${formatSignedMoney(row.profit)}</td>
-                  <td class="text-right" style="font-weight:700; color:${tone};">${formatPercent(row.profitRate)}</td>
+                  <td class="text-right ${row.grossProfit >= 0 ? 'type-in' : 'type-out'}">${formatSignedMoney(row.grossProfit)}</td>
+                  <td class="text-right ${row.operatingProfit >= 0 ? 'type-in' : 'type-out'}">${formatSignedMoney(row.operatingProfit)}</td>
+                  <td class="text-right" style="font-weight:700; color:${row.profitRate >= 10 ? 'var(--success)' : 'var(--warning)'};">${formatPercent(row.profitRate)}</td>
                   <td class="text-right" style="color:${row.costRatio <= 80 ? 'var(--success)' : 'var(--danger)'};">${formatPercent(row.costRatio)}</td>
-                  <td class="text-right" style="color:${row.marginRate >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatPercent(row.marginRate)}</td>
+                  <td class="text-right" style="font-weight:700; color:${tone};">${formatPercent(row.operatingProfitRate)}</td>
                   <td class="text-center">
                     <span class="badge ${
-                      row.profit < 0 ? 'badge-danger' : row.profitRate < 10 ? 'badge-warning' : 'badge-success'
-                    }">${row.profit < 0 ? '손실' : row.profitRate < 10 ? '주의' : '양호'}</span>
+                      row.profit < 0 ? 'badge-danger' : row.operatingProfitRate < 10 ? 'badge-warning' : 'badge-success'
+                    }">${row.profit < 0 ? '손실' : row.operatingProfitRate < 10 ? '주의' : '양호'}</span>
                   </td>
                 </tr>
               `;
@@ -531,10 +699,8 @@ export function renderProfitPage(container, navigateTo) {
         <div>
           <div style="font-size:12px; color:var(--text-muted);">해석 기준</div>
           <div style="margin-top:6px; font-size:12px; color:var(--text-secondary); line-height:1.7;">
-            <div>매출총이익률 = (판매가 - 원가) / 판매가</div>
-            <div>매출원가율 = 원가 / 판매가 &nbsp;(낮을수록 좋음)</div>
-            <div>수익률(마진) = (판매가 - 원가) / 원가</div>
-            <div>판매가 미입력 품목은 기본 마진 규칙으로 추정됩니다.</div>
+            <div>상단의 <strong>계산식 보기</strong>에서 산식과 해석 기준을 확인할 수 있습니다.</div>
+            <div>기간 손익은 거래 내역 기준, 품목 손익은 현재 재고 기준으로 계산됩니다.</div>
           </div>
         </div>
       </div>
@@ -577,6 +743,36 @@ export function renderProfitPage(container, navigateTo) {
       const nextTab = btn.dataset.profitTab;
       saveProfitViewPrefs({ tab: nextTab });
       renderProfitPage(container, navigateTo);
+    });
+  });
+
+  container.querySelector('#profit-planner-year')?.addEventListener('change', (event) => {
+    saveProfitMonthlyPlannerPrefs({ year: Number(event.target.value) || currentYear });
+    renderProfitPage(container, navigateTo);
+  });
+  container.querySelector('#profit-planner-month')?.addEventListener('change', (event) => {
+    const month = Number(event.target.value);
+    saveProfitMonthlyPlannerPrefs({ month: PROFIT_MONTHS.includes(month) ? month : 1 });
+    renderProfitPage(container, navigateTo);
+  });
+
+  const updatePlannerMap = (key, month, value) => {
+    const latest = readProfitMonthlyPlannerPrefs();
+    const nextMap = { ...(latest[key] || {}) };
+    nextMap[String(month)] = toNumber(value);
+    saveProfitMonthlyPlannerPrefs({ [key]: nextMap });
+    renderProfitPage(container, navigateTo);
+  };
+
+  container.querySelectorAll('input[data-plan-metric]').forEach((input) => {
+    input.addEventListener('change', () => {
+      updatePlannerMap(input.dataset.planMetric, input.dataset.month, input.value);
+    });
+  });
+
+  container.querySelectorAll('input[data-actual-metric]').forEach((input) => {
+    input.addEventListener('change', () => {
+      updatePlannerMap(input.dataset.actualMetric, input.dataset.month, input.value);
     });
   });
 
@@ -648,11 +844,16 @@ export function renderProfitPage(container, navigateTo) {
               '기간 매입 합계': periodSummary.totalIn,
               '기간 매출 합계': periodSummary.totalOut,
               '기간 손익': periodSummary.profit,
-              '총 예상 매출': totalRevenue,
-              '총 원가': totalCost,
-              '총 예상 이익': totalProfit,
-              '평균 이익률(%)': Number(avgProfitRate.toFixed(2)),
-              '마진율(%)': Number(avgMarginRate.toFixed(2)),
+              '총판매금액': totalGrossSales,
+              '총 할인금액': totalDiscount,
+              매출금액: totalRevenue,
+              매출원가: totalCost,
+              매출총이익: totalGrossProfit,
+              '총 판관비': totalSgnaExpense,
+              영업이익: totalProfit,
+              '매출총이익률(%)': Number(avgProfitRate.toFixed(2)),
+              '매출원가율(%)': Number(totalCostRatio.toFixed(2)),
+              '영업이익율(%)': Number(totalOperatingProfitRate.toFixed(2)),
               '판매가 입력률(%)': Number(salePriceRate.toFixed(2)),
             },
           ];
@@ -666,11 +867,16 @@ export function renderProfitPage(container, navigateTo) {
             수량: row.quantity,
             원가: row.unitCost,
             판매가: row.salePrice,
-            '총 원가': row.totalCost,
-            '총 매출': row.totalRevenue,
-            손익: row.profit,
-            '이익률(%)': Number(row.profitRate.toFixed(2)),
-            '마진율(%)': Number(row.marginRate.toFixed(2)),
+            '총판매금액': row.grossSalesAmount,
+            할인금액: row.discountAmount,
+            매출금액: row.totalRevenue,
+            매출원가: row.totalCost,
+            매출총이익: row.grossProfit,
+            판관비: row.sgnaExpense,
+            영업이익: row.operatingProfit,
+            '매출총이익률(%)': Number(row.profitRate.toFixed(2)),
+            '매출원가율(%)': Number(row.costRatio.toFixed(2)),
+            '영업이익율(%)': Number(row.operatingProfitRate.toFixed(2)),
           }));
           if (exportRows.length === 0) {
             showToast('내보낼 품목 손익 데이터가 없습니다.', 'warning');
@@ -742,6 +948,11 @@ export function renderProfitPage(container, navigateTo) {
 
   renderProfitTrendChart('profit-trend-chart', monthlySeries);
   renderVendorProfitChart('profit-vendor-chart', vendorChartRows);
+
+  container.querySelectorAll('.data-table').forEach((table) => {
+    table.dataset.autoSort = 'off';
+  });
+  enableLocalReportSort(container);
 }
 
 function summarizeByCategory(rows) {
@@ -895,6 +1106,193 @@ function saveProfitViewPrefs(next) {
   localStorage.setItem('invex_profit_view_v1', JSON.stringify(merged));
 }
 
+function readProfitMonthlyPlannerPrefs() {
+  try {
+    const raw = localStorage.getItem('invex_profit_monthly_planner_v1');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveProfitMonthlyPlannerPrefs(next) {
+  const current = readProfitMonthlyPlannerPrefs();
+  const merged = { ...current, ...next };
+  localStorage.setItem('invex_profit_monthly_planner_v1', JSON.stringify(merged));
+}
+
+function normalizeMonthlyMap(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const result = {};
+  PROFIT_MONTHS.forEach((month) => {
+    result[month] = toNumber(source[month] ?? source[String(month)] ?? 0);
+  });
+  return result;
+}
+
+function buildMonthlyPlannerData(transactions, items, year, maps) {
+  const plan = { sales: {}, cost: {}, sgna: {}, grossProfit: {}, operatingProfit: {}, operatingProfitRate: {} };
+  const actual = { sales: {}, cost: {}, sgna: {}, grossProfit: {}, operatingProfit: {}, operatingProfitRate: {} };
+
+  const txSummary = summarizeOutTransactionsByMonth(transactions, items, year);
+
+  PROFIT_MONTHS.forEach((month) => {
+    const pSales = toNumber(maps.salesPlan[month]);
+    const pCost = toNumber(maps.costPlan[month]);
+    const pSgna = toNumber(maps.sgnaPlan[month]);
+    const pGross = pSales - pCost;
+    const pOperating = pGross - pSgna;
+    const pOperatingRate = pSales > 0 ? (pOperating / pSales) * 100 : 0;
+
+    const aSales = toNumber(txSummary[month]?.sales ?? 0);
+    const aCost = toNumber(txSummary[month]?.cost ?? 0);
+    const aSgna = toNumber(maps.sgnaActual[month]);
+    const aGross = aSales - aCost;
+    const aOperating = aGross - aSgna;
+    const aOperatingRate = aSales > 0 ? (aOperating / aSales) * 100 : 0;
+
+    plan.sales[month] = Math.round(pSales);
+    plan.cost[month] = Math.round(pCost);
+    plan.sgna[month] = Math.round(pSgna);
+    plan.grossProfit[month] = Math.round(pGross);
+    plan.operatingProfit[month] = Math.round(pOperating);
+    plan.operatingProfitRate[month] = pOperatingRate;
+
+    actual.sales[month] = Math.round(aSales);
+    actual.cost[month] = Math.round(aCost);
+    actual.sgna[month] = Math.round(aSgna);
+    actual.grossProfit[month] = Math.round(aGross);
+    actual.operatingProfit[month] = Math.round(aOperating);
+    actual.operatingProfitRate[month] = aOperatingRate;
+  });
+
+  return { plan, actual };
+}
+
+function summarizeOutTransactionsByMonth(transactions, items, year) {
+  const summary = {};
+  PROFIT_MONTHS.forEach((month) => {
+    summary[month] = { sales: 0, cost: 0 };
+  });
+
+  const byCode = new Map();
+  const byName = new Map();
+  (items || []).forEach((item) => {
+    const code = String(item.itemCode || '').trim();
+    const name = String(item.itemName || '').trim();
+    if (code && !byCode.has(code)) byCode.set(code, item);
+    if (name && !byName.has(name)) byName.set(name, item);
+  });
+
+  const findItem = (tx) => {
+    const code = String(tx.itemCode || '').trim();
+    if (code && byCode.has(code)) return byCode.get(code);
+    const name = String(tx.itemName || '').trim();
+    if (name && byName.has(name)) return byName.get(name);
+    return null;
+  };
+
+  (transactions || []).forEach((tx) => {
+    if (tx.type !== 'out' || !tx.date) return;
+    const dateText = String(tx.date);
+    const matched = /^(\d{4})-(\d{2})/.exec(dateText);
+    if (!matched) return;
+    const txYear = Number(matched[1]);
+    const month = Number(matched[2]);
+    if (txYear !== year || !PROFIT_MONTHS.includes(month)) return;
+
+    const qty = toNumber(tx.quantity);
+    const item = findItem(tx);
+
+    const saleUnitDirect = toNumber(tx.price ?? tx.actualSellingPrice ?? tx.sellingPrice ?? tx.salePrice ?? tx.unitPrice);
+    const saleUnit = saleUnitDirect > 0 ? saleUnitDirect : toNumber(item ? getSalePrice(item) : 0);
+    const grossSales = qty * saleUnit;
+    const discount = toNumber(tx.discountAmount ?? tx.discount ?? tx.discountValue ?? tx.refundAmount);
+    const salesAmount = Math.max(0, grossSales - discount);
+
+    const costUnitDirect = toNumber(tx.unitCost ?? tx.cost ?? tx.costPrice);
+    const costUnit = costUnitDirect > 0 ? costUnitDirect : toNumber(item?.unitPrice ?? item?.unitCost);
+    const costAmount = qty * costUnit;
+
+    summary[month].sales += salesAmount;
+    summary[month].cost += costAmount;
+  });
+
+  return summary;
+}
+
+function renderMonthlyPlannerRow(label, planner, metric, options = {}) {
+  const { editablePlan = false, editableActual = false, percent = false, planKey = '', actualKey = '' } = options;
+  const cells = PROFIT_MONTHS.map((month) => {
+    const planValue = toNumber(planner.plan[metric]?.[month]);
+    const actualValue = toNumber(planner.actual[metric]?.[month]);
+    const diffValue = actualValue - planValue;
+
+    const planCell = editablePlan
+      ? `<input type="number" class="form-input" style="width:88px; min-width:88px; padding:4px 6px; height:30px; text-align:right;" data-plan-metric="${planKey}" data-month="${month}" value="${Math.round(planValue)}" />`
+      : `<span>${percent ? formatPercent(planValue) : formatMoney(planValue)}</span>`;
+
+    const actualCell = editableActual
+      ? `<input type="number" class="form-input" style="width:88px; min-width:88px; padding:4px 6px; height:30px; text-align:right;" data-actual-metric="${actualKey}" data-month="${month}" value="${Math.round(actualValue)}" />`
+      : `<span>${percent ? formatPercent(actualValue) : formatMoney(actualValue)}</span>`;
+
+    const diffColor = diffValue > 0 ? 'var(--success)' : diffValue < 0 ? 'var(--danger)' : 'var(--text-primary)';
+    const diffText = percent ? formatSignedPercent(diffValue) : formatSignedMoney(diffValue);
+
+    return `
+      <td class="text-right">${planCell}</td>
+      <td class="text-right">${actualCell}</td>
+      <td class="text-right" style="font-weight:700; color:${diffColor};">${diffText}</td>
+    `;
+  }).join('');
+
+  return `<tr><td style="font-weight:700;">${label}</td>${cells}</tr>`;
+}
+
+function getMonthlyPlannerSnapshot(planner, month) {
+  const safeMonth = PROFIT_MONTHS.includes(Number(month)) ? Number(month) : 1;
+  const plan = {};
+  const actual = {};
+  const diff = {};
+  ['sales', 'cost', 'sgna', 'grossProfit', 'operatingProfit', 'operatingProfitRate'].forEach((metric) => {
+    const planValue = toNumber(planner.plan[metric]?.[safeMonth]);
+    const actualValue = toNumber(planner.actual[metric]?.[safeMonth]);
+    plan[metric] = planValue;
+    actual[metric] = actualValue;
+    diff[metric] = actualValue - planValue;
+  });
+  return { month: safeMonth, plan, actual, diff };
+}
+
+function renderMonthlyPlannerCompactRow(label, snapshot, metric, options = {}) {
+  const { editablePlan = false, editableActual = false, percent = false, planKey = '', actualKey = '' } = options;
+  const planValue = toNumber(snapshot.plan[metric]);
+  const actualValue = toNumber(snapshot.actual[metric]);
+  const diffValue = toNumber(snapshot.diff[metric]);
+  const month = snapshot.month;
+
+  const planCell = editablePlan
+    ? `<input type="number" class="form-input" style="width:120px; min-width:120px; padding:4px 8px; height:32px; text-align:right;" data-plan-metric="${planKey}" data-month="${month}" value="${Math.round(planValue)}" />`
+    : `<span>${percent ? formatPercent(planValue) : formatMoney(planValue)}</span>`;
+
+  const actualCell = editableActual
+    ? `<input type="number" class="form-input" style="width:120px; min-width:120px; padding:4px 8px; height:32px; text-align:right;" data-actual-metric="${actualKey}" data-month="${month}" value="${Math.round(actualValue)}" />`
+    : `<span>${percent ? formatPercent(actualValue) : formatMoney(actualValue)}</span>`;
+
+  const diffText = percent ? formatSignedPercent(diffValue) : formatSignedMoney(diffValue);
+  const diffColor = diffValue > 0 ? 'var(--success)' : diffValue < 0 ? 'var(--danger)' : 'var(--text-primary)';
+  return `
+    <tr>
+      <td style="font-weight:700;">${label}</td>
+      <td class="text-right">${planCell}</td>
+      <td class="text-right">${actualCell}</td>
+      <td class="text-right" style="font-weight:700; color:${diffColor};">${diffText}</td>
+    </tr>
+  `;
+}
+
 function addDays(baseDate, delta) {
   const copy = new Date(baseDate);
   copy.setDate(copy.getDate() + delta);
@@ -953,6 +1351,18 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getItemMetric(item, keys = []) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(item, key)) {
+      return toNumber(item[key]);
+    }
+    if (item?.extra && Object.prototype.hasOwnProperty.call(item.extra, key)) {
+      return toNumber(item.extra[key]);
+    }
+  }
+  return 0;
+}
+
 function formatMoney(value) {
   const rounded = Math.round(toNumber(value));
   return `${rounded.toLocaleString('ko-KR')}원`;
@@ -966,6 +1376,13 @@ function formatSignedMoney(value) {
 
 function formatPercent(value) {
   return `${toNumber(value).toFixed(1)}%`;
+}
+
+function formatSignedPercent(value) {
+  const normalized = toNumber(value);
+  if (Math.abs(normalized) < 0.0001) return '0.0%';
+  const prefix = normalized > 0 ? '+' : '';
+  return `${prefix}${normalized.toFixed(1)}%`;
 }
 
 async function downloadChartsPdf(periodFrom, periodTo) {

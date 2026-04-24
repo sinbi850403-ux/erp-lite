@@ -5,6 +5,7 @@
  */
 
 import { getState, setState } from './store.js';
+import { isSuperAdminEmail } from './admin-emails.js';
 
 // 요금제 정의
 export const PLANS = {
@@ -151,9 +152,6 @@ export function setPlan(planId) {
  * 특정 페이지 접근 가능 여부
  * 현재 요금제 조회
  */
-// 총관리자 이메일 (page-admin.js의 ADMIN_EMAILS와 동기화 필수)
-const SUPER_ADMINS = ['sinbi0214@naver.com', 'sinbi850403@gmail.com', 'admin@invex.io.kr'];
-
 export function canAccessPage(pageId) {
   // 허브 페이지는 요금제·기간 무관 무조건 접근 가능 (네비게이션 전용)
   if (pageId && pageId.startsWith('hub-')) return true;
@@ -162,7 +160,7 @@ export function canAccessPage(pageId) {
 
   // 총관리자는 모든 페이지 무제한 접근
   const user = _getCurrentUser?.();
-  if (user && SUPER_ADMINS.includes(user.email)) return true;
+  if (user && isSuperAdminEmail(user.email)) return true;
 
   // 1년 무료 기간 체크 — 가입일 기준 365일 이내면 모든 기능 개방
   // 왜? → 1년 무료 오픈이므로 요금제 제한을 걸면 안 됨

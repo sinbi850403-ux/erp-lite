@@ -1,11 +1,6 @@
 import { getCurrentUser } from './auth.js';
 import { supabase } from './supabase-client.js';
-
-const ADMIN_EMAILS = [
-  'sinbi0214@naver.com',
-  'sinbi850403@gmail.com',
-  'admin@invex.io.kr',
-];
+import { isSuperAdminEmail } from './admin-emails.js';
 
 /**
  * 클라이언트 측 빠른 admin 확인 (동기 — UI 렌더링용)
@@ -14,7 +9,7 @@ const ADMIN_EMAILS = [
 export function isAdmin() {
   const user = getCurrentUser();
   if (!user) return false;
-  return ADMIN_EMAILS.includes(user.email);
+  return isSuperAdminEmail(user.email);
 }
 
 /**
@@ -26,19 +21,19 @@ export async function isAdminVerified() {
   if (!user) return false;
 
   // 1차: 이메일 빠른 체크
-  if (!ADMIN_EMAILS.includes(user.email)) return false;
+  if (!isSuperAdminEmail(user.email)) return false;
 
   // 2차: DB role 컬럼 확인 (RLS 보호 하에 자신의 row만 읽힘)
   try {
     const { data, error } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user.uid)
       .single();
     if (error || !data) return false;
-    return data.role === 'admin' || ADMIN_EMAILS.includes(user.email);
+    return data.role === 'admin' || isSuperAdminEmail(user.email);
   } catch {
     // DB 조회 실패 시 이메일 체크만으로 폴백 (오프라인 대비)
-    return ADMIN_EMAILS.includes(user.email);
+    return isSuperAdminEmail(user.email);
   }
 }

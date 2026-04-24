@@ -61,7 +61,8 @@ function shouldSkipTable(table) {
   const tbody = table.tBodies[0];
   if (!thead || !tbody || !tbody.rows.length) return true;
 
-  return Array.from(thead.querySelectorAll('th')).some(th => {
+  const headerCells = Array.from(thead.querySelectorAll('th'));
+  return headerCells.some(th => {
     const isCustomSortable = th.dataset.sortKey || (th.classList.contains('sortable-header') && !th.dataset.autoSortKey);
     return Boolean(isCustomSortable);
   });
@@ -95,6 +96,9 @@ function ensureSummaryBar(table) {
     summary.addEventListener('click', event => {
       const resetButton = event.target.closest('[data-auto-sort-reset]');
       if (!resetButton) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
       table.__autoSortState = { key: '', direction: '', type: 'text' };
       persistSortState(table);
       applyTableSort(table);
@@ -115,7 +119,11 @@ function decorateHeaders(table) {
     cell.dataset.autoSortDisplayLabel = displayLabel;
     cell.dataset.autoSortNormalizedLabel = normalizedLabel;
 
-    if (!isSortableColumn(normalizedLabel, index)) {
+    if (
+      cell.dataset.autoSortIgnore === 'true' ||
+      hasInteractiveHeader(cell) ||
+      !isSortableColumn(normalizedLabel, index)
+    ) {
       cell.removeAttribute('data-auto-sort-key');
       cell.classList.remove('sortable-header', 'is-active');
       cell.removeAttribute('aria-sort');
@@ -129,12 +137,19 @@ function decorateHeaders(table) {
     cell.setAttribute('role', 'button');
 
     if (!cell.dataset.autoSortBound) {
-      cell.addEventListener('click', () => toggleTableSort(table, index));
+      cell.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        toggleTableSort(table, index);
+      }, true);
       cell.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
         toggleTableSort(table, index);
-      });
+      }, true);
       cell.dataset.autoSortBound = '1';
     }
   });
@@ -270,10 +285,16 @@ function getHeaderRow(table) {
 }
 
 function isSortableColumn(label, index) {
-  if (index === 0 && ['#', 'no', '번호', '순위'].includes(label)) {
+  if (!label) return false;
+  if (index === 0 && ['#', 'no', '번호', '순위', '컬럼'].includes(label)) {
     return false;
   }
   return !NON_SORTABLE_HEADERS.has(label);
+}
+
+function hasInteractiveHeader(cell) {
+  if (!cell) return false;
+  return Boolean(cell.querySelector('input, select, textarea, button, label, [role="button"]'));
 }
 
 function compareRows(a, b, columnIndex, direction, type) {

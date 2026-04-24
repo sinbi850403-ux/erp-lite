@@ -8,6 +8,7 @@
 import { getState } from './store.js';
 import { showToast } from './toast.js';
 import { getSalePrice } from './price-utils.js';
+import { enableLocalReportSort } from './report-local-sort.js';
 
 export function renderWeeklyReportPage(container, navigateTo) {
   const state = getState();
@@ -172,6 +173,11 @@ export function renderWeeklyReportPage(container, navigateTo) {
       </ul>
     </div>
   `;
+
+  container.querySelectorAll('.data-table').forEach((table) => {
+    table.dataset.autoSort = 'off';
+  });
+  enableLocalReportSort(container);
 }
 
 // === 유틸리티 ===

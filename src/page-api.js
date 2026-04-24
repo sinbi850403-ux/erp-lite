@@ -6,6 +6,7 @@
 
 import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
+import { escapeHtml } from './ux-toolkit.js';
 
 /**
  * API 키 생성 유틸
@@ -61,21 +62,21 @@ export function renderApiPage(container, navigateTo) {
             <tbody>
               ${apiKeys.map(k => `
                 <tr>
-                  <td><strong>${k.name}</strong></td>
+                  <td><strong>${escapeHtml(k.name)}</strong></td>
                   <td>
-                    <code style="background:var(--bg-secondary); padding:2px 8px; border-radius:4px; font-size:12px;" id="key-${k.id}">
-                      ${k.visible ? k.key : k.key.substring(0, 10) + '•'.repeat(22)}
+                    <code style="background:var(--bg-secondary); padding:2px 8px; border-radius:4px; font-size:12px;" id="key-${escapeHtml(k.id)}">
+                      ${k.visible ? escapeHtml(k.key) : `${escapeHtml(k.key.substring(0, 10))}${'•'.repeat(22)}`}
                     </code>
-                    <button class="btn btn-ghost btn-sm btn-toggle-key" data-key-id="${k.id}" title="키 표시/숨김" style="margin-left:4px;">
+                    <button class="btn btn-ghost btn-sm btn-toggle-key" data-key-id="${escapeHtml(k.id)}" title="키 표시/숨김" style="margin-left:4px;">
                       ${k.visible ? '🙈' : '👁️'}
                     </button>
-                    <button class="btn btn-ghost btn-sm btn-copy-key" data-key="${k.key}" title="복사" style="margin-left:2px;">📋</button>
+                    <button class="btn btn-ghost btn-sm btn-copy-key" data-key="${escapeHtml(k.key)}" title="복사" style="margin-left:2px;">📋</button>
                   </td>
                   <td><span class="badge ${k.scope === 'full' ? 'badge-warning' : k.scope === 'read' ? 'badge-info' : 'badge-success'}">${k.scope === 'full' ? '전체' : k.scope === 'read' ? '읽기' : '쓰기'}</span></td>
                   <td style="font-size:12px; color:var(--text-muted);">${formatDate(k.createdAt)}</td>
-                  <td style="font-size:12px; color:var(--text-muted);">${k.lastUsed || '사용 전'}</td>
+                  <td style="font-size:12px; color:var(--text-muted);">${escapeHtml(k.lastUsed || '사용 전')}</td>
                   <td>
-                    <button class="btn btn-ghost btn-sm btn-revoke-key" data-key-id="${k.id}" style="color:var(--danger);">폐기</button>
+                    <button class="btn btn-ghost btn-sm btn-revoke-key" data-key-id="${escapeHtml(k.id)}" style="color:var(--danger);">폐기</button>
                   </td>
                 </tr>
               `).join('')}
@@ -110,15 +111,15 @@ export function renderApiPage(container, navigateTo) {
             <tbody>
               ${webhooks.map(wh => `
                 <tr>
-                  <td><strong>${wh.name}</strong></td>
-                  <td style="font-size:12px;"><code>${wh.url}</code></td>
-                  <td>${wh.events.map(e => `<span class="badge badge-default" style="margin:1px;">${e}</span>`).join('')}</td>
+                  <td><strong>${escapeHtml(wh.name)}</strong></td>
+                  <td style="font-size:12px;"><code>${escapeHtml(wh.url)}</code></td>
+                  <td>${(Array.isArray(wh.events) ? wh.events : []).map(e => `<span class="badge badge-default" style="margin:1px;">${escapeHtml(e)}</span>`).join('')}</td>
                   <td>
                     <span class="badge ${wh.active ? 'badge-success' : 'badge-default'}">
                       ${wh.active ? '활성' : '비활성'}
                     </span>
                   </td>
-                  <td><button class="btn btn-ghost btn-sm btn-delete-webhook" data-wh-id="${wh.id}">🗑️</button></td>
+                  <td><button class="btn btn-ghost btn-sm btn-delete-webhook" data-wh-id="${escapeHtml(wh.id)}">🗑️</button></td>
                 </tr>
               `).join('')}
             </tbody>

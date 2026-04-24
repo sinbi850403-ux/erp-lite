@@ -20,16 +20,44 @@ CREATE POLICY "profiles_insert" ON profiles
 CREATE POLICY "profiles_update" ON profiles 
   FOR UPDATE USING (auth.uid() = id);
 
+-- role 컬럼 보강 (기존 DB 호환)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS role TEXT;
+
+ALTER TABLE public.profiles
+  ALTER COLUMN role SET DEFAULT 'viewer';
+
+UPDATE public.profiles
+SET role = 'viewer'
+WHERE role IS NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'profiles_role_check'
+  ) THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_role_check
+      CHECK (role IN ('viewer', 'staff', 'manager', 'admin'));
+  END IF;
+END $$;
+
 -- 3. 트리거 함수 재생성 — service_role 권한으로 실행되도록
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, email, photo_url)
+  INSERT INTO public.profiles (id, name, email, photo_url, role)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', '사용자'),
     NEW.email,
-    NEW.raw_user_meta_data->>'avatar_url'
+    NEW.raw_user_meta_data->>'avatar_url',
+    CASE
+      WHEN lower(COALESCE(NEW.email, '')) IN ('sinbi0214@naver.com', 'sinbi850403@gmail.com', 'admin@invex.io.kr') THEN 'admin'
+      ELSE 'viewer'
+    END
   );
   RETURN NEW;
 END;

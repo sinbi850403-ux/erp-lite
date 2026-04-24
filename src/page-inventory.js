@@ -1,6 +1,6 @@
 /**
  * page-inventory.js - 재고 현황 페이지
- * ?ㅻТ 湲곕뒫: ?섎룞 ?덈ぉ 異붽?/?몄쭛, ?덉쟾?ш퀬 寃쎄퀬, 寃???꾪꽣, ?섏씠吏?ㅼ씠?? ?묒? ?대낫?닿린
+ * 핵심 기능: 수기 품목 추가/수정, 안전재고 경고, 검색/필터, 페이지네이션, 상세 보기
  * **컬럼 표시 설정**: 사용자가 보고 싶은 컬럼만 선택해서 볼 수 있음
  */
 
@@ -14,10 +14,27 @@ import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
+function safeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">${escapeHtml(String(value))}</option>`).join('');
+}
+
+function buildDatalistOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">`).join('');
+}
+
 // 페이지당 행 수
 const PAGE_SIZE = 20;
 
-// ?꾩껜 ?꾨뱶 ?뺤쓽 (?쒖꽌 ?좎?)
+// 전체 필드 정의 (순서 유지)
 const ALL_FIELDS = [
   { key: 'itemName', label: '품목명', numeric: false },
   { key: 'itemCode', label: '품목코드', numeric: false },
@@ -37,20 +54,20 @@ const ALL_FIELDS = [
   { key: 'note', label: '비고', numeric: false },
 ];
 
-// 페이지당 행 수
+// 필드 라벨 맵
 const FIELD_LABELS = {};
 ALL_FIELDS.forEach(f => { FIELD_LABELS[f.key] = f.label; });
 
 /**
  * 현재 표시할 컬럼 목록 결정
- * ????濡쒖쭅? ??visibleColumns ?ㅼ젙???덉쑝硫?洹멸구 ?곕Ⅴ怨?
- * 현재 표시할 컬럼 목록 결정
+ * visibleColumns 설정이 있으면 해당 설정을 우선 적용하고,
+ * 없으면 데이터가 있는 컬럼 + 핵심 금액 컬럼을 기본 노출한다.
  */
 function getVisibleFields(data) {
   const state = getState();
   const visibleColumns = state.visibleColumns;
 
-  // 페이지당 행 수
+  // 실제 데이터가 존재하는 컬럼 추출
   const hasData = new Set(
     ALL_FIELDS.map(f => f.key).filter(key =>
       data.some(row => row[key] !== '' && row[key] !== undefined && row[key] !== null)
@@ -58,7 +75,7 @@ function getVisibleFields(data) {
   );
 
   if (visibleColumns && Array.isArray(visibleColumns)) {
-    // [VAT ?⑥튂] 湲곗〈 ?ㅼ젙???덈뜑?쇰룄 ?덈∼寃?異붽???怨듦툒媛?? 遺媛?몃뒗 ?곗꽑 蹂댁씠寃?蹂댁젙
+    // 기존 설정에도 공급가액/VAT는 보이도록 보정
     const updatedVisible = [...visibleColumns];
     if (!updatedVisible.includes('supplyValue')) updatedVisible.push('supplyValue');
     if (!updatedVisible.includes('vat')) updatedVisible.push('vat');
@@ -67,13 +84,13 @@ function getVisibleFields(data) {
     return ALL_FIELDS.filter(f => updatedVisible.includes(f.key)).map(f => f.key);
   }
 
-  // 페이지당 행 수
-  // 전체 필드 정의 (순서 유지)
+  // 설정이 없으면 데이터 존재 컬럼 + 핵심 금액 컬럼을 기본 표시
+
   return ALL_FIELDS.filter(f => hasData.has(f.key) || f.key === 'supplyValue' || f.key === 'vat').map(f => f.key);
 }
 
 /**
- * 현재 표시할 컬럼 목록 결정
+ * 재고 페이지 렌더링
  */
 export function renderInventoryPage(container, navigateTo) {
   // ── 권한 플래그 ──────────────────────────────────────────
@@ -285,7 +302,7 @@ export function renderInventoryPage(container, navigateTo) {
         chips: inventoryFocusChips.map(chip => ({ ...chip, active: chip.value === 'all' })),
       })}
 
-    <!-- 검색 + 필터 — 기본은 검색만, 상세 필터는 토글로 열림 -->
+    <!-- 검색 + 필터 ? 기본은 검색만, 상세 필터는 토글로 열림 -->
     <div class="toolbar">
       <input type="text" class="search-input" id="search-input"
         placeholder="스마트 검색: 품목명, 분류:식품, 창고:본사, 재고>=10, 부족, 품절" />
@@ -316,30 +333,30 @@ export function renderInventoryPage(container, navigateTo) {
         </div>
       </div>
     </div>
-    <!-- 상세 필터 패널 — 기본 숨김, 토글 버튼으로 열림 -->
+    <!-- 상세 필터 패널 ? 기본 숨김, 토글 버튼으로 열림 -->
     <div class="filter-detail-panel" id="filter-detail-panel">
       <select class="filter-select" id="filter-item-code">
         <option value="">전체 품목코드</option>
-        ${getItemCodes(data).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getItemCodes(data))}
       </select>
       <select class="filter-select" id="filter-vendor">
         <option value="">전체 거래처</option>
-        ${getVendors(data).map(v => `<option value="${v}">${v}</option>`).join('')}
+        ${buildOptionTags(getVendors(data))}
       </select>
       <select class="filter-select" id="filter-category">
         <option value="">전체 분류</option>
-        ${getCategories(data).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getCategories(data))}
       </select>
       <select class="filter-select" id="filter-warehouse">
         <option value="">전체 창고</option>
-        ${getWarehouses(data).map(w => `<option value="${w}">${w}</option>`).join('')}
+        ${buildOptionTags(getWarehouses(data))}
       </select>
       <select class="filter-select" id="filter-stock">
         <option value="">전체 재고</option>
         <option value="low">부족 항목만</option>
       </select>
       <select class="filter-select" id="sort-preset" title="정렬">
-        ${sortOptions.map(option => `<option value="${option.value}">${option.label}</option>`).join('')}
+        ${sortOptions.map(option => `<option value="${safeAttr(option.value)}">${escapeHtml(option.label)}</option>`).join('')}
       </select>
     </div>
     <div class="smart-search-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:8px 0 4px;">
@@ -567,9 +584,20 @@ export function renderInventoryPage(container, navigateTo) {
 
   function getItemKey(row) {
     if (!row) return '';
+    const stableId = String(row.id || row._id || '').trim();
+    if (stableId) return stableId;
     const code = String(row.itemCode || '').trim();
     const name = String(row.itemName || '').trim();
     return `${code}::${name}`;
+  }
+
+  function getItemId(row) {
+    return String(row?.id || row?._id || '').trim();
+  }
+
+  function getRowByItemId(itemId) {
+    if (!itemId) return null;
+    return (getState().mappedData || []).find(row => getItemId(row) === itemId) || null;
   }
 
   function escapeText(value) {
@@ -792,7 +820,7 @@ export function renderInventoryPage(container, navigateTo) {
     if (currentSort.key && currentSort.direction) chips.push(`정렬: ${getSortOptionLabel(currentSort)}`);
 
     const chipsHtml = chips.length > 0
-      ? chips.map(text => `<span class="filter-chip">${text}</span>`).join('')
+      ? chips.map(text => `<span class="filter-chip">${escapeHtml(text)}</span>`).join('')
       : '<span class="filter-chip filter-chip-muted">필터 없음</span>';
 
     summaryEl.innerHTML = `
@@ -836,7 +864,7 @@ export function renderInventoryPage(container, navigateTo) {
     });
   }
 
-  // === ?뚯씠釉??ㅻ뜑 ?뚮뜑留?(而щ읆 蹂寃????ы샇異? ===
+  // === 테이블 헤더 렌더링 (컬럼 변경 시 번호 반영) ===
   function renderTableHeader() {
     const thead = container.querySelector('#inventory-thead');
     thead.innerHTML = `
@@ -923,7 +951,8 @@ export function renderInventoryPage(container, navigateTo) {
         검색 결과가 없습니다.
       </td></tr>`;
     } else {
-      selectedIndexes = new Set([...selectedIndexes].filter(index => Number.isInteger(index) && index >= 0 && index < data.length));
+      const validItemIds = new Set(data.map(row => getItemId(row)).filter(Boolean));
+      selectedIndexes = new Set([...selectedIndexes].filter(id => validItemIds.has(id)));
 
       // ── 동일 품목명/코드 기준 그룹핑 ─────────────────────
       const invGroupOrder = [];
@@ -940,6 +969,7 @@ export function renderInventoryPage(container, navigateTo) {
       const _todayKey = new Date().toISOString().slice(0, 10);
       const renderInvRow = (row, isChild = false) => {
         const realIdx = data.indexOf(row);
+        const itemId = getItemId(row);
         const min = safetyStock[row.itemName];
         const qtyStr = typeof row.quantity === 'string' ? row.quantity.replace(/,/g, '') : row.quantity;
         const qty = parseFloat(qtyStr) || 0;
@@ -952,22 +982,22 @@ export function renderInventoryPage(container, navigateTo) {
 
         return `
           <tr class="${isDanger ? 'row-danger' : isLow ? 'row-warning' : ''} ${isFocused ? 'row-focused' : ''} ${isChild ? 'inv-child-row' : ''}"
-              data-idx="${realIdx}" data-row-key="${rowKey}" style="${childStyle}">
+              data-item-id="${safeAttr(itemId)}" data-row-key="${safeAttr(rowKey)}" style="${childStyle}">
             <td data-label="" class="col-check">
-              <input type="checkbox" class="table-row-check inv-row-check" data-idx="${realIdx}" ${selectedIndexes.has(realIdx) ? 'checked' : ''} aria-label="행 선택" />
+              <input type="checkbox" class="table-row-check inv-row-check" data-item-id="${safeAttr(itemId)}" ${selectedIndexes.has(itemId) ? 'checked' : ''} aria-label="행 선택" />
             </td>
             <td class="col-num"></td>
             ${activeFields.map(key => `
               <td class="editable-cell ${ALL_FIELDS.find(f => f.key === key)?.numeric ? 'text-right' : ''}"
                   data-label="${FIELD_LABELS[key] || key}"
-                  data-field="${key}" data-idx="${realIdx}">
+                  data-field="${key}" data-item-id="${safeAttr(itemId)}">
                 ${key === 'itemName' && isLocked ? '<span title="잠금 품목 (수정 제한)" style="margin-right:4px;">🔒</span>' : ''}
                 ${formatCell(key, row[key])}
                 ${key === 'quantity' && isLow ? ' <span class="badge badge-danger" style="font-size:10px;">부족</span>' : ''}
               </td>
             `).join('')}
             <td data-label="안전재고" class="text-center">
-              <button class="btn-icon btn-safety" data-name="${escapeHtml(row.itemName)}" data-min="${min ?? ''}"
+              <button class="btn-icon btn-safety" data-name="${safeAttr(row.itemName)}" data-min="${safeAttr(min ?? '')}"
                 title="클릭하여 안전재고 수량 설정"
                 style="font-size:11px; padding:2px 6px; border-radius:4px;
                   ${min !== undefined ? 'background:rgba(63,185,80,0.15); color:var(--success);' : 'color:var(--text-muted);'}">
@@ -975,8 +1005,8 @@ export function renderInventoryPage(container, navigateTo) {
               </button>
             </td>
             <td data-label="" class="col-actions">
-              ${canEdit   ? `<button class="btn-icon btn-edit" data-idx="${realIdx}" title="수정">수정</button>` : `<button class="btn-icon" title="권한 없음" disabled style="opacity:0.3;cursor:not-allowed;">수정</button>`}
-              ${canDelete ? `<button class="btn-icon btn-icon-danger btn-del" data-idx="${realIdx}" title="삭제">삭제</button>` : ''}
+              ${canEdit   ? `<button class="btn-icon btn-edit" data-item-id="${safeAttr(itemId)}" title="수정">수정</button>` : `<button class="btn-icon" title="권한 없음" disabled style="opacity:0.3;cursor:not-allowed;">수정</button>`}
+              ${canDelete ? `<button class="btn-icon btn-icon-danger btn-del" data-item-id="${safeAttr(itemId)}" title="삭제">삭제</button>` : ''}
             </td>
           </tr>
         `;
@@ -996,7 +1026,7 @@ export function renderInventoryPage(container, navigateTo) {
           const firstCode = group[0].itemCode || '';
           const totalQty = group.reduce((s, r) => s + (parseFloat(String(r.quantity || '').replace(/,/g, '')) || 0), 0);
           invHtml += `
-            <tr class="inv-group-header" data-inv-group-key="${escapeHtml(grpKey)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
+            <tr class="inv-group-header" data-inv-group-key="${safeAttr(grpKey)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
               <td class="col-check"><span style="color:var(--text-muted); font-size:11px;">${group.length}건</span></td>
               <td class="col-num">${invRowNum++}</td>
               <td colspan="${totalCols - 2}" style="padding-left:8px;">
@@ -1059,16 +1089,16 @@ export function renderInventoryPage(container, navigateTo) {
     const selectAll = container.querySelector('#inv-select-all');
     if (!selectAll) return;
 
-    const pageIndexes = pageRows.map(row => data.indexOf(row)).filter(index => index >= 0);
-    if (pageIndexes.length === 0) {
+    const pageItemIds = pageRows.map(row => getItemId(row)).filter(Boolean);
+    if (pageItemIds.length === 0) {
       selectAll.checked = false;
       selectAll.indeterminate = false;
       return;
     }
 
-    const checkedCount = pageIndexes.filter(index => selectedIndexes.has(index)).length;
-    selectAll.checked = checkedCount === pageIndexes.length;
-    selectAll.indeterminate = checkedCount > 0 && checkedCount < pageIndexes.length;
+    const checkedCount = pageItemIds.filter(id => selectedIndexes.has(id)).length;
+    selectAll.checked = checkedCount === pageItemIds.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < pageItemIds.length;
   }
 
   function getCurrentPageRows() {
@@ -1090,15 +1120,6 @@ export function renderInventoryPage(container, navigateTo) {
     if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedCount === 0;
   }
 
-  function shiftSelectionAfterDelete(index) {
-    const next = new Set();
-    selectedIndexes.forEach(selectedIndex => {
-      if (selectedIndex === index) return;
-      next.add(selectedIndex > index ? selectedIndex - 1 : selectedIndex);
-    });
-    selectedIndexes = next;
-  }
-
   function applyBulkCategory() {
     if (selectedIndexes.size === 0) {
       showToast('선택된 품목이 없습니다.', 'warning');
@@ -1113,7 +1134,7 @@ export function renderInventoryPage(container, navigateTo) {
       return;
     }
 
-    [...selectedIndexes].forEach(index => updateItem(index, { category: trimmed }));
+    [...selectedIndexes].forEach(itemId => updateItem(itemId, { category: trimmed }));
     showToast(`${selectedIndexes.size}개 품목의 분류를 "${trimmed}"로 변경했습니다.`, 'success');
     renderTable();
     updateStats();
@@ -1126,8 +1147,7 @@ export function renderInventoryPage(container, navigateTo) {
     }
 
     const selectedRows = [...selectedIndexes]
-      .sort((a, b) => a - b)
-      .map(index => data[index])
+      .map(itemId => getRowByItemId(itemId))
       .filter(Boolean);
 
     const exportData = selectedRows.map(row => {
@@ -1147,10 +1167,11 @@ export function renderInventoryPage(container, navigateTo) {
       return;
     }
 
-    const sortedIndexes = [...selectedIndexes].sort((a, b) => b - a);
+    if (!confirm(`선택한 ${selectedIndexes.size}개 품목을 삭제할까요?`)) return;
+    const selectedIds = [...selectedIndexes];
     const removedItems = [];
-    sortedIndexes.forEach(index => {
-      const removed = deleteItem(index);
+    selectedIds.forEach(itemId => {
+      const removed = deleteItem(itemId);
       if (removed?.deleted) removedItems.push({ index: removed.index, item: removed.deleted });
     });
 
@@ -1237,10 +1258,11 @@ export function renderInventoryPage(container, navigateTo) {
     selectAll?.addEventListener('change', () => {
       const rowChecks = container.querySelectorAll('.inv-row-check');
       rowChecks.forEach((check) => {
-        const idx = parseInt(check.dataset.idx, 10);
+        const itemId = String(check.dataset.itemId || '').trim();
         check.checked = selectAll.checked;
-        if (selectAll.checked) selectedIndexes.add(idx);
-        else selectedIndexes.delete(idx);
+        if (!itemId) return;
+        if (selectAll.checked) selectedIndexes.add(itemId);
+        else selectedIndexes.delete(itemId);
       });
       refreshBulkActions();
       updateSelectAllState(getCurrentPageRows());
@@ -1248,9 +1270,10 @@ export function renderInventoryPage(container, navigateTo) {
 
     container.querySelectorAll('.inv-row-check').forEach(check => {
       check.addEventListener('change', () => {
-        const idx = parseInt(check.dataset.idx, 10);
-        if (check.checked) selectedIndexes.add(idx);
-        else selectedIndexes.delete(idx);
+        const itemId = String(check.dataset.itemId || '').trim();
+        if (!itemId) return;
+        if (check.checked) selectedIndexes.add(itemId);
+        else selectedIndexes.delete(itemId);
         refreshBulkActions();
         updateSelectAllState(getCurrentPageRows());
       });
@@ -1277,9 +1300,9 @@ export function renderInventoryPage(container, navigateTo) {
     // ?몃씪???몄쭛
     container.querySelectorAll('.editable-cell').forEach(cell => {
       cell.addEventListener('dblclick', () => {
-        const idx = parseInt(cell.dataset.idx);
+        const itemId = String(cell.dataset.itemId || '').trim();
         const field = cell.dataset.field;
-        const currentValue = data[idx]?.[field] ?? '';
+        const currentValue = getRowByItemId(itemId)?.[field] ?? '';
         if (cell.querySelector('input')) return;
 
         const input = document.createElement('input');
@@ -1293,17 +1316,20 @@ export function renderInventoryPage(container, navigateTo) {
 
         const save = () => {
           const newVal = input.value;
-          updateItem(idx, { [field]: newVal });
+          updateItem(itemId, { [field]: newVal });
           // ?⑷퀎 ?ш퀎??(留ㅼ엯?④? ?먮뒗 ?먮ℓ?④? 蹂寃???
           // 수량·단가·판매가 변경 시 금액 재계산 (VAT 비율은 기존 품목 설정 유지)
           if (field === 'quantity' || field === 'unitPrice' || field === 'salePrice') {
-            const current = { ...data[idx] };
-            recalcItemAmounts(current); // supplyValue, vat, totalPrice 정확히 재계산
-            updateItem(idx, {
-              supplyValue: current.supplyValue,
-              vat: current.vat,
-              totalPrice: current.totalPrice,
-            });
+            const latest = getRowByItemId(itemId);
+            if (latest) {
+              const current = { ...latest };
+              recalcItemAmounts(current); // supplyValue, vat, totalPrice 정확히 재계산
+              updateItem(itemId, {
+                supplyValue: current.supplyValue,
+                vat: current.vat,
+                totalPrice: current.totalPrice,
+              });
+            }
           }
           renderTable();
           updateStats();
@@ -1324,14 +1350,17 @@ export function renderInventoryPage(container, navigateTo) {
           return;
         }
         try {
-          const idx = parseInt(btn.dataset.idx);
-          const name = data[idx]?.itemName || `${idx + 1}번 품목`;
-          const removed = deleteItem(idx);
+          const itemId = String(btn.dataset.itemId || '').trim();
+          const row = getRowByItemId(itemId);
+          const name = row?.itemName || '선택 품목';
+          if (!itemId) return;
+          if (!confirm(`"${name}" 품목을 삭제할까요?`)) return;
+          const removed = deleteItem(itemId);
           if (!removed?.deleted) {
             showToast('삭제할 품목을 찾지 못했습니다.', 'warning');
             return;
           }
-          shiftSelectionAfterDelete(idx);
+          selectedIndexes.delete(itemId);
           renderTable();
           updateStats();
           showToast(`"${name}" 품목을 삭제했습니다.`, 'info', 5000, {
@@ -1361,8 +1390,8 @@ export function renderInventoryPage(container, navigateTo) {
           return;
         }
         try {
-          const idx = parseInt(btn.dataset.idx);
-          openItemModal(container, navigateTo, idx);
+          const itemId = String(btn.dataset.itemId || '').trim();
+          openItemModal(container, navigateTo, itemId || null);
         } catch (err) {
           handlePageError(err, { page: 'inventory', action: 'open-edit-modal' });
         }
@@ -1447,32 +1476,34 @@ export function renderInventoryPage(container, navigateTo) {
   const colBtn = container.querySelector('#btn-col-settings');
 
   // 패널 열기/닫기
-  colBtn.addEventListener('click', (e) => {
+  colBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    colPanel.classList.toggle('open');
+    colPanel?.classList.toggle('open');
   });
 
-  container.querySelector('#col-settings-close').addEventListener('click', () => {
-    colPanel.classList.remove('open');
+  container.querySelector('#col-settings-close')?.addEventListener('click', () => {
+    colPanel?.classList.remove('open');
   });
 
   const colPanelClickOutside = (e) => {
+    if (!colPanel || !colBtn) return;
     if (!colPanel.contains(e.target) && e.target !== colBtn) {
-      colPanel.classList.remove('open');
+      colPanel?.classList.remove('open');
     }
   };
   document.addEventListener('click', colPanelClickOutside);
   container.addEventListener('invex:page-unload', () => {
     document.removeEventListener('click', colPanelClickOutside);
+    setSyncCallback(null);
   }, { once: true });
 
   // 페이지당 행 수
-  container.querySelector('#col-select-all').addEventListener('click', () => {
+  container.querySelector('#col-select-all')?.addEventListener('click', () => {
     container.querySelectorAll('.col-check').forEach(cb => { cb.checked = true; });
   });
 
   // 페이지당 행 수
-  container.querySelector('#col-apply').addEventListener('click', () => {
+  container.querySelector('#col-apply')?.addEventListener('click', () => {
     const checked = [];
     container.querySelectorAll('.col-check:checked').forEach(cb => {
       checked.push(cb.dataset.key);
@@ -1493,7 +1524,7 @@ export function renderInventoryPage(container, navigateTo) {
     // 테이블 헤더+바디 다시 그리기
     renderTableHeader();
     renderTable();
-    colPanel.classList.remove('open');
+    colPanel?.classList.remove('open');
     showToast(`${checked.length}개 항목을 표시하도록 적용했습니다.`, 'success');
   });
 
@@ -1563,38 +1594,38 @@ export function renderInventoryPage(container, navigateTo) {
     });
   });
 
-  container.querySelector('#search-input').addEventListener('input', (e) => {
+  container.querySelector('#search-input')?.addEventListener('input', (e) => {
     applyKeywordFilter(e.target.value);
   });
-  container.querySelector('#filter-item-code').addEventListener('change', (e) => {
+  container.querySelector('#filter-item-code')?.addEventListener('change', (e) => {
     currentFilter.itemCode = e.target.value;
     currentPageNum = 1;
     renderTable();
     highlightActiveFilters();
     persistInventoryPrefs();
   });
-  container.querySelector('#filter-vendor').addEventListener('change', (e) => {
+  container.querySelector('#filter-vendor')?.addEventListener('change', (e) => {
     currentFilter.vendor = e.target.value;
     currentPageNum = 1;
     renderTable();
     highlightActiveFilters();
     persistInventoryPrefs();
   });
-  container.querySelector('#filter-category').addEventListener('change', (e) => {
+  container.querySelector('#filter-category')?.addEventListener('change', (e) => {
     currentFilter.category = e.target.value;
     currentPageNum = 1;
     renderTable();
     highlightActiveFilters();
     persistInventoryPrefs();
   });
-  container.querySelector('#filter-warehouse').addEventListener('change', (e) => {
+  container.querySelector('#filter-warehouse')?.addEventListener('change', (e) => {
     currentFilter.warehouse = e.target.value;
     currentPageNum = 1;
     renderTable();
     highlightActiveFilters();
     persistInventoryPrefs();
   });
-  container.querySelector('#filter-stock').addEventListener('change', (e) => {
+  container.querySelector('#filter-stock')?.addEventListener('change', (e) => {
     currentFilter.stock = e.target.value;
     if (e.target.value === 'low') currentFilter.focus = 'low';
     else if (currentFilter.focus === 'low') currentFilter.focus = 'all';
@@ -1604,7 +1635,7 @@ export function renderInventoryPage(container, navigateTo) {
     syncFocusChips();
     persistInventoryPrefs();
   });
-  container.querySelector('#sort-preset').addEventListener('change', (e) => {
+  container.querySelector('#sort-preset')?.addEventListener('change', (e) => {
     currentSort = sanitizeInventorySort(parseSortPreset(e.target.value));
     currentPageNum = 1;
     renderTableHeader();
@@ -1613,16 +1644,23 @@ export function renderInventoryPage(container, navigateTo) {
   });
 
   // 패널 열기/닫기
-  container.querySelector('#btn-filter-reset').addEventListener('click', () => {
+  container.querySelector('#btn-filter-reset')?.addEventListener('click', () => {
     currentFilter = { ...defaultFilter };
     currentSort = { ...defaultSort };
-    container.querySelector('#search-input').value = '';
-    container.querySelector('#filter-item-code').value = '';
-    container.querySelector('#filter-vendor').value = '';
-    container.querySelector('#filter-category').value = '';
-    container.querySelector('#filter-warehouse').value = '';
-    container.querySelector('#filter-stock').value = '';
-    container.querySelector('#sort-preset').value = 'default';
+    const resetSearchInputEl = container.querySelector('#search-input');
+    if (resetSearchInputEl) resetSearchInputEl.value = '';
+    const resetFilterItemCodeEl = container.querySelector('#filter-item-code');
+    if (resetFilterItemCodeEl) resetFilterItemCodeEl.value = '';
+    const resetFilterVendorEl = container.querySelector('#filter-vendor');
+    if (resetFilterVendorEl) resetFilterVendorEl.value = '';
+    const resetFilterCategoryEl = container.querySelector('#filter-category');
+    if (resetFilterCategoryEl) resetFilterCategoryEl.value = '';
+    const resetFilterWarehouseEl = container.querySelector('#filter-warehouse');
+    if (resetFilterWarehouseEl) resetFilterWarehouseEl.value = '';
+    const resetFilterStockEl = container.querySelector('#filter-stock');
+    if (resetFilterStockEl) resetFilterStockEl.value = '';
+    const resetSortPresetEl = container.querySelector('#sort-preset');
+    if (resetSortPresetEl) resetSortPresetEl.value = 'default';
     currentPageNum = 1;
     renderTableHeader();
     renderTable();
@@ -1632,13 +1670,13 @@ export function renderInventoryPage(container, navigateTo) {
     showToast('필터와 정렬을 초기화했습니다.', 'info');
   });
 
-  // 상세 필터 토글 — 기본 숨김, 클릭 시 패널 열기/닫기
+  // 상세 필터 토글 ? 기본 숨김, 클릭 시 패널 열기/닫기
   container.querySelector('#btn-filter-toggle')?.addEventListener('click', () => {
     const panel = container.querySelector('#filter-detail-panel');
     if (panel) panel.classList.toggle('is-open');
   });
 
-  // ?꾪꽣 ?쒖꽦 ?곹깭 ?쒓컖???쒖떆
+  // 현재 필터 활성 상태 표시
   function highlightActiveFilters() {
     const filterIds = ['filter-item-code', 'filter-vendor', 'filter-category', 'filter-warehouse', 'filter-stock', 'sort-preset'];
     filterIds.forEach(id => {
@@ -1668,7 +1706,7 @@ export function renderInventoryPage(container, navigateTo) {
   });
 
   // 페이지당 행 수
-  container.querySelector('#btn-export').addEventListener('click', () => {
+  container.querySelector('#btn-export')?.addEventListener('click', () => {
     try {
       const exportData = data.map(row => {
         const obj = {};
@@ -1689,18 +1727,25 @@ export function renderInventoryPage(container, navigateTo) {
   });
 
   // 페이지당 행 수
-  container.querySelector('#btn-add-item').addEventListener('click', () => {
+  container.querySelector('#btn-add-item')?.addEventListener('click', () => {
     openItemModal(container, navigateTo);
   });
 
   // === 상태 변수 ===
-  container.querySelector('#search-input').value = currentFilter.keyword;
-  container.querySelector('#filter-item-code').value = currentFilter.itemCode;
-  container.querySelector('#filter-vendor').value = currentFilter.vendor;
-  container.querySelector('#filter-category').value = currentFilter.category;
-  container.querySelector('#filter-warehouse').value = currentFilter.warehouse;
-  container.querySelector('#filter-stock').value = currentFilter.stock;
-  container.querySelector('#sort-preset').value = getSortPresetValue(currentSort);
+  const searchInputEl = container.querySelector('#search-input');
+  if (searchInputEl) searchInputEl.value = currentFilter.keyword;
+  const filterItemCodeEl = container.querySelector('#filter-item-code');
+  if (filterItemCodeEl) filterItemCodeEl.value = currentFilter.itemCode;
+  const filterVendorEl = container.querySelector('#filter-vendor');
+  if (filterVendorEl) filterVendorEl.value = currentFilter.vendor;
+  const filterCategoryEl = container.querySelector('#filter-category');
+  if (filterCategoryEl) filterCategoryEl.value = currentFilter.category;
+  const filterWarehouseEl = container.querySelector('#filter-warehouse');
+  if (filterWarehouseEl) filterWarehouseEl.value = currentFilter.warehouse;
+  const filterStockEl = container.querySelector('#filter-stock');
+  if (filterStockEl) filterStockEl.value = currentFilter.stock;
+  const sortPresetEl = container.querySelector('#sort-preset');
+  if (sortPresetEl) sortPresetEl.value = getSortPresetValue(currentSort);
   renderTableHeader();
   renderTable();
   highlightActiveFilters();
@@ -1709,6 +1754,7 @@ export function renderInventoryPage(container, navigateTo) {
   // 입출고 변경 시 재고 현황 즉시 자동 반영
   // renderTable은 클로저 내 data를 쓰므로 전체 페이지를 재렌더링
   setSyncCallback(() => {
+    if (container.dataset.page !== 'inventory') return;
     renderInventoryPage(container, navigateTo);
   });
 
@@ -1720,10 +1766,12 @@ export function renderInventoryPage(container, navigateTo) {
 
 // === 품목 추가/편집 모달 ===
 
-function openItemModal(container, navigateTo, editIdx = null) {
+function openItemModal(container, navigateTo, editItemId = null) {
   const state = getState();
-  const isEdit = editIdx !== null;
-  const item = isEdit ? (state.mappedData[editIdx] || {}) : {};
+  const isEdit = !!editItemId;
+  const item = isEdit
+    ? ((state.mappedData || []).find(row => getItemId(row) === String(editItemId).trim()) || {})
+    : {};
 
   /* ── 마스터 데이터 조회 ── */
   const vendors   = (state.vendorMaster || []).filter(v => v.type === 'supplier' || v.type === 'both');
@@ -1744,7 +1792,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
     <div class="modal" style="max-width:980px;">
       <div class="modal-header">
         <h3 class="modal-title">${isEdit ? '품목 수정' : '새 품목 추가'}</h3>
-        <button class="modal-close" id="modal-close">✕</button>
+        <button class="modal-close" id="modal-close">?</button>
       </div>
       <div class="modal-body">
         <div class="form-shell">
@@ -1762,18 +1810,18 @@ function openItemModal(container, navigateTo, editIdx = null) {
             })}
 
             <!-- datalist 마스터 -->
-            <datalist id="dl-category">${existingCats.map(c => `<option value="${c}">`).join('')}</datalist>
-            <datalist id="dl-unit">${existingUnits.map(u => `<option value="${u}">`).join('')}<option value="EA"><option value="BOX"><option value="KG"><option value="L"><option value="M"><option value="SET"></datalist>
+            <datalist id="dl-category">${buildDatalistOptionTags(existingCats)}</datalist>
+            <datalist id="dl-unit">${buildDatalistOptionTags([...existingUnits, 'EA', 'BOX', 'KG', 'L', 'M', 'SET'])}</datalist>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">품목명 <span class="required">*</span></label>
-                <input class="form-input" id="f-itemName" value="${item.itemName || ''}" placeholder="예: A4용지, 복사용지 80g" />
+                <input class="form-input" id="f-itemName" value="${safeAttr(item.itemName || '')}" placeholder="예: A4용지, 복사용지 80g" />
               </div>
               <div class="form-group">
                 <label class="form-label">품목코드</label>
                 <div style="display:flex; gap:6px;">
-                  <input class="form-input" id="f-itemCode" value="${item.itemCode || ''}" placeholder="예: I00001" style="flex:1;" />
+                  <input class="form-input" id="f-itemCode" value="${safeAttr(item.itemCode || '')}" placeholder="예: I00001" style="flex:1;" />
                   ${!isEdit ? `<button type="button" class="btn btn-outline btn-sm" id="btn-auto-code" title="자동생성" style="white-space:nowrap; padding:0 10px;">자동</button>` : ''}
                 </div>
               </div>
@@ -1782,33 +1830,33 @@ function openItemModal(container, navigateTo, editIdx = null) {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">규격/스펙</label>
-                <input class="form-input" id="f-spec" value="${item.spec || ''}" placeholder="예: 80g/m², A4, 500매" />
+                <input class="form-input" id="f-spec" value="${safeAttr(item.spec || '')}" placeholder="예: 80g/m², A4, 500매" />
               </div>
               <div class="form-group">
                 <label class="form-label">분류(카테고리)</label>
-                <input class="form-input" id="f-category" list="dl-category" value="${item.category || ''}" placeholder="예: 사무용품" autocomplete="off" />
+                <input class="form-input" id="f-category" list="dl-category" value="${safeAttr(item.category || '')}" placeholder="예: 사무용품" autocomplete="off" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">수량 <span class="required">*</span></label>
-                <input class="form-input" type="number" id="f-quantity" value="${item.quantity ?? ''}" placeholder="0" />
+                <input class="form-input" type="number" id="f-quantity" value="${safeAttr(item.quantity ?? '')}" placeholder="0" />
               </div>
               <div class="form-group">
                 <label class="form-label">단위</label>
-                <input class="form-input" id="f-unit" list="dl-unit" value="${item.unit || ''}" placeholder="EA, BOX, KG ..." autocomplete="off" />
+                <input class="form-input" id="f-unit" list="dl-unit" value="${safeAttr(item.unit || '')}" placeholder="EA, BOX, KG ..." autocomplete="off" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">매입가(원가)</label>
-                <input class="form-input" type="number" id="f-unitPrice" value="${item.unitPrice ?? ''}" placeholder="0" />
+                <input class="form-input" type="number" id="f-unitPrice" value="${safeAttr(item.unitPrice ?? '')}" placeholder="0" />
               </div>
               <div class="form-group">
                 <label class="form-label">판매단가</label>
-                <input class="form-input" type="number" id="f-salePrice" value="${item.salePrice ?? ''}" placeholder="미입력 시 손익 정확도가 내려갑니다." />
+                <input class="form-input" type="number" id="f-salePrice" value="${safeAttr(item.salePrice ?? '')}" placeholder="미입력 시 손익 정확도가 내려갑니다." />
               </div>
             </div>
 
@@ -1820,25 +1868,25 @@ function openItemModal(container, navigateTo, editIdx = null) {
                     <label class="form-label">주공급처</label>
                     <select class="form-select" id="f-vendor">
                       <option value="">-- 선택 또는 직접 입력 --</option>
-                      ${vendors.map(v => `<option value="${v.name}" ${item.vendor === v.name ? 'selected' : ''}>${v.name}${v.code ? ` (${v.code})` : ''}</option>`).join('')}
-                      ${item.vendor && !vendors.find(v => v.name === item.vendor) ? `<option value="${item.vendor}" selected>${item.vendor}</option>` : ''}
+                      ${vendors.map(v => `<option value="${safeAttr(v.name)}" ${item.vendor === v.name ? 'selected' : ''}>${escapeHtml(v.name)}${v.code ? ` (${escapeHtml(v.code)})` : ''}</option>`).join('')}
+                      ${item.vendor && !vendors.find(v => v.name === item.vendor) ? `<option value="${safeAttr(item.vendor)}" selected>${escapeHtml(item.vendor)}</option>` : ''}
                     </select>
                   </div>
                   <div class="form-group">
                     <label class="form-label">창고/위치</label>
-                    <input class="form-input" id="f-warehouse" value="${item.warehouse || ''}" placeholder="예: 본사 1층 A-03" />
+                    <input class="form-input" id="f-warehouse" value="${safeAttr(item.warehouse || '')}" placeholder="예: 본사 1층 A-03" />
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">비고</label>
-                    <input class="form-input" id="f-note" value="${item.note || ''}" placeholder="메모" />
+                    <input class="form-input" id="f-note" value="${safeAttr(item.note || '')}" placeholder="메모" />
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">🔒 품목 잠금 해제일</label>
-                    <input class="form-input" type="date" id="f-lockedUntil" value="${item.lockedUntil || ''}" />
+                    <input class="form-input" type="date" id="f-lockedUntil" value="${safeAttr(item.lockedUntil || '')}" />
                   </div>
                   <div class="form-group">
                     <div style="font-size:12px; color:var(--text-muted); margin-top:28px; line-height:1.6;">
@@ -1861,9 +1909,9 @@ function openItemModal(container, navigateTo, editIdx = null) {
                 <div class="smart-summary-label">현재 재고 가치</div>
                 <div class="smart-summary-value" id="f-totalPriceLabel">₩0</div>
                 <div class="smart-summary-note" id="item-price-note">수량과 원가를 입력하면 공급가액, 부가세, 합계가 자동 계산됩니다.</div>
-                <input type="hidden" id="f-supplyValue" value="${item.supplyValue ?? ''}" />
-                <input type="hidden" id="f-vat" value="${item.vat ?? ''}" />
-                <input type="hidden" id="f-totalPrice" value="${item.totalPrice ?? ''}" />
+                <input type="hidden" id="f-supplyValue" value="${safeAttr(item.supplyValue ?? '')}" />
+                <input type="hidden" id="f-vat" value="${safeAttr(item.vat ?? '')}" />
+                <input type="hidden" id="f-totalPrice" value="${safeAttr(item.totalPrice ?? '')}" />
               </div>
               <div class="smart-summary-item">
                 <div class="smart-summary-label">예상 판매 기준 차익</div>
@@ -1989,7 +2037,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       }
     }
 
-    // 2. 수량 — 숫자, 0 이상
+    // 2. 수량 ? 숫자, 0 이상
     let qty = 0;
     if (qtyRaw !== '') {
       qty = parseFloat(qtyRaw);
@@ -2002,7 +2050,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       }
     }
 
-    // 3. 원가 — 숫자, 음수 불가
+    // 3. 원가 ? 숫자, 음수 불가
     let unitPrice = 0;
     if (upRaw !== '') {
       unitPrice = parseFloat(upRaw);
@@ -2015,7 +2063,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       }
     }
 
-    // 4. 판매가 — 숫자, 음수 불가
+    // 4. 판매가 ? 숫자, 음수 불가
     let salePrice = 0;
     if (spRaw !== '') {
       salePrice = parseFloat(spRaw);
@@ -2026,7 +2074,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
         showFieldError(inputs.salePrice, '판매가는 0 이상이어야 합니다.');
         hasError = true;
       } else if (salePrice > 0 && unitPrice > 0 && salePrice < unitPrice) {
-        // 경고 (에러는 아님 — 저장은 가능)
+        // 경고 (에러는 아님 ? 저장은 가능)
         const warnEl = document.createElement('div');
         warnEl.className = 'form-warn-msg';
         warnEl.textContent = '판매가가 원가보다 낮습니다. 손실이 발생할 수 있습니다.';
@@ -2056,7 +2104,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       // 수정 시 기존 VAT 비율 유지, 신규는 기본 10%
       if (isEdit) {
         // 기존 품목 VAT 비율 추론하여 유지
-        const prevItem = getState().mappedData[editIdx] || {};
+        const prevItem = getRowByItemId(String(editItemId).trim()) || {};
         const prevSv = parseFloat(prevItem.supplyValue) || 0;
         const prevVat = parseFloat(prevItem.vat) || 0;
         const vatRate = (prevSv > 0 && prevVat / prevSv < 0.05) ? 0 : 0.1;
@@ -2070,7 +2118,7 @@ function openItemModal(container, navigateTo, editIdx = null) {
       }
 
       if (isEdit) {
-        updateItem(editIdx, newItem);
+        updateItem(String(editItemId).trim(), newItem);
         showToast(`"${name}" 품목을 수정했습니다.`, 'success');
       } else {
         addItem(newItem);
@@ -2159,4 +2207,5 @@ function getItemCodes(data) {
 function getVendors(data) {
   return [...new Set(data.map(r => r.vendor).filter(Boolean))].sort();
 }
+
 

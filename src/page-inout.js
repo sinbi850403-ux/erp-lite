@@ -1,4 +1,4 @@
-/**
+﻿/**
  * page-inout.js - 입출고 관리 페이지
  * 역할: 입고/출고 기록 등록, 이력 조회, 재고 자동 반영
  * 핵심: 입출고를 기록하면 재고 현황의 수량이 자동으로 증감됨
@@ -6,13 +6,27 @@
 
 import { getState, setState, addTransaction, deleteTransaction, restoreTransaction, updateTransactionPrices } from './store.js';
 import { showToast } from './toast.js';
-import { downloadExcel, readExcelFile } from './excel.js';
+import { downloadExcel, downloadExcelSheets, readExcelFile } from './excel.js';
 import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow } from './ux-toolkit.js';
 import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
 const PAGE_SIZE = 15;
+const BULK_INOUT_TEMPLATE_HEADERS = ['구분', '거래처', '품목명', '품목코드', '수량', '원가', '판매가', '실판매가', '이익률', '날짜', '비고'];
+
+function safeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildOptionTags(values) {
+  return values.map(value => `<option value="${safeAttr(value)}">${escapeHtml(String(value))}</option>`).join('');
+}
 
 /**
  * 날짜 문자열을 YYYY-MM-DD 형식으로 변환
@@ -184,15 +198,15 @@ export function renderInoutPage(container, navigateTo) {
       </select>
       <select class="filter-select" id="tx-vendor-filter">
         <option value="">전체 거래처</option>
-        ${getVendorOptions(transactions, items).map(v => `<option value="${v}">${v}</option>`).join('')}
+        ${buildOptionTags(getVendorOptions(transactions, items))}
       </select>
       <select class="filter-select" id="tx-code-filter">
         <option value="">전체 품목코드</option>
-        ${getCodeList(items).map(c => `<option value="${c}">${c}</option>`).join('')}
+        ${buildOptionTags(getCodeList(items))}
       </select>
       <input type="date" class="filter-select" id="tx-date-filter" style="padding:7px 10px;" />
       <select class="filter-select" id="tx-sort-filter">
-        ${sortOptions.map(option => `<option value="${option.value}">${option.label}</option>`).join('')}
+        ${sortOptions.map(option => `<option value="${safeAttr(option.value)}">${escapeHtml(option.label)}</option>`).join('')}
       </select>
       <button class="btn btn-ghost btn-sm" id="tx-filter-reset" title="필터 초기화">초기화</button>
     </div>
@@ -323,6 +337,7 @@ export function renderInoutPage(container, navigateTo) {
 
   function renderTxHeader() {
     const thead = container.querySelector('#tx-head');
+    if (!thead) return;
     thead.innerHTML = `
       <tr>
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
@@ -366,31 +381,40 @@ export function renderInoutPage(container, navigateTo) {
       </tr>
     `;
 
+    const applySortByKey = (key) => {
+      if (!key) return;
+      if (sort.key !== key) {
+        sort = { key, direction: 'asc' };
+      } else if (sort.direction === 'asc') {
+        sort = { key, direction: 'desc' };
+      } else {
+        sort = { ...defaultSort };
+      }
+      const sortFilterEl = container.querySelector('#tx-sort-filter');
+      if (sortFilterEl) sortFilterEl.value = getSortPresetValue(sort);
+      persistInoutPrefs();
+      currentPageNum = 1;
+      renderTxHeader();
+      renderTxTable();
+    };
+
     container.querySelectorAll('.sortable-header[data-sort-key]').forEach(header => {
       header.setAttribute('tabindex', '0');
       header.setAttribute('role', 'button');
-      header.addEventListener('click', () => {
-        const key = header.dataset.sortKey;
-        if (!key) return;
-        if (sort.key !== key) {
-          sort = { key, direction: 'asc' };
-        } else if (sort.direction === 'asc') {
-          sort = { key, direction: 'desc' };
-        } else {
-          sort = { ...defaultSort };
-        }
-        container.querySelector('#tx-sort-filter').value = getSortPresetValue(sort);
-        persistInoutPrefs();
-        currentPageNum = 1;
-        renderTxHeader();
-        renderTxTable();
-      });
+      header.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        applySortByKey(header.dataset.sortKey);
+      }, true);
 
       header.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        header.click();
-      });
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        applySortByKey(header.dataset.sortKey);
+      }, true);
     });
   }
 
@@ -438,7 +462,7 @@ export function renderInoutPage(container, navigateTo) {
       <div class="filter-summary-row">
         <div class="filter-summary-count">표시 ${filteredCount}건 / 전체 ${transactions.length}건</div>
         <div class="filter-summary-chips">
-          ${chips.map(text => `<span class="filter-chip">${text}</span>`).join('')}
+          ${chips.map(text => `<span class="filter-chip">${escapeHtml(text)}</span>`).join('')}
         </div>
       </div>
     `;
@@ -465,6 +489,7 @@ export function renderInoutPage(container, navigateTo) {
     const pageData = sorted.slice(start, start + PAGE_SIZE);
 
     const tbody = container.querySelector('#tx-body');
+    if (!tbody) return;
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
@@ -522,9 +547,9 @@ export function renderInoutPage(container, navigateTo) {
         const childStyle = isChild ? 'background:var(--bg-lighter);' : '';
         const indent = isChild ? 'padding-left:24px;' : '';
         return `
-          <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${tx.id}" style="${childStyle}">
+          <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${safeAttr(tx.id)}" style="${childStyle}">
             <td style="text-align:center;">
-              <input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
+              <input type="checkbox" class="tx-select-row" value="${safeAttr(tx.id)}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} />
             </td>
             <td class="col-num"></td>
             <td data-label="구분">
@@ -532,30 +557,30 @@ export function renderInoutPage(container, navigateTo) {
                 ${tx.type === 'in' ? '입고' : '출고'}
               </span>
             </td>
-            <td data-label="거래처" style="font-size:12px; ${indent}">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
+            <td data-label="거래처" style="font-size:12px; ${indent}">${tx.vendor ? escapeHtml(tx.vendor) : '<span style="color:var(--text-muted)">-</span>'}</td>
             <td data-label="품목명" style="${indent}">
               ${isChild
-                ? `<span style="color:var(--text-muted); font-size:12px;">${tx.itemName || '-'}</span>`
-                : `<strong>${tx.itemName || '-'}</strong>`}
+                ? `<span style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemName || '-')}</span>`
+                : `<strong>${escapeHtml(tx.itemName || '-')}</strong>`}
             </td>
-            <td data-label="품목코드" style="color:var(--text-muted); font-size:12px;">${tx.itemCode || '-'}</td>
+            <td data-label="품목코드" style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemCode || '-')}</td>
             <td data-label="수량" class="text-right">
               <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">
                 ${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}
               </span>
             </td>
             <td data-label="원가" class="text-right">${tx.unitPrice ? '₩' + Math.round(parseFloat(tx.unitPrice)).toLocaleString('ko-KR') : '-'}</td>
-            <td data-label="판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="sellingPrice" title="클릭하여 수정">
+            <td data-label="판매가" class="text-right editable-price-cell" data-tx-id="${safeAttr(tx.id)}" data-field="sellingPrice" title="클릭하여 수정">
               <span class="price-display">${tx.sellingPrice ? '₩' + Math.round(parseFloat(tx.sellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
             </td>
-            <td data-label="실판매가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="actualSellingPrice" title="클릭하여 수정">
+            <td data-label="실판매가" class="text-right editable-price-cell" data-tx-id="${safeAttr(tx.id)}" data-field="actualSellingPrice" title="클릭하여 수정">
               <span class="price-display">${tx.actualSellingPrice ? '₩' + Math.round(parseFloat(tx.actualSellingPrice)).toLocaleString('ko-KR') : '<span style="color:var(--text-muted)">-</span>'}</span>
             </td>
             <td data-label="이익률" class="text-right">${renderMargin(tx)}</td>
             <td data-label="날짜">${formatDate(tx.date)}</td>
-            <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${tx.note || ''}</td>
+            <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${escapeHtml(tx.note || '')}</td>
             <td class="text-center">
-              <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button>
+              <button class="btn-icon btn-icon-danger btn-del-tx" data-id="${safeAttr(tx.id)}" title="삭제">삭제</button>
             </td>
           </tr>`;
       };
@@ -595,7 +620,7 @@ export function renderInoutPage(container, navigateTo) {
           const marginColor = avgMargin !== null ? (parseFloat(avgMargin) > 0 ? 'var(--success)' : parseFloat(avgMargin) < 0 ? 'var(--danger)' : 'var(--text-muted)') : '';
 
           html += `
-            <tr class="tx-group-header" data-group-key="${escapeHtml(key)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
+            <tr class="tx-group-header" data-group-key="${safeAttr(key)}" style="cursor:pointer; background:var(--bg-card); border-left:3px solid var(--accent);">
               <td style="text-align:center;">
                 <span style="color:var(--text-muted); font-size:11px;">${totalCount}건</span>
               </td>
@@ -628,6 +653,7 @@ export function renderInoutPage(container, navigateTo) {
 
     //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
     const pagEl = container.querySelector('#tx-pagination');
+    if (!pagEl) return;
     const pageStart = sorted.length === 0 ? 0 : start + 1;
     pagEl.innerHTML = `
       <span>${sorted.length}건 중 ${pageStart}~${Math.min(start + PAGE_SIZE, sorted.length)}</span>
@@ -663,7 +689,7 @@ export function renderInoutPage(container, navigateTo) {
         const currentVal = parseFloat(txData[field]) || 0;
 
         cell.innerHTML = `
-          <input type="number" class="inline-price-input" value="${currentVal || ''}"
+          <input type="number" class="inline-price-input" value="${safeAttr(currentVal || '')}"
             placeholder="금액 입력" min="0"
             style="width:100px; text-align:right; padding:2px 4px; border:1px solid var(--accent); border-radius:4px; background:var(--bg-card); color:var(--text-primary); font-size:13px;" />
         `;
@@ -692,13 +718,19 @@ export function renderInoutPage(container, navigateTo) {
           return;
         }
         try {
-          const removed = deleteTransaction(btn.dataset.id);
+          const txId = String(btn.dataset.id || '').trim();
+          if (!txId) {
+            showToast('삭제할 기록 ID를 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.', 'warning');
+            return;
+          }
+          if (!confirm('선택한 입출고 기록을 삭제할까요?')) return;
+          const removed = deleteTransaction(txId);
           if (!removed || !removed.deleted) {
             showToast('삭제할 기록을 찾지 못했습니다.', 'warning');
             return;
           }
           const itemName = removed.deleted.itemName || '선택 기록';
-          selectedTxIds.delete(btn.dataset.id);
+          selectedTxIds.delete(txId);
           renderInoutPage(container, navigateTo);
           showToast(`"${itemName}" 기록을 삭제했습니다.`, 'info', 5000, {
             actionLabel: '실행 취소',
@@ -791,8 +823,13 @@ export function renderInoutPage(container, navigateTo) {
     if (!canCreate) { showToast('출고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'out', items);
   });
-  container.querySelectorAll('[data-nav]').forEach(button => {
-    button.addEventListener('click', () => navigateTo(button.dataset.nav));
+  container.querySelectorAll('.mission-actions [data-nav], .quick-start-actions [data-nav]').forEach(button => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+      navigateTo(button.dataset.nav);
+    });
   });
 
   function syncQuickFilterChips() {
@@ -1012,30 +1049,14 @@ function openBulkUploadModal(container, navigateTo, items) {
   });
 
   overlay.querySelector('#bulk-download-template').addEventListener('click', () => {
-    const template = [
-      {
-        구분: '입고',
-        거래처: '(주)삼성전자',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 100,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '1차 입고',
-      },
-      {
-        구분: '출고',
-        거래처: '쿠팡',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 30,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '쿠팡 출고',
-      },
+    const today = new Date().toISOString().split('T')[0];
+    const templateRows = [
+      BULK_INOUT_TEMPLATE_HEADERS,
+      ['입고', '(주)삼성전자', '갤럭시 S25', 'SM-S925', 100, 1200000, 1450000, 1450000, 20.8, today, '1차 입고'],
+      ['출고', '쿠팡', '갤럭시 S25', 'SM-S925', 30, 1200000, 1450000, 1490000, 24.2, today, '쿠팡 출고'],
     ];
 
-    downloadExcel(template, '입출고_일괄등록_양식');
+    downloadExcelSheets([{ name: '입출고_양식', rows: templateRows }], '입출고_일괄등록_양식');
     showToast('입출고 일괄등록 양식을 내려받았습니다. 내용을 입력한 뒤 다시 업로드해 주세요.', 'success');
   });
 
@@ -1087,28 +1108,55 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       itemName: headers.findIndex((header) => header === '품목명'),
       itemCode: headers.findIndex((header) => header === '품목코드'),
       quantity: headers.findIndex((header) => header === '수량'),
-      unitPrice: headers.findIndex((header) => header === '단가'),
+      unitPrice: headers.findIndex((header) => header === '원가'),
+      sellingPrice: headers.findIndex((header) => header === '판매가'),
+      actualSellingPrice: headers.findIndex((header) => header === '실판매가'),
       date: headers.findIndex((header) => header === '날짜'),
       note: headers.findIndex((header) => header === '비고'),
     };
+    const detected = detectBulkInoutColumns(sheetData);
+    Object.keys(colMap).forEach((key) => {
+      if (colMap[key] === -1 && detected.colMap[key] >= 0) {
+        colMap[key] = detected.colMap[key];
+      }
+    });
+    const dataStartIndex = Math.max(1, detected.headerRowIndex + 1);
 
-    if (colMap.type === -1 || colMap.itemName === -1 || colMap.quantity === -1) {
-      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "구분", "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
+    if (colMap.itemName === -1 || colMap.quantity === -1) {
+      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
       return;
     }
 
+    const detectedHeaders = (sheetData[detected.headerRowIndex] || []).map((header) => normalizeBulkHeader(header));
     const rows = [];
-    for (let index = 1; index < sheetData.length; index += 1) {
+    for (let index = dataStartIndex; index < sheetData.length; index += 1) {
       const row = sheetData[index];
       if (!row || row.length === 0) continue;
 
       const typeCell = String(row[colMap.type] ?? '').trim();
       const itemName = String(row[colMap.itemName] ?? '').trim();
-      const quantity = Number.parseFloat(row[colMap.quantity]) || 0;
+      const parsedQuantity = parseBulkNumber(row[colMap.quantity]);
+      let type = normalizeBulkTxType(typeCell);
+      let quantity = parsedQuantity;
+
+      if (colMap.type < 0) {
+        if (parsedQuantity < 0) {
+          type = 'out';
+          quantity = Math.abs(parsedQuantity);
+        } else if (parsedQuantity > 0) {
+          type = 'in';
+        }
+      }
 
       if (!itemName || quantity <= 0) continue;
 
-      const rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      let rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      if (!rawItemCode) {
+        const fallbackCodeIndex = detectedHeaders.findIndex((header) =>
+          header.includes('품목코드') || header.includes('상품코드') || header.includes('제품코드') || header.includes('itemcode') || header === 'sku' || header.endsWith('코드')
+        );
+        if (fallbackCodeIndex >= 0) rawItemCode = String(row[fallbackCodeIndex] ?? '').trim();
+      }
       const matchedItem = items.find((item) =>
         item.itemName === itemName || (rawItemCode && item.itemCode && item.itemCode === rawItemCode)
       );
@@ -1120,17 +1168,19 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
           const excelDate = new Date((rawDate - 25569) * 86400 * 1000);
           dateStr = excelDate.toISOString().split('T')[0];
         } else {
-          dateStr = String(rawDate ?? '').trim();
+          dateStr = formatDate(String(rawDate ?? '').trim());
         }
       }
 
       rows.push({
-        type: typeCell === '출고' ? 'out' : 'in',
+        type,
         vendor: colMap.vendor >= 0 ? String(row[colMap.vendor] ?? '').trim() : '',
         itemName,
         itemCode: rawItemCode || matchedItem?.itemCode || '',
         quantity,
-        unitPrice: colMap.unitPrice >= 0 ? (Number.parseFloat(row[colMap.unitPrice]) || 0) : 0,
+        unitPrice: colMap.unitPrice >= 0 ? parseBulkNumber(row[colMap.unitPrice]) : 0,
+        sellingPrice: colMap.sellingPrice >= 0 ? parseBulkNumber(row[colMap.sellingPrice]) : 0,
+        actualSellingPrice: colMap.actualSellingPrice >= 0 ? parseBulkNumber(row[colMap.actualSellingPrice]) : 0,
         date: dateStr || new Date().toISOString().split('T')[0],
         note: colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
         matched: Boolean(matchedItem),
@@ -1161,7 +1211,9 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
               <th>거래처</th>
               <th>품목명</th>
               <th>수량</th>
-              <th>단가</th>
+              <th>원가</th>
+              <th>판매가</th>
+              <th>실판매가</th>
               <th>날짜</th>
               <th>상태</th>
             </tr>
@@ -1174,6 +1226,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
                 <td>${escapeHtml(row.itemName)}</td>
                 <td class="text-right">${row.quantity.toLocaleString('ko-KR')}</td>
                 <td class="text-right">${row.unitPrice ? `₩${Math.round(row.unitPrice).toLocaleString('ko-KR')}` : '-'}</td>
+                <td class="text-right">${row.sellingPrice ? `₩${Math.round(row.sellingPrice).toLocaleString('ko-KR')}` : '-'}</td>
+                <td class="text-right">${row.actualSellingPrice ? `₩${Math.round(row.actualSellingPrice).toLocaleString('ko-KR')}` : '-'}</td>
                 <td>${escapeHtml(row.date)}</td>
                 <td>${row.matched
                   ? '<span style="color:var(--success); font-size:11px;">기존 품목 매칭</span>'
@@ -1204,6 +1258,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
           itemCode: row.itemCode,
           quantity: row.quantity,
           unitPrice: row.unitPrice,
+          sellingPrice: row.sellingPrice,
+          actualSellingPrice: row.actualSellingPrice,
           date: row.date,
           note: row.note,
         });
@@ -1221,6 +1277,97 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
 /**
  * 입고/출고 등록 모달
  */
+function normalizeBulkHeader(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[()\-_/]/g, '');
+}
+
+function emptyBulkColMap() {
+  return {
+    type: -1,
+    vendor: -1,
+    itemName: -1,
+    itemCode: -1,
+    quantity: -1,
+    unitPrice: -1,
+    sellingPrice: -1,
+    actualSellingPrice: -1,
+    date: -1,
+    note: -1,
+  };
+}
+
+function detectBulkInoutColumns(sheetData) {
+  const aliasMap = {
+    type: ['구분', '입출고', '거래구분', '유형', 'type', 'inout'],
+    vendor: ['거래처', '공급처', '고객처', 'vendor', 'supplier', 'customer'],
+    itemName: ['품목명', '상품명', '제품명', 'itemname', 'item', 'name'],
+    itemCode: ['품목코드', '품목 코드', '상품코드', '제품코드', '자재코드', '품번', '코드', 'sku', 'itemcode'],
+    quantity: ['수량', 'qty', 'quantity', '입고수량', '출고수량'],
+    unitPrice: ['단가', '원가', '매입단가', '공급단가', 'unitprice', 'price', 'cost'],
+    sellingPrice: ['판매가', '판매단가', 'saleprice', 'sellingprice', 'sale', 'selling'],
+    actualSellingPrice: ['실판매가', '실판매단가', 'actualsellingprice', 'actualsaleprice', 'actualprice'],
+    date: ['날짜', '일자', '거래일자', '입출고일', 'date'],
+    note: ['비고', '메모', 'note', 'memo', 'remarks'],
+  };
+
+  const normalizedAliases = {};
+  Object.keys(aliasMap).forEach((key) => {
+    normalizedAliases[key] = aliasMap[key].map(normalizeBulkHeader);
+  });
+
+  let best = { score: -1, headerRowIndex: 0, colMap: emptyBulkColMap() };
+  const scanLimit = Math.min(Array.isArray(sheetData) ? sheetData.length : 0, 10);
+
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const row = Array.isArray(sheetData[rowIndex]) ? sheetData[rowIndex] : [];
+    const normalizedHeaders = row.map((cell) => normalizeBulkHeader(cell));
+    const colMap = emptyBulkColMap();
+
+    Object.keys(colMap).forEach((key) => {
+      colMap[key] = normalizedHeaders.findIndex((header) => {
+        if (!header) return false;
+        return normalizedAliases[key].some((alias) => header === alias || header.includes(alias) || alias.includes(header));
+      });
+    });
+
+    let score = 0;
+    if (colMap.type >= 0) score += 3;
+    if (colMap.itemName >= 0) score += 3;
+    if (colMap.quantity >= 0) score += 3;
+    if (colMap.unitPrice >= 0) score += 1;
+    if (colMap.sellingPrice >= 0) score += 1;
+    if (colMap.actualSellingPrice >= 0) score += 1;
+    if (colMap.date >= 0) score += 1;
+    if (colMap.vendor >= 0) score += 1;
+    if (colMap.note >= 0) score += 1;
+
+    if (score > best.score) {
+      best = { score, headerRowIndex: rowIndex, colMap };
+    }
+  }
+
+  return { colMap: best.colMap, headerRowIndex: best.headerRowIndex };
+}
+
+function parseBulkNumber(value) {
+  const normalized = String(value ?? '')
+    .replace(/[₩,\s]/g, '')
+    .trim();
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeBulkTxType(value) {
+  const normalized = normalizeBulkHeader(value);
+  if (['입고', '입', 'in', 'inbound', 'purchase', 'buy', '매입'].includes(normalized)) return 'in';
+  if (['출고', '출', 'out', 'outbound', 'sale', 'sales', '판매', '매출'].includes(normalized)) return 'out';
+  return 'in';
+}
+
 function openTxModal(container, navigateTo, type, items) {
   const today = new Date().toISOString().split('T')[0];
   const state = getState();
@@ -1257,7 +1404,7 @@ function openTxModal(container, navigateTo, type, items) {
               <label class="form-label">${partnerLabel}</label>
               <select class="form-select" id="tx-vendor">
                 <option value="">-- 거래처 선택 (선택 사항) --</option>
-                ${vendors.map(v => `<option value="${v.name}">${v.name}${v.contactName ? ` (${v.contactName})` : ''}</option>`).join('')}
+                ${vendors.map(v => `<option value="${safeAttr(v.name)}">${escapeHtml(v.name)}${v.contactName ? ` (${escapeHtml(v.contactName)})` : ''}</option>`).join('')}
               </select>
               ${vendors.length === 0 ? `<div class="smart-inline-note">거래처 관리에 ${type === 'in' ? '공급처' : '고객'}를 먼저 등록하면 ${typeLabel} 기록이 더 편해집니다.</div>` : ''}
             </div>
@@ -1270,8 +1417,8 @@ function openTxModal(container, navigateTo, type, items) {
                 <select class="form-select" id="tx-item">
                   <option value="">-- 품목 선택 --</option>
                   ${items.map((item, i) => `
-                    <option value="${i}" data-code="${item.itemCode || ''}" data-price="${item.unitPrice || ''}" data-qty="${item.quantity || 0}">
-                      ${item.itemName}${item.itemCode ? ` (${item.itemCode})` : ''}${type === 'out' ? ` [현재 ${parseFloat(item.quantity || 0)}]` : ''}
+                    <option value="${i}" data-code="${safeAttr(item.itemCode || '')}" data-price="${safeAttr(item.unitPrice || '')}" data-qty="${safeAttr(item.quantity || 0)}">
+                      ${escapeHtml(item.itemName || '')}${item.itemCode ? ` (${escapeHtml(item.itemCode)})` : ''}${type === 'out' ? ` [현재 ${parseFloat(item.quantity || 0)}]` : ''}
                     </option>
                   `).join('')}
                 </select>
@@ -1404,22 +1551,38 @@ function openTxModal(container, navigateTo, type, items) {
       });
 
     const visibleValues = new Set(['']);
-    let optionMarkup = '<option value="">-- 품목 선택 --</option>';
+    itemSelect.textContent = '';
+
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = '-- 품목 선택 --';
+    itemSelect.appendChild(placeholderOption);
 
     if (previousValue !== '' && !matched.some(({ index }) => String(index) === previousValue)) {
       const selectedItem = items[parseInt(previousValue, 10)];
       if (selectedItem) {
         visibleValues.add(String(previousValue));
-        optionMarkup += `<option value="${previousValue}" data-code="${selectedItem.itemCode || ''}" data-price="${selectedItem.unitPrice || ''}" data-qty="${selectedItem.quantity || 0}">${getOptionLabel(selectedItem)} (현재 선택)</option>`;
+        const option = document.createElement('option');
+        option.value = previousValue;
+        option.dataset.code = String(selectedItem.itemCode || '');
+        option.dataset.price = String(selectedItem.unitPrice || '');
+        option.dataset.qty = String(selectedItem.quantity || 0);
+        option.textContent = `${selectedItem.itemName || '-'}${selectedItem.itemCode ? ` (${selectedItem.itemCode})` : ''}${type === 'out' ? ` [현재 ${(parseFloat(selectedItem.quantity || 0) || 0).toLocaleString('ko-KR')}]` : ''} (현재 선택)`;
+        itemSelect.appendChild(option);
       }
     }
 
-    optionMarkup += matched.map(({ item, index }) => {
+    matched.forEach(({ item, index }) => {
       visibleValues.add(String(index));
-      return `<option value="${index}" data-code="${item.itemCode || ''}" data-price="${item.unitPrice || ''}" data-qty="${item.quantity || 0}">${getOptionLabel(item)}</option>`;
-    }).join('');
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.dataset.code = String(item.itemCode || '');
+      option.dataset.price = String(item.unitPrice || '');
+      option.dataset.qty = String(item.quantity || 0);
+      option.textContent = `${item.itemName || '-'}${item.itemCode ? ` (${item.itemCode})` : ''}${type === 'out' ? ` [현재 ${(parseFloat(item.quantity || 0) || 0).toLocaleString('ko-KR')}]` : ''}`;
+      itemSelect.appendChild(option);
+    });
 
-    itemSelect.innerHTML = optionMarkup;
     itemSelect.value = visibleValues.has(previousValue) ? previousValue : '';
 
     if (itemSearchMeta) {
@@ -1480,7 +1643,8 @@ function openTxModal(container, navigateTo, type, items) {
       { done: !!inputs.vendor.value, text: '거래처가 연결되었습니다.' },
       { done: type !== 'out' || !selectedItem || nextQty >= 0, text: type === 'out' ? '출고 후 재고가 음수가 아닙니다.' : '입고 반영 후 재고가 계산되었습니다.' },
     ];
-    overlay.querySelector('#tx-status-list').innerHTML = statusItems.map(entry => `
+    const statusListEl = overlay.querySelector('#tx-status-list');
+    if (statusListEl) statusListEl.innerHTML = statusItems.map(entry => `
       <div class="form-status-item ${entry.done ? 'is-complete' : ''}">${entry.text}</div>
     `).join('');
   };

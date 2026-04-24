@@ -9,7 +9,7 @@ import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-moni
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './auth.js';
 import { initTheme, toggleTheme } from './theme.js';
 import { injectGetCurrentUser, injectGetUserProfile, getPageBadge, getCurrentPlan, PLANS, setPlan } from './plan.js';
-import { getNotificationCount, renderNotificationPanel } from './notifications.js';
+import { getNotificationCount, renderNotificationPanel, syncExternalNotifications } from './notifications.js';
 import { showToast } from './toast.js';
 import { isAdmin } from './admin-auth.js';
 import { navigateTo, injectRouterCallbacks, PAGE_LOADERS, LAST_PAGE_KEY, renderQuickAccess } from './router.js';
@@ -42,7 +42,14 @@ function showAuthGate() {
   if (gate) { gate.style.display = 'flex'; gate.style.opacity = '1'; }
 }
 
-['landing-goto-login', 'landing-cta-signup', 'landing-cta-bottom'].forEach(id => {
+[
+  'landing-goto-login',
+  'landing-cta-signup',
+  'landing-cta-bottom',
+  'landing-pricing-free',
+  'landing-pricing-pro',
+  'landing-pricing-enterprise',
+].forEach(id => {
   document.getElementById(id)?.addEventListener('click', showAuthGate);
 });
 
@@ -122,6 +129,12 @@ initAuth((user, profile) => {
   const gate = document.getElementById('auth-gate');
   
   if (user) {
+    // DB 프로필의 요금제를 앱 런타임 상태에 동기화
+    const profilePlan = profile?.plan;
+    if (profilePlan && PLANS[profilePlan]) {
+      setPlan(profilePlan);
+    }
+
     const landing = document.getElementById('landing-page');
     if (landing) landing.style.display = 'none';
     if (gate) {
@@ -676,10 +689,11 @@ toggleBtn?.addEventListener('click', () => {
 
 overlay?.addEventListener('click', closeSidebar);
 
-// 사이드바 nav 클릭 — document 레벨 이벤트 위임 (sidebar null 방어)
-document.addEventListener("click", e => {
-  const btn = e.target.closest(".nav-btn[data-page], .nav-btn-rich[data-page], [data-page].nav-btn");
-  if (btn && btn.closest("#sidebar")) navigateTo(btn.dataset.page);
+// 사이드바 nav 클릭 — #sidebar 범위에서만 이벤트 위임
+sidebar?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.nav-btn[data-page]');
+  if (!btn || !sidebar.contains(btn)) return;
+  navigateTo(btn.dataset.page);
 });
 
 // 라우터에 콜백 주입 (사이드바 닫기 / 카드 접기 / 알림 배지)
@@ -688,9 +702,6 @@ injectRouterCallbacks({
   closeSidebar,
   updateNotifBadge,
 });
-
-// 전역 네비게이션 (HTML onclick 속성 및 콘솔 디버깅용)
-window.invexNav = navigateTo;
 
 // === ?곗씠??諛깆뾽 / 蹂듭썝 ===
 
@@ -704,21 +715,31 @@ window.invexNav = navigateTo;
 // ??珥덇린??(濡쒓렇???꾨즺 ???몄텧)
 // ??遺꾨━? ???몄쬆 ?뺤씤 ?꾩뿉 IndexedDB 蹂듭썝?섎㈃ 鍮??곗씠?곌? 濡쒕뱶?????덉쓬
 async function initAppAfterAuth() {
-  // Supabase health check
+  // Supabase health check는 백그라운드로 실행해 초기 화면 진입을 막지 않음
   if (isSupabaseConfigured) {
-    try {
-      const { error } = await Promise.race([
-        supabase.from('profiles').select('id').limit(1),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 8000)),
-      ]);
-      if (error) throw error;
-    } catch (e) {
-      console.warn('[Health] Supabase 연결 불안정:', e.message);
-      showToast('서버 연결이 불안정합니다. 일부 기능이 제한될 수 있습니다.', 'warning');
-    }
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 3000)),
+    ])
+      .then(({ data, error }) => {
+        if (error) throw error;
+        if (!data?.session?.user) return;
+      })
+      .catch((e) => {
+        const message = String(e?.message || '').toLowerCase();
+        if (message.includes('no active session') || message.includes('session missing')) return;
+        console.warn('[Health] Supabase 연결 불안정:', e.message);
+        showToast('서버 연결이 불안정합니다. 일부 기능이 제한될 수 있습니다.', 'warning');
+      });
   }
 
   await restoreState();
+  // restoreState가 로컬 캐시의 예전 currentPlan을 복원할 수 있으므로,
+  // 인증 프로필(plan)을 다시 우선 동기화한다.
+  const profilePlan = getUserProfileData()?.plan;
+  if (profilePlan && PLANS[profilePlan]) {
+    setPlan(profilePlan);
+  }
   const lastPage = localStorage.getItem(LAST_PAGE_KEY);
   const startPage = (lastPage && PAGE_LOADERS[lastPage]) ? lastPage : 'home';
   updateSidebarBadges();

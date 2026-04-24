@@ -12,6 +12,10 @@
 import { supabase, isSupabaseConfigured } from './supabase-client.js';
 
 const DB_TIMEOUT_MS = 15_000;
+const USER_ID_CACHE_TTL_MS = 60_000;
+let _cachedUserId = null;
+let _cachedUserIdAt = 0;
+let _userIdInFlight = null;
 
 /**
  * Supabase 쿼리에 타임아웃을 적용하는 래퍼
@@ -35,13 +39,61 @@ function handleError(error, context) {
   }
 }
 
+function toNullableNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const normalized = String(value).replace(/,/g, '').trim();
+  if (!normalized || normalized === '-' || normalized.toLowerCase() === 'nan') return null;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : null;
+}
+
+function toNullableString(value) {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized : null;
+}
+
+function generateClientUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /**
  * 현재 로그인한 사용자 ID를 안전하게 가져오기
  */
 async function getUserId() {
-  const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
-  if (!user) throw new Error('로그인이 필요합니다.');
-  return user.id;
+  if (_cachedUserId && Date.now() - _cachedUserIdAt < USER_ID_CACHE_TTL_MS) {
+    return _cachedUserId;
+  }
+
+  if (_userIdInFlight) return _userIdInFlight;
+
+  _userIdInFlight = (async () => {
+    const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
+    if (session?.user?.id) {
+      _cachedUserId = session.user.id;
+      _cachedUserIdAt = Date.now();
+      return _cachedUserId;
+    }
+
+    const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
+    if (!user) throw new Error('로그인이 필요합니다');
+
+    _cachedUserId = user.id;
+    _cachedUserIdAt = Date.now();
+    return _cachedUserId;
+  })().finally(() => {
+    _userIdInFlight = null;
+  });
+
+  return _userIdInFlight;
 }
 
 // ============================================================
@@ -115,17 +167,104 @@ export const items = {
    */
   async bulkUpsert(itemsArray) {
     const userId = await getUserId();
-    const rows = itemsArray.map(item => ({
-      ...item,
-      user_id: userId,
-    }));
+    const rows = itemsArray.map((item) => {
+      const payload = {
+        user_id: userId,
+        item_name: toNullableString(item?.item_name),
+        item_code: toNullableString(item?.item_code),
+        category: toNullableString(item?.category),
+        quantity: toNullableNumber(item?.quantity),
+        unit: toNullableString(item?.unit),
+        unit_price: toNullableNumber(item?.unit_price),
+        supply_value: toNullableNumber(item?.supply_value),
+        vat: toNullableNumber(item?.vat),
+        total_price: toNullableNumber(item?.total_price),
+        sale_price: toNullableNumber(item?.sale_price),
+        warehouse: toNullableString(item?.warehouse),
+        location: toNullableString(item?.location),
+        vendor: toNullableString(item?.vendor),
+        min_stock: toNullableNumber(item?.min_stock),
+        expiry_date: toNullableString(item?.expiry_date),
+        lot_number: toNullableString(item?.lot_number),
+        memo: toNullableString(item?.memo),
+        extra: item?.extra && typeof item.extra === 'object' ? item.extra : {},
+      };
+
+      const rawId = item?.id;
+      if (rawId !== null && rawId !== undefined && String(rawId).trim() !== '') {
+        payload.id = rawId;
+      }
+      return payload;
+    });
+    const dedupedMap = new Map();
+    const normalizeItemName = (value) => String(value ?? '').trim().toLowerCase();
+    rows.forEach((row) => {
+      const normalizedName = normalizeItemName(row.item_name);
+      if (!normalizedName) return;
+      const key = `${userId}::${normalizedName}`;
+      dedupedMap.set(key, { ...row, item_name: String(row.item_name ?? '').trim() });
+    });
+    const dedupedRows = [...dedupedMap.values()];
+
+    const existingIdByName = new Map();
+    const names = dedupedRows.map((row) => row.item_name).filter(Boolean);
+    const QUERY_BATCH = 120;
+
+    const isBatchRequestTooLarge = (error) => {
+      const message = String(error?.message || '').toLowerCase();
+      return (
+        message.includes('bad request') ||
+        message.includes('uri too long') ||
+        message.includes('request-uri too large') ||
+        message.includes('payload too large') ||
+        message.includes('query')
+      );
+    };
+
+    const fetchExistingByNameBatch = async (nameBatch, offsetLabel = 0) => {
+      if (!nameBatch.length) return [];
+      const { data, error } = await supabase
+        .from('items')
+        .select('id,item_name')
+        .eq('user_id', userId)
+        .in('item_name', nameBatch);
+
+      if (!error) return data || [];
+
+      if (nameBatch.length > 1 && isBatchRequestTooLarge(error)) {
+        const mid = Math.ceil(nameBatch.length / 2);
+        const left = await fetchExistingByNameBatch(nameBatch.slice(0, mid), offsetLabel);
+        const right = await fetchExistingByNameBatch(nameBatch.slice(mid), offsetLabel + mid);
+        return [...left, ...right];
+      }
+
+      handleError(error, `기존 품목 ID 조회(${offsetLabel}~${offsetLabel + nameBatch.length})`);
+      return [];
+    };
+
+    for (let i = 0; i < names.length; i += QUERY_BATCH) {
+      const nameBatch = names.slice(i, i + QUERY_BATCH);
+      if (!nameBatch.length) continue;
+      const existingRows = await fetchExistingByNameBatch(nameBatch, i);
+      existingRows.forEach((row) => {
+        const key = normalizeItemName(row.item_name);
+        if (key && row.id) existingIdByName.set(key, row.id);
+      });
+    }
+
+    dedupedRows.forEach((row) => {
+      const hasId = row.id !== null && row.id !== undefined && String(row.id).trim() !== '';
+      if (hasId) return;
+      const existingId = existingIdByName.get(normalizeItemName(row.item_name));
+      row.id = existingId || generateClientUuid();
+    });
 
     // 500개씩 배치 처리 — Supabase 요청 크기 제한 대응
     const BATCH_SIZE = 500;
     const results = [];
 
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < dedupedRows.length; i += BATCH_SIZE) {
+      const batch = dedupedRows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase
         .from('items')
         .upsert(batch, { onConflict: 'user_id,item_name' })
@@ -170,10 +309,13 @@ export const items = {
    * 여러 품목 일괄 삭제
    */
   async bulkRemove(itemIds) {
+    if (!itemIds || itemIds.length === 0) return;
+    const userId = await getUserId();
     const { error } = await supabase
       .from('items')
       .delete()
-      .in('id', itemIds);
+      .in('id', itemIds)
+      .eq('user_id', userId);
     handleError(error, '품목 일괄 삭제');
   },
 
@@ -273,11 +415,29 @@ export const vendors = {
     return data;
   },
 
+  /**
+   * 거래처 일괄 생성 (upsert — 이름 중복 시 업데이트)
+   * store.js 동기화에서 N+1 쿼리 문제 해결용
+   */
+  async bulkUpsert(vendorArray) {
+    if (!vendorArray || vendorArray.length === 0) return [];
+    const userId = await getUserId();
+    const rows = vendorArray.map(v => ({ ...v, user_id: userId }));
+    const { data, error } = await supabase
+      .from('vendors')
+      .upsert(rows, { onConflict: 'user_id,name', ignoreDuplicates: false })
+      .select();
+    handleError(error, '거래처 일괄 저장');
+    return data || [];
+  },
+
   async update(vendorId, updates) {
+    const userId = await getUserId();
     const { data, error } = await supabase
       .from('vendors')
       .update(updates)
       .eq('id', vendorId)
+      .eq('user_id', userId)
       .select()
       .single();
     handleError(error, '거래처 수정');
@@ -285,10 +445,12 @@ export const vendors = {
   },
 
   async remove(vendorId) {
+    const userId = await getUserId();
     const { error } = await supabase
       .from('vendors')
       .delete()
-      .eq('id', vendorId);
+      .eq('id', vendorId)
+      .eq('user_id', userId);
     handleError(error, '거래처 삭제');
   },
 };
@@ -804,6 +966,37 @@ export const salaryItems = {
 };
 
 // ============================================================
+// 사용자 전체 데이터 삭제 (설정 > 전체 초기화)
+// setState({})만 하면 Supabase는 안 지워져서 재로그인 시 복원됨
+// → Supabase에서 직접 DELETE 필요
+// ============================================================
+export async function deleteAllUserData() {
+  const userId = await getUserId();
+
+  // 병렬 삭제 — RLS(user_id=auth.uid()) 이중 보호
+  const results = await Promise.allSettled([
+    supabase.from('items').delete().eq('user_id', userId),
+    supabase.from('transactions').delete().eq('user_id', userId),
+    supabase.from('vendors').delete().eq('user_id', userId),
+    supabase.from('transfers').delete().eq('user_id', userId),
+    supabase.from('stocktakes').delete().eq('user_id', userId),
+    supabase.from('account_entries').delete().eq('user_id', userId),
+    supabase.from('purchase_orders').delete().eq('user_id', userId),
+    supabase.from('custom_fields').delete().eq('user_id', userId),
+    supabase.from('user_settings').delete().eq('user_id', userId),
+    supabase.from('audit_logs').delete().eq('user_id', userId),
+  ]);
+
+  const errors = results
+    .filter(r => r.status === 'rejected' || r.value?.error)
+    .map(r => r.status === 'rejected' ? r.reason?.message : r.value?.error?.message);
+
+  if (errors.length > 0) {
+    console.warn('[DB] deleteAllUserData 일부 실패:', errors);
+  }
+}
+
+// ============================================================
 // 전체 데이터 로드 (초기화용) — store.js 호환
 // 왜? → 기존 getState()가 전체 데이터를 메모리에 갖고 있는 구조라서
 // → 점진적 전환을 위해 한번에 전체 로딩 후 캐시하는 함수 제공
@@ -907,16 +1100,16 @@ export function storeItemToDb(storeItem) {
   });
 
   return {
-    ...((_id) ? { id: _id } : {}),
-    item_name: itemName,
-    item_code: itemCode,
-    unit_price: unitPrice,
-    supply_value: supplyValue,
-    total_price: totalPrice,
-    sale_price: salePrice,
-    min_stock: minStock,
-    expiry_date: expiryDate,
-    lot_number: lotNumber,
+    ...((_id !== null && _id !== undefined && String(_id).trim() !== '') ? { id: _id } : {}),
+    item_name: toNullableString(itemName),
+    item_code: toNullableString(itemCode),
+    unit_price: toNullableNumber(unitPrice),
+    supply_value: toNullableNumber(supplyValue),
+    total_price: toNullableNumber(totalPrice),
+    sale_price: toNullableNumber(salePrice),
+    min_stock: toNullableNumber(minStock),
+    expiry_date: toNullableString(expiryDate),
+    lot_number: toNullableString(lotNumber),
     extra,
     ...known,
   };
@@ -927,8 +1120,11 @@ function dbTxToStoreTx(dbTx) {
     id: dbTx.id,
     type: dbTx.type,
     itemName: dbTx.item_name,
+    itemCode: dbTx.item_code,
     quantity: dbTx.quantity,
     unitPrice: dbTx.unit_price,
+    sellingPrice: dbTx.selling_price,
+    actualSellingPrice: dbTx.actual_selling_price,
     date: dbTx.date,
     vendor: dbTx.vendor,
     warehouse: dbTx.warehouse,
@@ -1141,3 +1337,4 @@ function storeLeaveToDb(l) {
   if ('approvedAt' in l) out.approved_at = l.approvedAt;
   return out;
 }
+

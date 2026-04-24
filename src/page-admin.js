@@ -8,8 +8,9 @@
 import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 import { getCurrentUser } from './auth.js';
-import { PLANS } from './plan.js';
+import { PLANS, setPlan } from './plan.js';
 import { supabase } from './supabase-client.js';
+import { escapeHtml } from './ux-toolkit.js';
 
 // ═══════════════════════════════════════════
 // 전역 onclick 핸들러 (이벤트 버블링 우회)
@@ -693,11 +694,35 @@ function showPlanChangeModal(user, container, navigateTo) {
     card.addEventListener('click', async () => {
       const planId = card.dataset.plan;
       try {
-        const { error } = await supabase
+        // .select()로 실제 업데이트된 행 수 확인 — RLS 차단 시 data=[] 반환
+        const { data, error } = await supabase
           .from('profiles')
           .update({ plan: planId })
-          .eq('id', user.id);
+          .eq('id', user.id)
+          .select('id, plan');
+
         if (error) throw error;
+
+        // data가 비어있으면 RLS가 업데이트를 차단한 것
+        if (!data || data.length === 0) {
+          throw new Error(
+            'RLS 정책으로 인해 변경이 차단됐습니다.\n' +
+            'Supabase SQL Editor에서 supabase/fix-admin-plan-update.sql 을 실행해 주세요.'
+          );
+        }
+
+        // 로컬 캐시 즉시 반영 (재렌더 전 캐시 동기화)
+        if (_adminUserCache) {
+          const cached = _adminUserCache.find(u => u.id === user.id);
+          if (cached) cached.plan = planId;
+        }
+
+        // 현재 로그인한 관리자 본인이면 로컬 플랜도 갱신
+        const me = getCurrentUser();
+        if (me?.uid === user.id) {
+          setPlan(planId);
+        }
+
         modal.remove();
         showToast(`${user.name || '사용자'}님의 요금제를 ${PLANS[planId].name}으로 변경했습니다.`, 'success');
         renderAdminPage(container, navigateTo);
@@ -791,11 +816,11 @@ async function loadAdminTickets(container) {
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
             <span style="font-size:10px; padding:1px 6px; border-radius:3px; background:${st.bg}; color:${st.color}; font-weight:600;">${st.label}</span>
-            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title || ''}</span>
+            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.title || '')}</span>
           </div>
-          <div style="font-size:10px; color:var(--text-muted);">${d.user_name || ''} (${d.user_email || ''}) · ${date}</div>
+          <div style="font-size:10px; color:var(--text-muted);">${escapeHtml(d.user_name || '')} (${escapeHtml(d.user_email || '')}) · ${date}</div>
         </div>
-        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${d.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
+        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${escapeHtml(d.id)}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
       `;
       area.appendChild(row);
     });
@@ -832,12 +857,12 @@ function showReplyModal(ticketId, data, container) {
       </div>
       <div class="modal-body" style="padding:20px;">
         <div style="margin-bottom:16px; padding:12px; background:var(--bg-secondary); border-radius:8px;">
-          <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${data.title}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${data.userName} (${data.userEmail})</div>
-          <div style="font-size:12px; line-height:1.6; white-space:pre-wrap;">${data.content}</div>
+          <div style="font-size:13px; font-weight:600; margin-bottom:4px;">${escapeHtml(data.title)}</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">${escapeHtml(data.userName)} (${escapeHtml(data.userEmail)})</div>
+          <div style="font-size:12px; line-height:1.6; white-space:pre-wrap;">${escapeHtml(data.content)}</div>
         </div>
         <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:4px;">답변 내용</label>
-        <textarea id="reply-content" class="input" rows="5" style="width:100%; resize:vertical; font-family:inherit;">${data.reply || ''}</textarea>
+        <textarea id="reply-content" class="input" rows="5" style="width:100%; resize:vertical; font-family:inherit;">${escapeHtml(data.reply || '')}</textarea>
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
           <button class="btn btn-ghost" id="reply-cancel">취소</button>
           <button class="btn btn-primary" id="reply-submit">답변 저장</button>
