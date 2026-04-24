@@ -5017,3 +5017,26 @@ html.dark-mode .hub-card:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== 사용자 지정 폰트 확대 기능 ===== */
+html.font-scale-1 .acc-group-header { font-size: 16px !important; }
+html.font-scale-1 .acc-item-btn { font-size: 15.5px !important; }
+html.font-scale-1 .page-title { font-size: 26px !important; }
+html.font-scale-1 .page-desc { font-size: 14.5px !important; }
+html.font-scale-1 .data-table th, html.font-scale-1 .data-table td { font-size: 14.5px !important; }
+html.font-scale-1 input, html.font-scale-1 select, html.font-scale-1 button { font-size: 14.5px !important; }
+html.font-scale-1 .card-title { font-size: 16.5px !important; }
+html.font-scale-1 .hub-card-title { font-size: 17px !important; }
+html.font-scale-1 .hub-card-desc { font-size: 14px !important; }
+html.font-scale-1 body { font-size: 14.5px !important; }
+
+html.font-scale-2 .acc-group-header { font-size: 17px !important; }
+html.font-scale-2 .acc-item-btn { font-size: 16.5px !important; }
+html.font-scale-2 .page-title { font-size: 28px !important; }
+html.font-scale-2 .page-desc { font-size: 15.5px !important; }
+html.font-scale-2 .data-table th, html.font-scale-2 .data-table td { font-size: 15.5px !important; }
+html.font-scale-2 input, html.font-scale-2 select, html.font-scale-2 button { font-size: 15.5px !important; }
+html.font-scale-2 .card-title { font-size: 17.5px !important; }
+html.font-scale-2 .hub-card-title { font-size: 18px !important; }
+html.font-scale-2 .hub-card-desc { font-size: 15px !important; }
+html.font-scale-2 body { font-size: 15.5px !important; }

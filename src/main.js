@@ -641,29 +641,37 @@ document.getElementById('btn-global-search')?.addEventListener('click', () => {
   toggleGlobalSearch();
 });
 
-// 화면/글자 확대 토글 (zoom 사용)
-let currentScale = parseFloat(localStorage.getItem('invex_ui_scale')) || 1;
+// 폰트 크기 확대 토글 (zoom 대신 CSS 클래스 방식)
+let currentScale = parseFloat(localStorage.getItem('invex_font_scale')) || 0;
+
 function applyScale() {
-  document.documentElement.style.zoom = currentScale;
+  document.documentElement.classList.remove('font-scale-1', 'font-scale-2');
+  if (currentScale === 1) {
+    document.documentElement.classList.add('font-scale-1');
+  } else if (currentScale === 2) {
+    document.documentElement.classList.add('font-scale-2');
+  }
+  
   const btn = document.getElementById('btn-font-toggle');
   if (btn) {
-    if (currentScale === 1) btn.textContent = '가';
-    else if (currentScale === 1.05) btn.textContent = '가+';
+    if (currentScale === 0) btn.textContent = '가';
+    else if (currentScale === 1) btn.textContent = '가+';
     else btn.textContent = '가++';
   }
 }
 applyScale(); // 초기 로드 진입 시 바로 적용
 
 document.getElementById('btn-font-toggle')?.addEventListener('click', () => {
-  // 1.0(기본) -> 1.05(조금 큼) -> 1.1(매우 큼) -> 다시 1.0
-  if (currentScale === 1) currentScale = 1.05;
-  else if (currentScale === 1.05) currentScale = 1.1;
-  else currentScale = 1;
+  // 0(기본) -> 1(크게) -> 2(더크게) -> 다시 0
+  if (currentScale === 0) currentScale = 1;
+  else if (currentScale === 1) currentScale = 2;
+  else currentScale = 0;
   
-  localStorage.setItem('invex_ui_scale', currentScale);
+  localStorage.setItem('invex_font_scale', currentScale);
   applyScale();
   
-  showToast(`화면 크기: 기본의 ${Math.round(currentScale * 100)}%`, 'success');
+  const scaleText = currentScale === 0 ? '기본' : (currentScale === 1 ? '크게' : '매우 크게');
+  showToast(`글자 크기: ${scaleText}`, 'success');
 });
 
 // 테마 토글 버튼
