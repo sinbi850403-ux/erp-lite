@@ -4,6 +4,7 @@
  */
 
 import './style.css';
+console.log('INVEX initializing...');
 import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-monitor.js';
 import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './auth.js';
 import { initTheme, toggleTheme } from './theme.js';
