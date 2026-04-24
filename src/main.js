@@ -641,7 +641,32 @@ document.getElementById('btn-global-search')?.addEventListener('click', () => {
   toggleGlobalSearch();
 });
 
-// ?ㅽ겕紐⑤뱶 ?좉? 踰꾪듉
+// 화면/글자 확대 토글 (zoom 사용)
+let currentScale = parseFloat(localStorage.getItem('invex_ui_scale')) || 1;
+function applyScale() {
+  document.documentElement.style.zoom = currentScale;
+  const btn = document.getElementById('btn-font-toggle');
+  if (btn) {
+    if (currentScale === 1) btn.textContent = '가';
+    else if (currentScale === 1.05) btn.textContent = '가+';
+    else btn.textContent = '가++';
+  }
+}
+applyScale(); // 초기 로드 진입 시 바로 적용
+
+document.getElementById('btn-font-toggle')?.addEventListener('click', () => {
+  // 1.0(기본) -> 1.05(조금 큼) -> 1.1(매우 큼) -> 다시 1.0
+  if (currentScale === 1) currentScale = 1.05;
+  else if (currentScale === 1.05) currentScale = 1.1;
+  else currentScale = 1;
+  
+  localStorage.setItem('invex_ui_scale', currentScale);
+  applyScale();
+  
+  showToast(`화면 크기: 기본의 ${Math.round(currentScale * 100)}%`, 'success');
+});
+
+// 테마 토글 버튼
 document.getElementById('btn-theme-toggle')?.addEventListener('click', () => {
   toggleTheme();
   const isDark = document.documentElement.classList.contains('dark-mode');
