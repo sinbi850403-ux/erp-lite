@@ -10,6 +10,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase-client.js';
+import { getCurrentUser } from './auth.js';
 
 const DB_TIMEOUT_MS = 15_000;
 
@@ -39,9 +40,11 @@ function handleError(error, context) {
  * 현재 로그인한 사용자 ID를 안전하게 가져오기
  */
 async function getUserId() {
-  const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
-  if (!user) throw new Error('로그인이 필요합니다.');
-  return user.id;
+  const user = getCurrentUser();
+  if (!user || (!user.uid && !user.id)) {
+    throw new Error('로그인이 필요합니다.');
+  }
+  return user.uid || user.id;
 }
 
 // ============================================================
