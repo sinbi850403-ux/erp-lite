@@ -809,22 +809,6 @@ export function renderInoutPage(container, navigateTo) {
     openTxModal(container, navigateTo, 'out', items);
   });
 
-  // 헤더 버튼 바인딩
-  container.querySelector('#btn-in')?.addEventListener('click', () => {
-    if (!canCreate) { showToast('입고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
-    openTxModal(container, navigateTo, 'in', items);
-  });
-  container.querySelector('#btn-out')?.addEventListener('click', () => {
-    if (!canCreate) { showToast('출고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
-    openTxModal(container, navigateTo, 'out', items);
-  });
-  container.querySelector('#btn-bulk-upload')?.addEventListener('click', () => {
-    navigateTo('bulk');
-  });
-  container.querySelector('#btn-export-tx')?.addEventListener('click', () => {
-    downloadExcel(container.querySelector('#tx-body'), '입출고이력.xlsx', { includeHeaders: true });
-  });
-
   container.querySelectorAll('[data-nav]').forEach(button => {
     button.addEventListener('click', () => navigateTo(button.dataset.nav));
   });
@@ -940,16 +924,18 @@ export function renderInoutPage(container, navigateTo) {
     showToast('필터와 정렬을 초기화했습니다.', 'info');
   });
 
-  // 필터/정렬 이벤트
-  container.querySelector('#btn-in').addEventListener('click', () => {
+  // 하단 헤더 액션
+  container.querySelector('#btn-in')?.addEventListener('click', () => {
+    if (!canCreate) { showToast('입고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'in', items);
   });
-  container.querySelector('#btn-out').addEventListener('click', () => {
+  container.querySelector('#btn-out')?.addEventListener('click', () => {
+    if (!canCreate) { showToast('출고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'out', items);
   });
 
-  // ?대젰 ?대낫?닿린
-  container.querySelector('#btn-export-tx').addEventListener('click', () => {
+  // 이력 내보내기
+  container.querySelector('#btn-export-tx')?.addEventListener('click', () => {
     if (transactions.length === 0) {
       showToast('내보낼 기록이 없습니다.', 'warning');
       return;
@@ -979,9 +965,10 @@ export function renderInoutPage(container, navigateTo) {
     showToast('이력을 엑셀로 내보냈습니다.', 'success');
   });
 
-  // ?묒? ?쇨큵 ?깅줉
-  container.querySelector('#btn-bulk-upload').addEventListener('click', () => {
-    openBulkUploadModal(container, navigateTo, items);
+  // 엑셀 일괄 등록
+  container.querySelector('#btn-bulk-upload')?.addEventListener('click', () => {
+    // 사용자가 '엑셀로 대량업로드 할 수 있게' 라고 요청했으므로 bulk 페이지로 직접 이동하도록 연결
+    navigateTo('bulk');
   });
 
   //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
