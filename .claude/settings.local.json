@@ -36,7 +36,13 @@
       "Bash(git stash *)",
       "Bash(git checkout *)",
       "Bash(git commit *)",
-      "Bash(grep -v \"//.*hub-data\")"
+      "Bash(grep -v \"//.*hub-data\")",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "Bash(python -c \"import sys, json; [print\\(d['name']\\) for d in json.load\\(sys.stdin\\)]\")",
+      "Bash(mktemp -d)",
+      "Bash(mktemp -d -t harness100)",
+      "Bash(git clone *)"
     ]
   }
 }
