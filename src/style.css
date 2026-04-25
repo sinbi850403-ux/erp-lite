@@ -4545,21 +4545,22 @@ select.is-success {
 .snav-direct {
   display: block;
   width: 100%;
-  padding: 8px 20px;
+  padding: 9px 18px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.75);
-  font-size: 13px;
+  color: rgba(255,255,255,0.88);
+  font-size: 13.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: color 0.15s;
   font-family: var(--font-family);
+  letter-spacing: -0.1px;
 }
 .snav-direct:hover { color: #fff; }
 .snav-direct.active {
   color: #fff;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 /* 섹션 래퍼 */
@@ -4568,19 +4569,19 @@ select.is-success {
   flex-direction: column;
 }
 
-/* 섹션 헤더 (클릭하면 접기/펼치기) */
+/* 섹션 헤더 — 그룹 제목, 클릭하면 접기/펼치기 */
 .snav-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
-  padding: 9px 16px 5px;
+  padding: 12px 18px 5px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.55);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
   text-align: left;
   cursor: pointer;
@@ -4588,29 +4589,28 @@ select.is-success {
   font-family: var(--font-family);
   user-select: none;
 }
-.snav-header:hover { color: rgba(255,255,255,0.7); }
+.snav-header:hover { color: rgba(255,255,255,0.85); }
 
-/* 토글 기호 [-]/[+] */
+/* 토글 기호 − / + */
 .snav-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-  font-weight: 400;
-  color: rgba(255,255,255,0.35);
+  width: 13px;
+  font-size: 13px;
+  font-weight: 300;
+  color: rgba(255,255,255,0.4);
   flex-shrink: 0;
   line-height: 1;
   transition: color 0.15s;
 }
-.snav-header:hover .snav-toggle { color: rgba(255,255,255,0.6); }
+.snav-header:hover .snav-toggle { color: rgba(255,255,255,0.7); }
 
 /* 섹션 바디 — open일 때만 표시 */
 .snav-body {
   display: none;
   flex-direction: column;
-  padding: 0 0 6px;
+  padding: 2px 0 8px;
 }
 .snav-section.open .snav-body { display: flex; }
 
@@ -4618,42 +4618,41 @@ select.is-success {
 .snav-item {
   display: block;
   width: 100%;
-  padding: 6px 20px 6px 28px;
+  padding: 7px 18px 7px 30px;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.62);
+  color: rgba(255,255,255,0.78);
   font-size: 13px;
   font-weight: 400;
   text-align: left;
   cursor: pointer;
   transition: color 0.12s, background 0.12s;
   font-family: var(--font-family);
-  line-height: 1.4;
+  line-height: 1.35;
+  letter-spacing: -0.1px;
 }
 .snav-item:hover {
-  color: rgba(255,255,255,0.92);
-  background: rgba(255,255,255,0.04);
+  color: #fff;
+  background: rgba(255,255,255,0.06);
 }
 .snav-item.active {
   color: #fff;
   font-weight: 600;
-  background: rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.1);
 }
 
-/* 라이트 모드 대응 */
+/* 라이트 모드 */
 html:not(.dark-mode) .snav-direct,
 html:not(.dark-mode) .snav-item {
-  color: rgba(30,40,60,0.65);
+  color: rgba(15,25,50,0.78);
 }
 html:not(.dark-mode) .snav-direct:hover,
-html:not(.dark-mode) .snav-item:hover { color: rgba(10,20,40,0.9); }
-html:not(.dark-mode) .snav-direct.active,
-html:not(.dark-mode) .snav-item.active { color: #1a3a6b; font-weight: 600; }
-html:not(.dark-mode) .snav-header { color: rgba(30,40,60,0.4); }
-html:not(.dark-mode) .snav-header:hover { color: rgba(30,40,60,0.65); }
-html:not(.dark-mode) .snav-toggle { color: rgba(30,40,60,0.3); }
-html:not(.dark-mode) .snav-item:hover { background: rgba(0,0,0,0.04); }
-html:not(.dark-mode) .snav-item.active { background: rgba(0,60,160,0.06); }
+html:not(.dark-mode) .snav-item:hover { color: rgba(5,10,30,1); background: rgba(0,0,0,0.05); }
+html:not(.dark-mode) .snav-direct.active { color: #0f2d6b; font-weight: 700; }
+html:not(.dark-mode) .snav-item.active { color: #0f2d6b; font-weight: 600; background: rgba(0,50,180,0.08); }
+html:not(.dark-mode) .snav-header { color: rgba(15,25,50,0.45); }
+html:not(.dark-mode) .snav-header:hover { color: rgba(15,25,50,0.75); }
+html:not(.dark-mode) .snav-toggle { color: rgba(15,25,50,0.35); }
 
 /* ─────────────────────────────────────────────────────── */
 
