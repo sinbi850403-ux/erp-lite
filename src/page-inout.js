@@ -13,7 +13,7 @@ import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
 
 const PAGE_SIZE = 15;
-const BULK_INOUT_TEMPLATE_HEADERS = ['자산', '입고일자', '상품코드', '거래처', '품명', '규격', '단위', '입고수량', '단가', '공급가액', '부가세', '합계금액'];
+const BULK_INOUT_TEMPLATE_HEADERS = ['자산', '입고일자', '거래처', '상품코드', '품명', '규격', '단위', '입고수량', '단가', '공급가액', '부가세', '합계금액'];
 
 function safeAttr(value) {
   return String(value ?? '')
@@ -340,14 +340,14 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
 
     let cols = '';
     if (isInMode) {
-      // 입고관리: 자산|입고일자|상품코드|거래처|품명|규격|단위|입고수량|단가|공급가액|부가세|합계금액
+      // 입고관리: 자산|입고일자|거래처|상품코드|품명|규격|단위|입고수량|단가|공급가액|부가세|합계금액
       cols = `
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
         <th class="col-num">#</th>
         <th>자산</th>
         ${sortableTh('date', '입고일자')}
-        <th>상품코드</th>
         ${sortableTh('vendor', '거래처')}
+        <th>상품코드</th>
         ${sortableTh('itemName', '품명')}
         <th>규격</th>
         <th>단위</th>
@@ -588,8 +588,8 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
             <td class="col-num"></td>
             <td style="font-size:12px;">${escapeHtml(tx.category || it.category || '')}</td>
             <td>${formatDate(tx.date)}</td>
-            <td style="font-size:12px; color:var(--text-muted);">${escapeHtml(tx.itemCode || it.itemCode || '-')}</td>
             <td style="font-size:12px;">${tx.vendor ? escapeHtml(tx.vendor) : '<span style="color:var(--text-muted)">-</span>'}</td>
+            <td style="font-size:12px; color:var(--text-muted);">${escapeHtml(tx.itemCode || it.itemCode || '-')}</td>
             <td style="${indent}"><strong>${escapeHtml(tx.itemName || '-')}</strong></td>
             <td style="font-size:12px; color:var(--text-muted);">${escapeHtml(tx.spec || it.spec || '')}</td>
             <td style="font-size:12px;">${escapeHtml(tx.unit || it.unit || '')}</td>
@@ -1052,8 +1052,8 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         return {
           '자산':     it.category || '',
           '입고일자': tx.date || '',
-          '상품코드': tx.itemCode || it.itemCode || '',
           '거래처':   tx.vendor || '',
+          '상품코드': tx.itemCode || it.itemCode || '',
           '품명':     tx.itemName || '',
           '규격':     it.spec || '',
           '단위':     it.unit || '',

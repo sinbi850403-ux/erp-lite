@@ -1358,11 +1358,13 @@ html.dark-mode .acc-item-btn.active {
   height: 100%;
   cursor: col-resize;
   z-index: 2;
+  background: var(--border);
+  opacity: 0.6;
 }
 .col-resize-handle:hover,
 .col-resize-handle:active {
   background: var(--accent);
-  opacity: 0.4;
+  opacity: 0.8;
 }
 
 .data-table td {
