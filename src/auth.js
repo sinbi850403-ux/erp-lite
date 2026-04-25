@@ -138,7 +138,7 @@ async function loadProfile(user) {
   try {
     const { data, error } = await withTimeout(
       supabase.from('profiles').select('*').eq('id', user.uid).single(),
-      8000,
+      15000,
       'load-profile',
     );
 
@@ -158,10 +158,27 @@ async function loadProfile(user) {
         created_at: new Date().toISOString(),
       };
 
-      const { error: insertError } = await supabase.from('profiles').insert(newProfile);
+      let { error: insertError } = await supabase.from('profiles').insert(newProfile);
+      if (insertError) {
+        // schema cache 오류 발생 시 (role, plan 컬럼 미존재) 기본 정보만 인서트 시도
+        if (insertError.message && insertError.message.includes('schema cache')) {
+          const basicProfile = {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName,
+            photo_url: user.photoURL,
+            created_at: new Date().toISOString(),
+          };
+          ({ error: insertError } = await supabase.from('profiles').insert(basicProfile));
+        } else {
+          // 1회 재시도 (네트워크 순간 실패 대비)
+          await new Promise(r => setTimeout(r, 1500));
+          ({ error: insertError } = await supabase.from('profiles').insert(newProfile));
+        }
+      }
       if (insertError) {
         console.warn('[Auth] profile bootstrap failed:', insertError.message);
-        return fallback;
+        // 에러를 던지지 않고 기본 프로필로 로컬 앱 작동은 보장
       }
 
       return { ...fallback, createdAt: newProfile.created_at };
@@ -796,6 +813,8 @@ export const PAGE_MIN_ROLE = {
   attendance:     'staff',
   payroll:        'admin',
   leaves:         'staff',
+  severance:      'manager',
+  'yearend-settlement': 'manager',
 };
 
 export const ACTION_MIN_ROLE = {

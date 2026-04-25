@@ -4,14 +4,19 @@
  */
 
 import './style.css';
+console.log('INVEX initializing...');
 import { initErrorMonitor, setMonitorUser, clearMonitorUser } from './error-monitor.js';
-import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword } from './auth.js';
-import { initTheme } from './theme.js';
-import { injectGetCurrentUser, injectGetUserProfile } from './plan.js';
-import { getNotificationCount } from './notifications.js';
+import { initAuth, getCurrentUser, getUserProfileData, loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, logout } from './auth.js';
+import { initTheme, toggleTheme } from './theme.js';
+import { injectGetCurrentUser, injectGetUserProfile, getPageBadge, getCurrentPlan, PLANS, setPlan } from './plan.js';
+import { getNotificationCount, renderNotificationPanel } from './notifications.js';
 import { showToast } from './toast.js';
 import { isAdmin } from './admin-auth.js';
 import { navigateTo, injectRouterCallbacks, PAGE_LOADERS, LAST_PAGE_KEY, renderQuickAccess } from './router.js';
+import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
+import { restoreState } from './store.js';
+import { checkAndShowOnboarding } from './onboarding.js';
+import { initSidebarCustomize } from './sidebar-customize.js';
 // framework.js: html, on, createPage 유틸 (page-*.js에서 사용)
 // 여기서는 직접 사용하지 않으므로 import 불필요
 
@@ -195,6 +200,18 @@ function updateNotifBadge() {
 window.addEventListener('notifications-updated', () => {
   updateNotifBadge();
   syncExternalNotifications();
+});
+
+window.addEventListener('invex:sync-failed', () => {
+  showToast('일부 데이터가 클라우드에 저장되지 않았습니다. 잠시 후 재시도합니다.', 'warning');
+});
+
+window.addEventListener('invex:idb-failed', () => {
+  showToast('로컬 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.', 'warning');
+});
+
+window.addEventListener('invex:profile-load-failed', () => {
+  showToast('프로필 로드에 실패했습니다. 페이지를 새로고침하세요.', 'error');
 });
 
 const CARD_STATE_KEY = 'invex_card_state_v1';
@@ -624,7 +641,40 @@ document.getElementById('btn-global-search')?.addEventListener('click', () => {
   toggleGlobalSearch();
 });
 
-// ?ㅽ겕紐⑤뱶 ?좉? 踰꾪듉
+// 폰트 크기 확대 토글 (zoom 대신 CSS 클래스 방식)
+let currentScale = parseFloat(localStorage.getItem('invex_font_scale')) || 0;
+
+function applyScale() {
+  document.documentElement.classList.remove('font-scale-1', 'font-scale-2');
+  if (currentScale === 1) {
+    document.documentElement.classList.add('font-scale-1');
+  } else if (currentScale === 2) {
+    document.documentElement.classList.add('font-scale-2');
+  }
+  
+  const btn = document.getElementById('btn-font-toggle');
+  if (btn) {
+    if (currentScale === 0) btn.textContent = '가';
+    else if (currentScale === 1) btn.textContent = '가+';
+    else btn.textContent = '가++';
+  }
+}
+applyScale(); // 초기 로드 진입 시 바로 적용
+
+document.getElementById('btn-font-toggle')?.addEventListener('click', () => {
+  // 0(기본) -> 1(크게) -> 2(더크게) -> 다시 0
+  if (currentScale === 0) currentScale = 1;
+  else if (currentScale === 1) currentScale = 2;
+  else currentScale = 0;
+  
+  localStorage.setItem('invex_font_scale', currentScale);
+  applyScale();
+  
+  const scaleText = currentScale === 0 ? '기본' : (currentScale === 1 ? '크게' : '매우 크게');
+  showToast(`글자 크기: ${scaleText}`, 'success');
+});
+
+// 테마 토글 버튼
 document.getElementById('btn-theme-toggle')?.addEventListener('click', () => {
   toggleTheme();
   const isDark = document.documentElement.classList.contains('dark-mode');
@@ -687,19 +737,34 @@ window.invexNav = navigateTo;
 // ??珥덇린??(濡쒓렇???꾨즺 ???몄텧)
 // ??遺꾨━? ???몄쬆 ?뺤씤 ?꾩뿉 IndexedDB 蹂듭썝?섎㈃ 鍮??곗씠?곌? 濡쒕뱶?????덉쓬
 async function initAppAfterAuth() {
+  // Supabase health check
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await Promise.race([
+        supabase.from('profiles').select('id').limit(1),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('health check timeout')), 8000)),
+      ]);
+      if (error) throw error;
+    } catch (e) {
+      console.warn('[Health] Supabase 연결 불안정:', e.message);
+      showToast('서버 연결이 불안정합니다. 일부 기능이 제한될 수 있습니다.', 'warning');
+    }
+  }
+
   await restoreState();
   const lastPage = localStorage.getItem(LAST_PAGE_KEY);
   const startPage = (lastPage && PAGE_LOADERS[lastPage]) ? lastPage : 'home';
   updateSidebarBadges();
   renderQuickAccess();
   updatePlanDisplay();
+  initSidebarCustomize();
   await navigateTo(startPage);
   // 泥?濡쒓렇???ъ슜?먯뿉寃??⑤낫??留덈쾿???쒖떆
   checkAndShowOnboarding(navigateTo);
 }
 
 // Supabase 미설정(로컬 개발) 시에는 게이트 자동 제거
-import { isSupabaseConfigured } from './supabase-client.js';
+import { isSupabaseConfigured, supabase } from './supabase-client.js';
 if (!isSupabaseConfigured) {
   const gate = document.getElementById('auth-gate');
   if (gate) gate.style.display = 'none';

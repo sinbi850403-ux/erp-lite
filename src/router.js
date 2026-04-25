@@ -57,6 +57,8 @@ export const PAGE_LOADERS = {
   mapping:         () => import('./page-mapping.js').then(m => m.renderMappingPage),
   inventory:       () => import('./page-inventory.js').then(m => m.renderInventoryPage),
   inout:           () => import('./page-inout.js').then(m => m.renderInoutPage),
+  in:              () => import('./page-inout.js').then(m => m.renderInoutPage),
+  out:             () => import('./page-inout.js').then(m => m.renderInoutPage),
   summary:         () => import('./page-summary.js').then(m => m.renderSummaryPage),
   scanner:         () => import('./page-scanner.js').then(m => m.renderScannerPage),
   documents:       () => import('./page-documents.js').then(m => m.renderDocumentsPage),
@@ -94,6 +96,8 @@ export const PAGE_LOADERS = {
   attendance:      () => import('./page-attendance.js').then(m => m.renderAttendancePage),
   payroll:         () => import('./page-payroll.js').then(m => m.renderPayrollPage),
   leaves:          () => import('./page-leaves.js').then(m => m.renderLeavesPage),
+  severance:       () => import('./page-severance.js').then(m => m.renderSeverancePage),
+  'yearend-settlement': () => import('./page-yearend-settlement.js').then(m => m.renderYearendSettlementPage),
   // 동기 렌더러 (이미 import된 모듈)
   auditlog:        async () => renderAuditLogPage,
   'hub-inventory': async () => renderHubInventory,
@@ -135,7 +139,7 @@ export function renderQuickAccess() {
 
   nav.innerHTML = pages.map(id => `
     <button class="nav-btn nav-btn-quick" data-quick-page="${id}" title="${getPageLabel(id)}">
-      <span class="nav-icon">🕘</span> ${getPageLabel(id)}
+      <span class="nav-icon"></span> ${getPageLabel(id)}
     </button>
   `).join('');
 
@@ -153,10 +157,10 @@ export function updateBreadcrumb(pageName) {
   const parentHub = HUB_MAP[pageName];
 
   if (pageName === 'home') {
-    el.innerHTML = `<span class="breadcrumb-current">🏠 대시보드</span>`;
+    el.innerHTML = `<span class="breadcrumb-current">대시보드</span>`;
   } else if (parentHub) {
     el.innerHTML = `
-      <span class="breadcrumb-item" data-bc-nav="home">🏠</span>
+      <span class="breadcrumb-item" data-bc-nav="home">대시보드</span>
       <span class="breadcrumb-sep">›</span>
       <span class="breadcrumb-item" data-bc-nav="${parentHub}">${PAGE_LABELS[parentHub] || parentHub}</span>
       <span class="breadcrumb-sep">›</span>
@@ -164,7 +168,7 @@ export function updateBreadcrumb(pageName) {
     `;
   } else {
     el.innerHTML = `
-      <span class="breadcrumb-item" data-bc-nav="home">🏠</span>
+      <span class="breadcrumb-item" data-bc-nav="home">대시보드</span>
       <span class="breadcrumb-sep">›</span>
       <span class="breadcrumb-current">${label}</span>
     `;
@@ -261,6 +265,7 @@ export async function navigateTo(pageName) {
       throw new Error(`렌더러가 함수가 아닙니다: ${pageName}`);
     }
 
+    main.dispatchEvent(new CustomEvent('invex:page-unload', { bubbles: false }));
     main.innerHTML = '';
     renderPage(main, navigateTo);
 

@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>INVEX | 스마트 재고·원가 관리</title>
-  <meta name="description" content="INVEX - 중소기업을 위한 스마트 재고·원가·입출고 관리 플랫폼" />
+  <title>INVEX | Smart Inventory Management</title>
+  <meta name="description" content="INVEX - Smart Inventory, Cost and ERP platform for SMEs" />
   <meta name="theme-color" content="#2563eb" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/auth.css" />
-<link rel="stylesheet" href="/src/landing.css" />
+  <link rel="stylesheet" href="/auth.css" />
+  <link rel="stylesheet" href="/src/landing.css" />
 </head>
 <body>
   <!-- 🎯 랜딩 페이지: 비로그인 상태에서 첫 화면 -->
@@ -324,117 +324,131 @@
         </div>
       </div>
 
-      <!-- 사이드바 상단 도구 바 — 검색/알림/테마를 여기서 바로 접근 가능하게 -->
+      <!-- 사이드바 상단 도구 바 -->
       <div class="sidebar-tools">
-        <button class="btn-tool" id="btn-global-search" title="검색 (Ctrl+K)">🔍</button>
+        <button class="btn-tool" id="btn-global-search" title="검색 (Ctrl+K)">검색</button>
         <button class="btn-tool" id="btn-notifications" title="알림">
-          🔔
+          알림
           <span class="notif-dot" id="notif-dot" style="display:none;"></span>
         </button>
-        <button class="btn-tool" id="btn-theme-toggle" title="테마 전환">🌙</button>
+        <button class="btn-tool" id="btn-font-toggle" title="화면/글자 크기">가±</button>
+        <button class="btn-tool" id="btn-theme-toggle" title="테마 전환">테마</button>
       </div>
 
       <div class="sidebar-divider"></div>
 
-      <!-- 홈 -->
-      <nav class="nav-rich-list">
-        <button class="nav-btn nav-btn-rich active" data-page="home">
-          <span class="nav-icon">🏠</span>
-          <span class="nav-copy">
-            <span class="nav-main">대시보드</span>
-          </span>
-        </button>
+      <!-- 대시보드 (항상 표시) -->
+      <nav class="acc-nav-single">
+        <button class="acc-item-btn active" data-page="home" onclick="(window.invexNav||function(){})('home')">대시보드</button>
       </nav>
 
       <div class="sidebar-divider"></div>
 
-      <!-- 빠른 이동 (최근 방문) -->
-      <div class="nav-section quick-access-section" id="quick-access-section" style="display:none;">
-        <div class="nav-section-title">빠른 이동</div>
-        <nav id="quick-access-nav"></nav>
-      </div>
+      <!-- ===== 아코디언 네비게이션 ===== -->
 
-      <div class="sidebar-divider" id="quick-access-divider" style="display:none;"></div>
+      <!-- 데이터 가져오기 -->
+      <details class="acc-group" open>
+        <summary class="acc-group-header">데이터 가져오기</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="upload" onclick="(window.invexNav||function(){})('upload')">파일 업로드</button>
+          <button class="acc-item-btn" data-page="mapping" onclick="(window.invexNav||function(){})('mapping')">데이터 확인</button>
+        </nav>
+      </details>
 
-      <!-- ===== ERP 네비게이션 ===== -->
+      <!-- 재고 관리 -->
+      <details class="acc-group" open>
+        <summary class="acc-group-header">재고관리</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="in" onclick="(window.invexNav||function(){})('in')">입고관리</button>
+          <button class="acc-item-btn" data-page="out" onclick="(window.invexNav||function(){})('out')">출고관리</button>
+          <button class="acc-item-btn" data-page="stocktake" onclick="(window.invexNav||function(){})('stocktake')">수불관리</button>
+          <button class="acc-item-btn" data-page="inventory" onclick="(window.invexNav||function(){})('inventory')">재고현황</button>
+        </nav>
+      </details>
 
-      <!-- 업무 -->
-      <div class="nav-section"><div class="nav-section-title">업무</div></div>
-      <nav class="nav-rich-list">
-        <button class="nav-btn nav-btn-rich" data-page="hub-data" onclick="(window.invexNav||function(){})('hub-data')">
-          <span class="nav-icon">📂</span>
-          <span class="nav-copy"><span class="nav-main">데이터 가져오기</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="hub-inventory" onclick="(window.invexNav||function(){})('hub-inventory')">
-          <span class="nav-icon">📦</span>
-          <span class="nav-copy"><span class="nav-main">재고 관리</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="hub-warehouse" onclick="(window.invexNav||function(){})('hub-warehouse')">
-          <span class="nav-icon">🏢</span>
-          <span class="nav-copy"><span class="nav-main">창고·거래처</span></span>
-        </button>
-      </nav>
+      <!-- 창고·거래처 -->
+      <details class="acc-group">
+        <summary class="acc-group-header">창고·거래처</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="warehouses" onclick="(window.invexNav||function(){})('warehouses')">다중 창고 관리</button>
+          <button class="acc-item-btn" data-page="transfer" onclick="(window.invexNav||function(){})('transfer')">창고 이동</button>
+          <button class="acc-item-btn" data-page="vendors" onclick="(window.invexNav||function(){})('vendors')">거래처 관리</button>
+        </nav>
+      </details>
 
-      <div class="sidebar-divider"></div>
+      <!-- 구매·판매 -->
+      <details class="acc-group">
+        <summary class="acc-group-header">구매·판매</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="auto-order" onclick="(window.invexNav||function(){})('auto-order')">자동 발주 추천</button>
+          <button class="acc-item-btn" data-page="orders" onclick="(window.invexNav||function(){})('orders')">발주 관리</button>
+          <button class="acc-item-btn" data-page="sales" onclick="(window.invexNav||function(){})('sales')">수주 관리</button>
+          <button class="acc-item-btn" data-page="forecast" onclick="(window.invexNav||function(){})('forecast')">AI 수요 예측</button>
+        </nav>
+      </details>
 
-      <!-- 분석 -->
-      <div class="nav-section"><div class="nav-section-title">분석</div></div>
-      <nav class="nav-rich-list">
-        <button class="nav-btn nav-btn-rich" data-page="hub-order" onclick="(window.invexNav||function(){})('hub-order')">
-          <span class="nav-icon">🤖</span>
-          <span class="nav-copy"><span class="nav-main">발주·예측</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="hub-report" onclick="(window.invexNav||function(){})('hub-report')">
-          <span class="nav-icon">📊</span>
-          <span class="nav-copy"><span class="nav-main">보고·분석</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="hub-documents" onclick="(window.invexNav||function(){})('hub-documents')">
-          <span class="nav-icon">📑</span>
-          <span class="nav-copy"><span class="nav-main">문서·서류</span></span>
-        </button>
-      </nav>
+      <!-- 보고·분석 -->
+      <details class="acc-group">
+        <summary class="acc-group-header">보고·분석</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="summary" onclick="(window.invexNav||function(){})('summary')">요약 보고</button>
+          <button class="acc-item-btn" data-page="weekly-report" onclick="(window.invexNav||function(){})('weekly-report')">주간 보고서</button>
+          <button class="acc-item-btn" data-page="profit" onclick="(window.invexNav||function(){})('profit')">손익 분석</button>
+          <button class="acc-item-btn" data-page="accounts" onclick="(window.invexNav||function(){})('accounts')">미수금/미지급 정산</button>
+          <button class="acc-item-btn" data-page="costing" onclick="(window.invexNav||function(){})('costing')">원가 분석</button>
+          <button class="acc-item-btn" data-page="dashboard" onclick="(window.invexNav||function(){})('dashboard')">고급 분석</button>
+        </nav>
+      </details>
 
-      <div class="sidebar-divider"></div>
+      <!-- 문서·서류 -->
+      <details class="acc-group">
+        <summary class="acc-group-header">문서·서류</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="tax-reports" onclick="(window.invexNav||function(){})('tax-reports')">세무/회계 서류</button>
+          <button class="acc-item-btn" data-page="documents" onclick="(window.invexNav||function(){})('documents')">문서 생성</button>
+          <button class="acc-item-btn" data-page="ledger" onclick="(window.invexNav||function(){})('ledger')">수불부</button>
+          <button class="acc-item-btn" data-page="auditlog" onclick="(window.invexNav||function(){})('auditlog')">감사 추적</button>
+        </nav>
+      </details>
 
       <!-- 인사·급여 -->
-      <div class="nav-section"><div class="nav-section-title">인사·급여</div></div>
-      <nav class="nav-rich-list">
-        <button class="nav-btn nav-btn-rich" data-page="hub-hr" onclick="(window.invexNav||function(){})('hub-hr')">
-          <span class="nav-icon">👥</span>
-          <span class="nav-copy"><span class="nav-main">인사·급여</span></span>
-        </button>
-      </nav>
-
-      <div class="sidebar-divider"></div>
+      <details class="acc-group">
+        <summary class="acc-group-header">인사·급여</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="hr-dashboard" onclick="(window.invexNav||function(){})('hr-dashboard')">HR 대시보드</button>
+          <button class="acc-item-btn" data-page="employees" onclick="(window.invexNav||function(){})('employees')">직원 관리</button>
+          <button class="acc-item-btn" data-page="attendance" onclick="(window.invexNav||function(){})('attendance')">근태 관리</button>
+          <button class="acc-item-btn" data-page="payroll" onclick="(window.invexNav||function(){})('payroll')">급여 계산</button>
+          <button class="acc-item-btn" data-page="leaves" onclick="(window.invexNav||function(){})('leaves')">휴가·연차 관리</button>
+          <button class="acc-item-btn" data-page="severance" onclick="(window.invexNav||function(){})('severance')">퇴직금 계산</button>
+          <button class="acc-item-btn" data-page="yearend-settlement" onclick="(window.invexNav||function(){})('yearend-settlement')">연말정산 보조</button>
+        </nav>
+      </details>
 
       <!-- 설정·지원 -->
-      <div class="nav-section"><div class="nav-section-title">설정·지원</div></div>
-      <nav class="nav-rich-list">
-        <button class="nav-btn nav-btn-rich" data-page="hub-settings" onclick="(window.invexNav||function(){})('hub-settings')">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-copy"><span class="nav-main">설정</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="hub-support" onclick="(window.invexNav||function(){})('hub-support')">
-          <span class="nav-icon">💬</span>
-          <span class="nav-copy"><span class="nav-main">지원</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="admin" style="display:none;">
-          <span class="nav-icon">👑</span>
-          <span class="nav-copy"><span class="nav-main">관리자</span></span>
-        </button>
-        <button class="nav-btn nav-btn-rich" data-page="pos" style="display:none;">
-          <span class="nav-icon">🏪</span>
-          <span class="nav-copy"><span class="nav-main">POS 매출분석</span></span>
-        </button>
-      </nav>
-
+      <details class="acc-group">
+        <summary class="acc-group-header">설정·지원</summary>
+        <nav class="acc-group-body">
+          <button class="acc-item-btn" data-page="settings" onclick="(window.invexNav||function(){})('settings')">기본 설정</button>
+          <button class="acc-item-btn" data-page="team" onclick="(window.invexNav||function(){})('team')">팀 관리</button>
+          <button class="acc-item-btn" data-page="backup" onclick="(window.invexNav||function(){})('backup')">백업/복원</button>
+          <button class="acc-item-btn" data-page="roles" onclick="(window.invexNav||function(){})('roles')">권한 관리</button>
+          <button class="acc-item-btn" data-page="billing" onclick="(window.invexNav||function(){})('billing')">구독 관리</button>
+          <button class="acc-item-btn" data-page="mypage" onclick="(window.invexNav||function(){})('mypage')">마이페이지</button>
+          <button class="acc-item-btn" data-page="guide" onclick="(window.invexNav||function(){})('guide')">사용 가이드</button>
+          <button class="acc-item-btn" data-page="support" onclick="(window.invexNav||function(){})('support')">고객 문의</button>
+          <button class="acc-item-btn" data-page="referral" onclick="(window.invexNav||function(){})('referral')">친구 초대</button>
+          <button class="acc-item-btn" data-page="admin" style="display:none;" onclick="(window.invexNav||function(){})('admin')">관리자</button>
+          <button class="acc-item-btn" data-page="pos" style="display:none;" onclick="(window.invexNav||function(){})('pos')">POS 매출분석</button>
+        </nav>
+      </details>
 
       <div class="sidebar-footer">
         <!-- 사용자 로그인 영역 -->
         <div id="user-info-area"></div>
         <!-- 현재 요금제 표시 -->
         <div class="sidebar-plan-badge" id="plan-display" title="요금제 변경">
-          <span class="plan-label" id="plan-name">🆓 Free</span>
+          <span class="plan-label" id="plan-name">Free</span>
         </div>
         INVEX v3.0<br/>
         © 2026
@@ -446,7 +460,7 @@
     <header class="top-header" id="top-header">
       <div class="top-header-left">
         <nav class="breadcrumb" id="breadcrumb" aria-label="현재 위치">
-          <span class="breadcrumb-current">🏠 대시보드</span>
+          <span class="breadcrumb-current">대시보드</span>
         </nav>
       </div>
       <div class="top-header-right">

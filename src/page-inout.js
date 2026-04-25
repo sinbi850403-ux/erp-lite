@@ -11,6 +11,7 @@ import { escapeHtml, renderGuidedPanel, renderInsightHero, renderQuickFilterRow 
 import { canAction } from './auth.js';
 import { handlePageError } from './error-monitor.js';
 import { showFieldError, clearAllFieldErrors, setSavingState } from './ux-toolkit.js';
+import { currentPage } from './router.js';
 
 const PAGE_SIZE = 15;
 
@@ -56,26 +57,28 @@ export function renderInoutPage(container, navigateTo) {
   const todayTxOut = countToday(transactions, 'out');
   const vendorMissingCount = transactions.filter(tx => !String(tx.vendor || '').trim()).length;
   const quickTxFilters = [
-    { value: 'all', label: '전체 보기' },
+    { value: currentPage === 'in' ? 'in' : (currentPage === 'out' ? 'out' : 'all'), label: '전체 보기' },
     { value: 'today', label: '오늘 기록' },
-    { value: 'in', label: '입고만' },
-    { value: 'out', label: '출고만' },
+    ...(currentPage !== 'out' && currentPage !== 'in' ? [
+      { value: 'in', label: '입고만' },
+      { value: 'out', label: '출고만' }
+    ] : []),
     { value: 'missingVendor', label: '거래처 미입력' },
     { value: 'recent3', label: '최근 3일' },
   ];
   const inoutHighlights = [
-    {
+    ...(currentPage !== 'out' ? [{
       label: '오늘 입고 건수',
       value: `${todayTxIn}건`,
       note: '오늘 입력된 입고 기록 수입니다.',
       stateClass: todayTxIn > 0 ? 'text-success' : '',
-    },
-    {
+    }] : []),
+    ...(currentPage !== 'in' ? [{
       label: '오늘 출고 건수',
       value: `${todayTxOut}건`,
       note: '오늘 입력된 출고 기록 수입니다.',
       stateClass: todayTxOut > 0 ? 'text-danger' : '',
-    },
+    }] : []),
     {
       label: '거래처 미입력',
       value: vendorMissingCount > 0 ? `${vendorMissingCount}건` : '완료',
@@ -92,14 +95,14 @@ export function renderInoutPage(container, navigateTo) {
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1 class="page-title"><span class="title-icon">📥</span> 입출고 관리</h1>
+        <h1 class="page-title">${currentPage === 'in' ? '입고 관리' : currentPage === 'out' ? '출고 관리' : '입출고 관리'}</h1>
         <div class="page-desc">입고와 출고를 기록하면 재고 수량이 자동으로 반영됩니다.</div>
       </div>
       <div class="page-actions">
         <button class="btn btn-outline" id="btn-export-tx">이력 내보내기</button>
-        <button class="btn btn-outline" id="btn-bulk-upload">엑셀 일괄 등록</button>
-        <button class="btn btn-success" id="btn-in">입고 등록</button>
-        <button class="btn btn-danger" id="btn-out">출고 등록</button>
+        <button class="btn btn-outline" id="btn-bulk-upload">엑셀 대량 업로드</button>
+        ${currentPage !== 'out' ? `<button class="btn btn-success" id="btn-in">입고 등록</button>` : ''}
+        ${currentPage !== 'in' ? `<button class="btn btn-danger" id="btn-out">출고 등록</button>` : ''}
       </div>
     </div>
 
@@ -109,14 +112,18 @@ export function renderInoutPage(container, navigateTo) {
         <div class="stat-label">전체 기록</div>
         <div class="stat-value text-accent">${transactions.length}건</div>
       </div>
+      ${currentPage !== 'out' ? `
       <div class="stat-card">
         <div class="stat-label">오늘 입고</div>
         <div class="stat-value text-success">${countToday(transactions, 'in')}건</div>
       </div>
+      ` : ''}
+      ${currentPage !== 'in' ? `
       <div class="stat-card">
         <div class="stat-label">오늘 출고</div>
         <div class="stat-value text-danger">${countToday(transactions, 'out')}건</div>
       </div>
+      ` : ''}
       <div class="stat-card">
         <div class="stat-label">등록 품목 수</div>
         <div class="stat-value">${items.length}</div>
@@ -135,8 +142,8 @@ export function renderInoutPage(container, navigateTo) {
         items.length === 0 ? '먼저 품목을 등록해야 입출고를 정확하게 기록할 수 있습니다.' : '품목 등록이 되어 있으므로 바로 입고와 출고를 기록할 수 있습니다.',
       ],
       actions: [
-        { id: 'btn-open-inbound-inline', label: '입고 바로 등록', variant: 'btn-success' },
-        { id: 'btn-open-outbound-inline', label: '출고 바로 등록', variant: 'btn-outline' },
+        ...(currentPage !== 'out' ? [{ id: 'btn-open-inbound-inline', label: '입고 바로 등록', variant: 'btn-success' }] : []),
+        ...(currentPage !== 'in' ? [{ id: 'btn-open-outbound-inline', label: '출고 바로 등록', variant: 'btn-danger' }] : []),
         { nav: 'summary', label: '요약 보고 보기', variant: 'btn-ghost' },
       ],
     })}
@@ -177,7 +184,7 @@ export function renderInoutPage(container, navigateTo) {
     <!-- ?꾪꽣 -->
     <div class="toolbar">
       <input type="text" class="search-input" id="tx-search" placeholder="품목명 또는 코드로 검색..." />
-      <select class="filter-select" id="tx-type-filter">
+      <select class="filter-select" id="tx-type-filter" ${currentPage === 'in' || currentPage === 'out' ? 'style="display:none;"' : ''}>
         <option value="">전체</option>
         <option value="in">입고만</option>
         <option value="out">출고만</option>
@@ -227,6 +234,16 @@ export function renderInoutPage(container, navigateTo) {
   const defaultSort = { key: 'date', direction: 'desc' };
   const savedViewPrefs = state.inoutViewPrefs || {};
   let filter = sanitizeInoutFilter(savedViewPrefs.filter);
+  
+  // URL이나 router의 상태로 'in' 또는 'out' 페이지로 넘어왔을 때 초기 필터 오버라이드
+  if (currentPage === 'in') {
+    filter.type = 'in';
+    filter.quick = 'in';
+  } else if (currentPage === 'out') {
+    filter.type = 'out';
+    filter.quick = 'out';
+  }
+
   let sort = sanitizeInoutSort(savedViewPrefs.sort);
   let persistTimer = null;
 
@@ -323,48 +340,70 @@ export function renderInoutPage(container, navigateTo) {
 
   function renderTxHeader() {
     const thead = container.querySelector('#tx-head');
-    thead.innerHTML = `
-      <tr>
-        <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
-        <th class="col-num">#</th>
-        <th class="sortable-header ${sort.key === 'type' ? 'is-active' : ''}" data-sort-key="type" title="클릭하여 정렬" aria-sort="${sort.key === 'type' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">구분</span><span class="sort-indicator">${getSortIndicator('type')}</span>
-          </button>
-        </th>
-        <th class="sortable-header ${sort.key === 'vendor' ? 'is-active' : ''}" data-sort-key="vendor" title="클릭하여 정렬" aria-sort="${sort.key === 'vendor' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">거래처</span><span class="sort-indicator">${getSortIndicator('vendor')}</span>
-          </button>
-        </th>
-        <th class="sortable-header ${sort.key === 'itemName' ? 'is-active' : ''}" data-sort-key="itemName" title="클릭하여 정렬" aria-sort="${sort.key === 'itemName' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">품목명</span><span class="sort-indicator">${getSortIndicator('itemName')}</span>
-          </button>
-        </th>
-        <th>품목코드</th>
-        <th class="sortable-header text-right ${sort.key === 'quantity' ? 'is-active' : ''}" data-sort-key="quantity" title="클릭하여 정렬" aria-sort="${sort.key === 'quantity' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">수량</span><span class="sort-indicator">${getSortIndicator('quantity')}</span>
-          </button>
-        </th>
-        <th class="sortable-header text-right ${sort.key === 'unitPrice' ? 'is-active' : ''}" data-sort-key="unitPrice" title="클릭하여 정렬" aria-sort="${sort.key === 'unitPrice' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">원가</span><span class="sort-indicator">${getSortIndicator('unitPrice')}</span>
-          </button>
-        </th>
-        <th class="text-right">판매가</th>
-        <th class="text-right">실판매가</th>
-        <th class="text-right">이익률</th>
-        <th class="sortable-header ${sort.key === 'date' ? 'is-active' : ''}" data-sort-key="date" title="클릭하여 정렬" aria-sort="${sort.key === 'date' ? (sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none') : 'none'}">
-          <button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true">
-            <span class="sort-label">날짜</span><span class="sort-indicator">${getSortIndicator('date')}</span>
-          </button>
-        </th>
-        <th>비고</th>
-        <th style="width:50px;">삭제</th>
-      </tr>
-    `;
+    if (currentPage === 'in') {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
+          <th class="col-num">#</th>
+          <th>자산</th>
+          <th class="sortable-header ${sort.key === 'date' ? 'is-active' : ''}" data-sort-key="date"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">입고일자</span><span class="sort-indicator">${getSortIndicator('date')}</span></button></th>
+          <th>상품코드</th>
+          <th class="sortable-header ${sort.key === 'vendor' ? 'is-active' : ''}" data-sort-key="vendor"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">거래처</span><span class="sort-indicator">${getSortIndicator('vendor')}</span></button></th>
+          <th class="sortable-header ${sort.key === 'itemName' ? 'is-active' : ''}" data-sort-key="itemName"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">품명</span><span class="sort-indicator">${getSortIndicator('itemName')}</span></button></th>
+          <th>규격</th>
+          <th>단위</th>
+          <th class="sortable-header text-right ${sort.key === 'quantity' ? 'is-active' : ''}" data-sort-key="quantity"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">입고수량</span><span class="sort-indicator">${getSortIndicator('quantity')}</span></button></th>
+          <th class="sortable-header text-right ${sort.key === 'unitPrice' ? 'is-active' : ''}" data-sort-key="unitPrice"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">단가</span><span class="sort-indicator">${getSortIndicator('unitPrice')}</span></button></th>
+          <th class="text-right">공급가액</th>
+          <th class="text-right">부가세</th>
+          <th class="text-right">합계금액</th>
+          <th style="width:50px;">삭제</th>
+        </tr>
+      `;
+    } else if (currentPage === 'out') {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
+          <th class="col-num">#</th>
+          <th>자산</th>
+          <th class="sortable-header ${sort.key === 'date' ? 'is-active' : ''}" data-sort-key="date"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">출고일자</span><span class="sort-indicator">${getSortIndicator('date')}</span></button></th>
+          <th>매장명</th>
+          <th>상품코드</th>
+          <th class="text-right">입고수량</th>
+          <th class="sortable-header text-right ${sort.key === 'unitPrice' ? 'is-active' : ''}" data-sort-key="unitPrice"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">단가</span><span class="sort-indicator">${getSortIndicator('unitPrice')}</span></button></th>
+          <th class="text-right">공급가액</th>
+          <th class="text-right">부가세</th>
+          <th class="text-right">합계금액</th>
+          <th class="text-right">출고단가</th>
+          <th class="sortable-header text-right ${sort.key === 'quantity' ? 'is-active' : ''}" data-sort-key="quantity"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">출고수량</span><span class="sort-indicator">${getSortIndicator('quantity')}</span></button></th>
+          <th class="text-right">출고금액</th>
+          <th class="text-right">매입원가</th>
+          <th class="text-right">이익액</th>
+          <th class="text-right">이익율</th>
+          <th class="text-right">매출원가율</th>
+          <th style="width:50px;">삭제</th>
+        </tr>
+      `;
+    } else {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
+          <th class="col-num">#</th>
+          <th class="sortable-header ${sort.key === 'type' ? 'is-active' : ''}" data-sort-key="type"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">구분</span><span class="sort-indicator">${getSortIndicator('type')}</span></button></th>
+          <th class="sortable-header ${sort.key === 'vendor' ? 'is-active' : ''}" data-sort-key="vendor"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">거래처</span><span class="sort-indicator">${getSortIndicator('vendor')}</span></button></th>
+          <th class="sortable-header ${sort.key === 'itemName' ? 'is-active' : ''}" data-sort-key="itemName"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">품목명</span><span class="sort-indicator">${getSortIndicator('itemName')}</span></button></th>
+          <th>품목코드</th>
+          <th class="sortable-header text-right ${sort.key === 'quantity' ? 'is-active' : ''}" data-sort-key="quantity"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">수량</span><span class="sort-indicator">${getSortIndicator('quantity')}</span></button></th>
+          <th class="sortable-header text-right ${sort.key === 'unitPrice' ? 'is-active' : ''}" data-sort-key="unitPrice"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">원가</span><span class="sort-indicator">${getSortIndicator('unitPrice')}</span></button></th>
+          <th class="text-right">판매가</th>
+          <th class="text-right">실판매가</th>
+          <th class="text-right">이익률</th>
+          <th class="sortable-header ${sort.key === 'date' ? 'is-active' : ''}" data-sort-key="date"><button type="button" class="sort-hitbox" tabindex="-1" aria-hidden="true"><span class="sort-label">날짜</span><span class="sort-indicator">${getSortIndicator('date')}</span></button></th>
+          <th>비고</th>
+          <th style="width:50px;">삭제</th>
+        </tr>
+      `;
+    }
 
     container.querySelectorAll('.sortable-header[data-sort-key]').forEach(header => {
       header.setAttribute('tabindex', '0');
@@ -465,8 +504,9 @@ export function renderInoutPage(container, navigateTo) {
     const pageData = sorted.slice(start, start + PAGE_SIZE);
 
     const tbody = container.querySelector('#tx-body');
+    const tableColSpan = currentPage === 'in' ? 15 : currentPage === 'out' ? 19 : 14;
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:32px; color:var(--text-muted);">
+      tbody.innerHTML = `<tr><td colspan="${tableColSpan}" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
       </td></tr>`;
     } else {
@@ -521,6 +561,73 @@ export function renderInoutPage(container, navigateTo) {
       const renderTxRow = (tx, isChild = false) => {
         const childStyle = isChild ? 'background:var(--bg-lighter);' : '';
         const indent = isChild ? 'padding-left:24px;' : '';
+        const txQty = parseFloat(tx.quantity || 0) || 0;
+        const txCost = parseFloat(tx.unitPrice || 0) || 0;
+        const supplyValue = txQty * txCost;
+        const vat = Math.floor(supplyValue * 0.1);
+        const totalPrice = supplyValue + vat;
+        const outUnitPrice = parseFloat(tx.actualSellingPrice || tx.sellingPrice || 0) || 0;
+        const outAmount = txQty * outUnitPrice;
+        const purchaseCost = txQty * txCost;
+        const profitAmount = outAmount - purchaseCost;
+        const profitRate = purchaseCost > 0 ? (profitAmount / purchaseCost) * 100 : 0;
+        const salesCostRate = outAmount > 0 ? (purchaseCost / outAmount) * 100 : 0;
+        const item = (getState().mappedData || []).find((candidate) =>
+          (candidate.itemCode && tx.itemCode && String(candidate.itemCode).trim() === String(tx.itemCode).trim()) ||
+          String(candidate.itemName || '').trim() === String(tx.itemName || '').trim()
+        );
+        const assetText = item?.category || '자산';
+        const unitText = item?.unit || 'EA';
+        const specText = (tx.note || '').includes('규격:') ? String(tx.note).split('규격:')[1].trim() : '-';
+        const money = (value) => Math.round(value || 0).toLocaleString('ko-KR');
+        const percent = (value) => Number.isFinite(value) ? `${value.toFixed(2)}%` : '-';
+
+        if (currentPage === 'in') {
+          return `
+            <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${tx.id}" style="${childStyle}">
+              <td style="text-align:center;"><input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} /></td>
+              <td class="col-num"></td>
+              <td data-label="자산">${escapeHtml(assetText)}</td>
+              <td data-label="입고일자">${formatDate(tx.date)}</td>
+              <td data-label="상품코드">${escapeHtml(tx.itemCode || '-')}</td>
+              <td data-label="거래처" style="${indent}">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
+              <td data-label="품명" style="${indent}">${isChild ? `<span style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemName || '-')}</span>` : `<strong>${escapeHtml(tx.itemName || '-')}</strong>`}</td>
+              <td data-label="규격">${escapeHtml(specText)}</td>
+              <td data-label="단위">${escapeHtml(unitText)}</td>
+              <td data-label="입고수량" class="text-right">${txQty.toLocaleString('ko-KR')}</td>
+              <td data-label="단가" class="text-right">${money(txCost)}</td>
+              <td data-label="공급가액" class="text-right">${money(supplyValue)}</td>
+              <td data-label="부가세" class="text-right">${money(vat)}</td>
+              <td data-label="합계금액" class="text-right">${money(totalPrice)}</td>
+              <td class="text-center"><button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button></td>
+            </tr>`;
+        }
+
+        if (currentPage === 'out') {
+          return `
+            <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${tx.id}" style="${childStyle}">
+              <td style="text-align:center;"><input type="checkbox" class="tx-select-row" value="${tx.id}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} /></td>
+              <td class="col-num"></td>
+              <td data-label="자산">${escapeHtml(assetText)}</td>
+              <td data-label="출고일자">${formatDate(tx.date)}</td>
+              <td data-label="매장명" style="${indent}">${tx.vendor || '<span style="color:var(--text-muted)">-</span>'}</td>
+              <td data-label="상품코드">${escapeHtml(tx.itemCode || '-')}</td>
+              <td data-label="입고수량" class="text-right">0</td>
+              <td data-label="단가" class="text-right">${money(txCost)}</td>
+              <td data-label="공급가액" class="text-right">${money(supplyValue)}</td>
+              <td data-label="부가세" class="text-right">${money(vat)}</td>
+              <td data-label="합계금액" class="text-right">${money(totalPrice)}</td>
+              <td data-label="출고단가" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="sellingPrice" title="클릭하여 수정"><span class="price-display">${tx.sellingPrice ? money(parseFloat(tx.sellingPrice)) : '<span style="color:var(--text-muted)">-</span>'}</span></td>
+              <td data-label="출고수량" class="text-right">${txQty.toLocaleString('ko-KR')}</td>
+              <td data-label="출고금액" class="text-right editable-price-cell" data-tx-id="${tx.id}" data-field="actualSellingPrice" title="클릭하여 수정"><span class="price-display">${outUnitPrice ? money(outAmount) : '<span style="color:var(--text-muted)">-</span>'}</span></td>
+              <td data-label="매입원가" class="text-right">${money(purchaseCost)}</td>
+              <td data-label="이익액" class="text-right">${money(profitAmount)}</td>
+              <td data-label="이익율" class="text-right">${percent(profitRate)}</td>
+              <td data-label="매출원가율" class="text-right">${percent(salesCostRate)}</td>
+              <td class="text-center"><button class="btn-icon btn-icon-danger btn-del-tx" data-id="${tx.id}" title="삭제">삭제</button></td>
+            </tr>`;
+        }
+
         return `
           <tr class="${selectedTxIds.has(tx.id) ? 'selected' : ''} ${isChild ? 'tx-child-row' : ''}" data-tx-id="${tx.id}" style="${childStyle}">
             <td style="text-align:center;">
@@ -562,6 +669,11 @@ export function renderInoutPage(container, navigateTo) {
 
       let rowNum = start + 1;
       let html = '';
+      if (currentPage === 'in' || currentPage === 'out') {
+        pageData.forEach((tx) => {
+          html += renderTxRow(tx, false).replace('<td class="col-num"></td>', `<td class="col-num">${rowNum++}</td>`);
+        });
+      } else {
       groupOrder.forEach(key => {
         const group = groupMap.get(key);
         if (group.length === 1) {
@@ -621,6 +733,7 @@ export function renderInoutPage(container, navigateTo) {
             ${isExpanded ? group.map(tx => renderTxRow(tx, true)).join('') : ''}`;
         }
       });
+      }
       tbody.innerHTML = html;
     }
 
@@ -791,6 +904,7 @@ export function renderInoutPage(container, navigateTo) {
     if (!canCreate) { showToast('출고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'out', items);
   });
+
   container.querySelectorAll('[data-nav]').forEach(button => {
     button.addEventListener('click', () => navigateTo(button.dataset.nav));
   });
@@ -808,8 +922,16 @@ export function renderInoutPage(container, navigateTo) {
         filter.type = filter.quick;
         container.querySelector('#tx-type-filter').value = filter.type;
       } else if (filter.type && (filter.quick === 'all' || filter.quick === 'today' || filter.quick === 'missingVendor' || filter.quick === 'recent3')) {
-        filter.type = '';
-        container.querySelector('#tx-type-filter').value = '';
+        if (currentPage === 'in') {
+          filter.type = 'in';
+          if (container.querySelector('#tx-type-filter')) container.querySelector('#tx-type-filter').value = 'in';
+        } else if (currentPage === 'out') {
+          filter.type = 'out';
+          if (container.querySelector('#tx-type-filter')) container.querySelector('#tx-type-filter').value = 'out';
+        } else {
+          filter.type = '';
+          if (container.querySelector('#tx-type-filter')) container.querySelector('#tx-type-filter').value = '';
+        }
       }
       if (filter.quick === 'today') {
         filter.date = new Date().toISOString().split('T')[0];
@@ -898,16 +1020,18 @@ export function renderInoutPage(container, navigateTo) {
     showToast('필터와 정렬을 초기화했습니다.', 'info');
   });
 
-  // 필터/정렬 이벤트
-  container.querySelector('#btn-in').addEventListener('click', () => {
+  // 하단 헤더 액션
+  container.querySelector('#btn-in')?.addEventListener('click', () => {
+    if (!canCreate) { showToast('입고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'in', items);
   });
-  container.querySelector('#btn-out').addEventListener('click', () => {
+  container.querySelector('#btn-out')?.addEventListener('click', () => {
+    if (!canCreate) { showToast('출고 등록 권한이 없습니다. 직원 이상만 가능합니다.', 'warning'); return; }
     openTxModal(container, navigateTo, 'out', items);
   });
 
-  // ?대젰 ?대낫?닿린
-  container.querySelector('#btn-export-tx').addEventListener('click', () => {
+  // 이력 내보내기
+  container.querySelector('#btn-export-tx')?.addEventListener('click', () => {
     if (transactions.length === 0) {
       showToast('내보낼 기록이 없습니다.', 'warning');
       return;
@@ -937,8 +1061,8 @@ export function renderInoutPage(container, navigateTo) {
     showToast('이력을 엑셀로 내보냈습니다.', 'success');
   });
 
-  // ?묒? ?쇨큵 ?깅줉
-  container.querySelector('#btn-bulk-upload').addEventListener('click', () => {
+  // 엑셀 대량 업로드 (모달 열기)
+  container.querySelector('#btn-bulk-upload')?.addEventListener('click', () => {
     openBulkUploadModal(container, navigateTo, items);
   });
 
@@ -971,24 +1095,35 @@ export function renderInoutPage(container, navigateTo) {
  * 왜 필요? → 건별 등록은 수십 건 이상일 때 비효율적.
  */
 function openBulkUploadModal(container, navigateTo, items) {
+  const isInboundPage = currentPage === 'in';
+  const isOutboundPage = currentPage === 'out';
+  const bulkTemplateSpec = getInoutBulkTemplateSpec(currentPage);
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal" style="max-width:700px;">
       <div class="modal-header">
-        <h3 class="modal-title">엑셀 일괄 입출고 등록</h3>
+        <h3 class="modal-title">${isOutboundPage ? '출고관리 엑셀 일괄 등록' : isInboundPage ? '입고관리 엑셀 일괄 등록' : '엑셀 일괄 입출고 등록'}</h3>
         <button class="modal-close" id="bulk-close">✕</button>
       </div>
       <div class="modal-body" id="bulk-body">
         <div class="alert alert-info" style="margin-bottom:16px;">
           <strong>사용 방법</strong><br/>
           1. 아래에서 샘플 양식을 내려받습니다.<br/>
-          2. 양식에 입고 또는 출고 데이터를 입력합니다.<br/>
+          2. 양식에 ${isOutboundPage ? '출고' : isInboundPage ? '입고' : '입고 또는 출고'} 데이터를 입력합니다.<br/>
           3. 저장한 엑셀 파일을 끌어놓거나 선택하면 미리보기 후 한 번에 등록할 수 있습니다.
         </div>
 
         <div style="display:flex; gap:8px; margin-bottom:16px;">
           <button class="btn btn-outline" id="bulk-download-template">엑셀 양식 다운로드</button>
+        </div>
+
+        <div style="margin-bottom:16px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg-lighter);">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">양식 헤더 미리보기</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            ${bulkTemplateSpec.headers.map((header) => `<span class="badge" style="font-size:11px;">${header}</span>`).join('')}
+          </div>
         </div>
 
         <div style="border:2px dashed var(--border); border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color 0.2s;" id="bulk-dropzone">
@@ -1012,31 +1147,8 @@ function openBulkUploadModal(container, navigateTo, items) {
   });
 
   overlay.querySelector('#bulk-download-template').addEventListener('click', () => {
-    const template = [
-      {
-        구분: '입고',
-        거래처: '(주)삼성전자',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 100,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '1차 입고',
-      },
-      {
-        구분: '출고',
-        거래처: '쿠팡',
-        품목명: '갤럭시 S25',
-        품목코드: 'SM-S925',
-        수량: 30,
-        단가: 1200000,
-        날짜: new Date().toISOString().split('T')[0],
-        비고: '쿠팡 출고',
-      },
-    ];
-
-    downloadExcel(template, '입출고_일괄등록_양식');
-    showToast('입출고 일괄등록 양식을 내려받았습니다. 내용을 입력한 뒤 다시 업로드해 주세요.', 'success');
+    downloadExcel([bulkTemplateSpec.sample], bulkTemplateSpec.fileName);
+    showToast(`${bulkTemplateSpec.title} 양식을 내려받았습니다. 내용을 입력한 뒤 다시 업로드해 주세요.`, 'success');
   });
 
   const dropzone = overlay.querySelector('#bulk-dropzone');
@@ -1082,18 +1194,22 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
 
     const headers = sheetData[0].map((header) => String(header ?? '').trim());
     const colMap = {
-      type: headers.findIndex((header) => header === '구분'),
-      vendor: headers.findIndex((header) => header === '거래처'),
-      itemName: headers.findIndex((header) => header === '품목명'),
-      itemCode: headers.findIndex((header) => header === '품목코드'),
-      quantity: headers.findIndex((header) => header === '수량'),
-      unitPrice: headers.findIndex((header) => header === '단가'),
-      date: headers.findIndex((header) => header === '날짜'),
-      note: headers.findIndex((header) => header === '비고'),
+      type: headers.findIndex((h) => ['구분'].includes(h)),
+      vendor: headers.findIndex((h) => ['거래처'].includes(h)),
+      storeName: headers.findIndex((h) => ['매장명'].includes(h)),
+      itemName: headers.findIndex((h) => ['품목명', '품명'].includes(h)),
+      itemCode: headers.findIndex((h) => ['품목코드', '상품코드'].includes(h)),
+      quantity: headers.findIndex((h) => ['수량', '입고수량', '출고수량'].includes(h)),
+      unitPrice: headers.findIndex((h) => ['단가'].includes(h)),
+      date: headers.findIndex((h) => ['날짜', '입고일자', '출고일자'].includes(h)),
+      note: headers.findIndex((h) => ['비고'].includes(h)),
+      spec: headers.findIndex((h) => ['규격'].includes(h)),
+      quantityIn: headers.findIndex((h) => ['입고수량'].includes(h)),
+      quantityOut: headers.findIndex((h) => ['출고수량'].includes(h)),
     };
 
-    if (colMap.type === -1 || colMap.itemName === -1 || colMap.quantity === -1) {
-      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "구분", "품목명", "수량" 컬럼이 포함되어 있는지 확인해 주세요.</div>';
+    if (colMap.itemName === -1 || colMap.quantity === -1) {
+      previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "품목명"(또는 "품명") 및 "수량"(또는 "입고수량", "출고수량") 컬럼이 포함되어 있는지 확인해 주세요.</div>';
       return;
     }
 
@@ -1102,11 +1218,31 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       const row = sheetData[index];
       if (!row || row.length === 0) continue;
 
-      const typeCell = String(row[colMap.type] ?? '').trim();
+      const typeCell = colMap.type >= 0 ? String(row[colMap.type] ?? '').trim().toLowerCase() : '';
       const itemName = String(row[colMap.itemName] ?? '').trim();
-      const quantity = Number.parseFloat(row[colMap.quantity]) || 0;
+      const quantityRaw = colMap.quantity >= 0 ? row[colMap.quantity] : '';
+      const inQuantityRaw = colMap.quantityIn >= 0 ? row[colMap.quantityIn] : '';
+      const outQuantityRaw = colMap.quantityOut >= 0 ? row[colMap.quantityOut] : '';
+      const qty = Number.parseFloat(quantityRaw) || 0;
+      const inQty = Number.parseFloat(inQuantityRaw) || 0;
+      const outQty = Number.parseFloat(outQuantityRaw) || 0;
 
-      if (!itemName || quantity <= 0) continue;
+      if (!itemName) continue;
+
+      let derivedType = typeCell === '출고' || typeCell === 'out' ? 'out' : (typeCell === '입고' || typeCell === 'in' ? 'in' : '');
+      if (!derivedType) {
+        if (outQty > 0 && inQty <= 0) derivedType = 'out';
+        else if (inQty > 0 && outQty <= 0) derivedType = 'in';
+        else if (isOutboundPage) derivedType = 'out';
+        else if (isInboundPage) derivedType = 'in';
+        else if (colMap.quantityOut >= 0 && colMap.quantity === colMap.quantityOut) derivedType = 'out';
+        else derivedType = 'in';
+      }
+
+      let quantity = qty || inQty || outQty || 0;
+      if (derivedType === 'out' && outQty > 0) quantity = outQty;
+      if (derivedType === 'in' && inQty > 0) quantity = inQty;
+      if (quantity <= 0) continue;
 
       const rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
       const matchedItem = items.find((item) =>
@@ -1125,20 +1261,26 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       }
 
       rows.push({
-        type: typeCell === '출고' ? 'out' : 'in',
+        type: derivedType,
         vendor: colMap.vendor >= 0 ? String(row[colMap.vendor] ?? '').trim() : '',
         itemName,
         itemCode: rawItemCode || matchedItem?.itemCode || '',
         quantity,
         unitPrice: colMap.unitPrice >= 0 ? (Number.parseFloat(row[colMap.unitPrice]) || 0) : 0,
         date: dateStr || new Date().toISOString().split('T')[0],
-        note: colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
+        note: [
+          colMap.note >= 0 ? String(row[colMap.note] ?? '').trim() : '',
+          colMap.spec >= 0 ? String(row[colMap.spec] ?? '').trim() : '',
+          colMap.storeName >= 0
+            ? `매장:${String(row[colMap.storeName] ?? '').trim()}`
+            : '',
+        ].filter(Boolean).join(' | '),
         matched: Boolean(matchedItem),
       });
     }
 
     if (rows.length === 0) {
-      previewEl.innerHTML = '<div class="alert alert-warning">유효한 데이터가 없습니다. 구분, 품목명, 수량 값을 다시 확인해 주세요.</div>';
+      previewEl.innerHTML = '<div class="alert alert-warning">유효한 데이터가 없습니다. 품명, 수량 값을 다시 확인해 주세요.</div>';
       return;
     }
 
@@ -1216,6 +1358,72 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
   } catch (err) {
     previewEl.innerHTML = `<div class="alert alert-danger">파일 처리 중 오류가 발생했습니다: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+function getInoutBulkTemplateSpec(page) {
+  const date = new Date().toISOString().split('T')[0];
+
+  if (page === 'out') {
+    const outQty = 12;
+    const unitPrice = 21000;
+    const supplyValue = outQty * unitPrice;
+    const vat = Math.floor(supplyValue * 0.1);
+    const totalAmount = supplyValue + vat;
+    const outUnitPrice = 27500;
+    const outAmount = outUnitPrice * outQty;
+    const purchaseCost = supplyValue;
+    const profitAmount = outAmount - purchaseCost;
+    const profitRate = purchaseCost > 0 ? Number(((profitAmount / purchaseCost) * 100).toFixed(2)) : 0;
+    const salesCostRate = outAmount > 0 ? Number(((purchaseCost / outAmount) * 100).toFixed(2)) : 0;
+    return {
+      title: '출고관리',
+      fileName: '출고관리_일괄등록_양식',
+      headers: ['자산', '출고일자', '매장명', '상품코드', '입고수량', '단가', '공급가액', '부가세', '합계금액', '출고단가', '출고수량', '출고금액', '매입원가', '이익액', '이익율', '매출원가율'],
+      sample: {
+        자산: '완제품',
+        출고일자: date,
+        매장명: '강남점',
+        상품코드: 'PMZBA-CHAN1821',
+        입고수량: 0,
+        단가: unitPrice,
+        공급가액: supplyValue,
+        부가세: vat,
+        합계금액: totalAmount,
+        출고단가: outUnitPrice,
+        출고수량: outQty,
+        출고금액: outAmount,
+        매입원가: purchaseCost,
+        이익액: profitAmount,
+        이익율: profitRate,
+        매출원가율: salesCostRate,
+      },
+    };
+  }
+
+  const inQty = 100;
+  const unitPrice = 1200000;
+  const supplyValue = inQty * unitPrice;
+  const vat = Math.floor(supplyValue * 0.1);
+  const totalAmount = supplyValue + vat;
+  return {
+    title: page === 'in' ? '입고관리' : '입출고관리',
+    fileName: page === 'in' ? '입고관리_일괄등록_양식' : '입출고관리_일괄등록_양식',
+    headers: ['자산', '입고일자', '상품코드', '거래처', '품명', '규격', '단위', '입고수량', '단가', '공급가액', '부가세', '합계금액'],
+    sample: {
+      자산: '완제품',
+      입고일자: date,
+      상품코드: 'SM-S925',
+      거래처: '(주)삼성전자',
+      품명: '갤럭시 S25',
+      규격: '256GB',
+      단위: 'EA',
+      입고수량: inQty,
+      단가: unitPrice,
+      공급가액: supplyValue,
+      부가세: vat,
+      합계금액: totalAmount,
+    },
+  };
 }
 
 /**

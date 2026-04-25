@@ -26,10 +26,11 @@ export function renderStocktakePage(container, navigateTo) {
   container.innerHTML = `
     <div class="page-header">
       <div>
-        <h1 class="page-title"><span class="title-icon">📋</span> 재고 실사</h1>
+        <h1 class="page-title">수불관리</h1>
         <div class="page-desc">시스템 재고와 실물 재고를 대조하고 차이를 조정합니다.</div>
       </div>
       <div class="page-actions">
+        <button class="btn btn-outline" id="btn-stocktake-template">엑셀 양식 다운로드</button>
         <button class="btn btn-outline" id="btn-stocktake-history">📅 실사 이력 (${stocktakeHistory.length}건)</button>
         <button class="btn btn-primary" id="btn-start-stocktake">📋 새 실사 시작</button>
       </div>
@@ -46,7 +47,7 @@ export function renderStocktakePage(container, navigateTo) {
         </div>
       ` : `
         <div class="card">
-          <div class="card-title">🔍 재고 실사표</div>
+          <div class="card-title">🔍 수불내역표</div>
           <div style="display:flex; gap:12px; margin-bottom:16px; align-items:center;">
             <div class="form-group" style="margin:0;">
               <label class="form-label">실사일자</label>
@@ -70,33 +71,72 @@ export function renderStocktakePage(container, navigateTo) {
               <thead>
                 <tr>
                   <th style="width:40px;">#</th>
-                  <th>품목명</th>
-                  <th>코드</th>
-                  <th>창고</th>
-                  <th class="text-right">시스템 재고</th>
-                  <th class="text-right">실물 재고</th>
-                  <th class="text-right">차이</th>
-                  <th>상태</th>
-                  <th>비고</th>
+                  <th>자산</th>
+                  <th>입고일자</th>
+                  <th>상품코드</th>
+                  <th>거래처</th>
+                  <th>품명</th>
+                  <th>규격</th>
+                  <th>단위</th>
+                  <th class="text-right">입고수량</th>
+                  <th class="text-right">단가</th>
+                  <th class="text-right">공급가액</th>
+                  <th class="text-right">부가세</th>
+                  <th class="text-right">합계금액</th>
+                  <th class="text-right">출고단가</th>
+                  <th class="text-right">출고수량</th>
+                  <th class="text-right">출고금액</th>
+                  <th class="text-right">매입원가</th>
+                  <th class="text-right">이익액</th>
+                  <th class="text-right">이익율</th>
+                  <th class="text-right">매출원가율</th>
+                  <th class="text-right">기말재고수량</th>
+                  <th class="text-right">기말재고</th>
                 </tr>
               </thead>
               <tbody id="st-body">
                 ${items.map((item, i) => {
                   const sysQty = parseFloat(item.quantity) || 0;
+                  const unitPrice = parseFloat(item.unitPrice) || 0;
+                  const inQty = sysQty;
+                  const supplyValue = inQty * unitPrice;
+                  const vat = Math.floor(supplyValue * 0.1);
+                  const totalPrice = supplyValue + vat;
+                  const outQty = 0;
+                  const outUnitPrice = parseFloat(item.actualSellingPrice || item.salePrice || 0) || 0;
+                  const outAmount = outQty * outUnitPrice;
+                  const purchaseCost = outQty * unitPrice;
+                  const profitAmount = outAmount - purchaseCost;
+                  const profitRate = purchaseCost > 0 ? ((profitAmount / purchaseCost) * 100) : 0;
+                  const salesCostRate = outAmount > 0 ? ((purchaseCost / outAmount) * 100) : 0;
                   return `
                     <tr data-idx="${i}">
                       <td class="col-num">${i + 1}</td>
-                      <td><strong>${item.itemName}</strong></td>
+                      <td>${item.category || '자산'}</td>
+                      <td>${today}</td>
                       <td style="color:var(--text-muted); font-size:12px;">${item.itemCode || '-'}</td>
-                      <td style="font-size:12px;">${item.warehouse || '-'}</td>
-                      <td class="text-right">${sysQty.toLocaleString('ko-KR')}</td>
+                      <td style="font-size:12px;">${item.vendor || '-'}</td>
+                      <td><strong>${item.itemName}</strong></td>
+                      <td>${item.spec || '-'}</td>
+                      <td>${item.unit || 'EA'}</td>
+                      <td class="text-right">${inQty.toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(unitPrice).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(supplyValue).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(vat).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(totalPrice).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(outUnitPrice).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${outQty.toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(outAmount).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(purchaseCost).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${Math.round(profitAmount).toLocaleString('ko-KR')}</td>
+                      <td class="text-right">${profitRate.toFixed(2)}%</td>
+                      <td class="text-right">${salesCostRate.toFixed(2)}%</td>
                       <td class="text-right">
-                        <input type="number" class="form-input st-actual" data-idx="${i}" value="" placeholder="${sysQty}" style="width:80px; padding:3px 6px; text-align:right; font-weight:600;" />
+                        <input type="number" class="form-input st-actual" data-idx="${i}" value="" placeholder="${sysQty}" style="width:88px; padding:3px 6px; text-align:right; font-weight:600;" />
                       </td>
-                      <td class="text-right st-diff" data-idx="${i}" style="font-weight:600;">-</td>
-                      <td class="st-status" data-idx="${i}">-</td>
-                      <td>
-                        <input class="form-input st-note" data-idx="${i}" placeholder="메모" style="width:100px; padding:3px 6px; font-size:11px;" />
+                      <td class="text-right">
+                        <span class="st-diff" data-idx="${i}" style="font-weight:600;">-</span>
+                        <span class="st-status" data-idx="${i}" style="display:none;"></span>
                       </td>
                     </tr>
                   `;
@@ -125,6 +165,51 @@ export function renderStocktakePage(container, navigateTo) {
   `;
 
   if (items.length === 0) return;
+
+  container.querySelector('#btn-stocktake-template')?.addEventListener('click', () => {
+    const today = new Date().toISOString().split('T')[0];
+    const inQty = 120;
+    const inUnitPrice = 21000;
+    const supplyValue = inQty * inUnitPrice;
+    const vat = Math.floor(supplyValue * 0.1);
+    const totalAmount = supplyValue + vat;
+    const outQty = 45;
+    const outUnitPrice = 28000;
+    const outAmount = outUnitPrice * outQty;
+    const purchaseCost = inUnitPrice * outQty;
+    const profitAmount = outAmount - purchaseCost;
+    const profitRate = purchaseCost > 0 ? Number(((profitAmount / purchaseCost) * 100).toFixed(2)) : 0;
+    const salesCostRate = outAmount > 0 ? Number(((purchaseCost / outAmount) * 100).toFixed(2)) : 0;
+    const endingQty = inQty - outQty;
+    const endingValue = endingQty * inUnitPrice;
+
+    const template = [{
+      자산: '완제품',
+      입고일자: today,
+      상품코드: 'PMZBA-CHAN1821',
+      거래처: '기본 거래처',
+      품명: '핸들/통합/스트라이커/신규[200]',
+      규격: '표준',
+      단위: 'EA',
+      입고수량: inQty,
+      단가: inUnitPrice,
+      공급가액: supplyValue,
+      부가세: vat,
+      합계금액: totalAmount,
+      출고단가: outUnitPrice,
+      출고수량: outQty,
+      출고금액: outAmount,
+      매입원가: purchaseCost,
+      이익액: profitAmount,
+      이익율: profitRate,
+      매출원가율: salesCostRate,
+      기말재고수량: endingQty,
+      기말재고: endingValue,
+    }];
+
+    downloadExcel(template, '수불관리_엑셀양식');
+    showToast('수불관리 엑셀 양식을 내려받았습니다.', 'success');
+  });
 
   // 실물 수량 입력 시 차이 계산
   container.querySelectorAll('.st-actual').forEach(input => {

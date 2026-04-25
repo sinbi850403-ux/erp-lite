@@ -34,9 +34,19 @@ export function initTheme() {
  * 테마 토글
  */
 export function toggleTheme() {
+  // transition 일시 비활성화 → 테마 순간 전환 (딜레이 없음)
+  document.documentElement.classList.add('invex-no-transition');
+
   const isDark = document.documentElement.classList.contains('dark-mode');
   setDarkMode(!isDark);
   localStorage.setItem(THEME_KEY, isDark ? 'light' : 'dark');
+
+  // 두 프레임 후 transition 복원 (렌더링 완료 후)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.documentElement.classList.remove('invex-no-transition');
+    });
+  });
 }
 
 /**

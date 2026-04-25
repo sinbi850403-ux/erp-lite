@@ -1,4 +1,4 @@
-﻿/**
+/**
  * page-admin.js - 총관리자 대시보드 (Pro Edition)
  * 역할: 백엔드에 저장된 실제 사용자 데이터를 조회하여 SaaS 전체를 관리
  * 관리자 권한 체크
@@ -9,8 +9,46 @@ import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 import { getCurrentUser } from './auth.js';
 import { PLANS } from './plan.js';
-import { db, isConfigured } from './backend-config.js';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from './backend-store.js';
+import { supabase } from './supabase-client.js';
+
+// ═══════════════════════════════════════════
+// 전역 onclick 핸들러 (이벤트 버블링 우회)
+// ═══════════════════════════════════════════
+let _adminUserCache = [];
+let _adminContainer = null;
+let _adminNavigateTo = null;
+
+window._invexAdminAction = function(btn) {
+  const action = btn.dataset.action;
+  const uid    = btn.dataset.uid;
+  const u      = _adminUserCache.find(x => x.id === uid);
+
+  if (action === 'detail') {
+    if (u) showUserDetailModal(u);
+    else showToast('사용자 정보를 찾을 수 없습니다', 'error');
+
+  } else if (action === 'plan') {
+    if (u) showPlanChangeModal(u, _adminContainer, _adminNavigateTo);
+    else showToast('사용자 정보를 찾을 수 없습니다', 'error');
+
+  } else if (action === 'suspend') {
+    const current   = btn.dataset.status;
+    const newStatus = current === 'suspended' ? 'active' : 'suspended';
+    supabase
+      .from('profiles')
+      .update({ status: newStatus })
+      .eq('id', uid)
+      .then(({ error }) => {
+        if (error) { showToast('처리 실패: ' + error.message, 'error'); return; }
+        showToast(
+          newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.',
+          newStatus === 'suspended' ? 'warning' : 'success'
+        );
+        if (_adminContainer && _adminNavigateTo)
+          renderAdminPage(_adminContainer, _adminNavigateTo);
+      });
+  }
+};
 
 // ═══════════════════════════════════════════
 // 총관리자(사이트 소유자) 이메일 목록
@@ -31,16 +69,53 @@ export function isAdmin() {
 }
 
 /**
- * 백엔드 사용자 목록 가져오기
- * 관리자 권한 체크
+ * 백엔드 사용자 목록 가져오기 (Supabase profiles 테이블)
+ * Supabase cold start 대응: 최대 3회 재시도, 타임아웃 20초
  */
-async function fetchAllUsers() {
-  if (!isConfigured || !db) return [];
+async function fetchAllUsers(attempt = 1) {
   try {
-    const snap = await getDocs(collection(db, 'users'));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const timeout = 20000; // 20초 (cold start 대응)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Supabase query timeout')), timeout)
+    );
+
+    const queryPromise = supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+    if (error) {
+      console.warn(`사용자 목록 조회 실패 (시도 ${attempt}):`, error.message);
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        return fetchAllUsers(attempt + 1);
+      }
+      return [];
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 2000));
+        return fetchAllUsers(attempt + 1);
+      }
+      return [];
+    }
+
+    // 필드명 정규화 (DB 컬럼명 → JS 객체)
+    return data.map(u => ({
+      ...u,
+      photoURL: u.photo_url,
+      lastLogin: u.last_login_at,
+      createdAt: u.created_at,
+    }));
   } catch (e) {
-    console.warn('사용자 목록 조회 실패:', e);
+    console.warn(`사용자 목록 조회 실패 (시도 ${attempt}):`, e.message);
+    if (attempt < 3) {
+      await new Promise(r => setTimeout(r, 1500 * attempt));
+      return fetchAllUsers(attempt + 1);
+    }
     return [];
   }
 }
@@ -104,6 +179,10 @@ export async function renderAdminPage(container, navigateTo) {
 
   // 백엔드에서 실제 사용자 데이터 조회
   const allUsers = await fetchAllUsers();
+  // 전역 캐시에 저장 (onclick 핸들러에서 참조)
+  _adminUserCache  = allUsers;
+  _adminContainer  = container;
+  _adminNavigateTo = navigateTo;
   const state = getState();
   const notices = state.adminNotices || [];
   const paymentHistory = state.paymentHistory || [];
@@ -161,7 +240,7 @@ export async function renderAdminPage(container, navigateTo) {
     <!-- 메인 2단 레이아웃 -->
     <div style="display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:20px;">
 
-      <!-- 왼쪽: 사용자 관리 테이블 -->
+      <!-- 왼쪽: 사용자 관리 카드 목록 -->
       <div class="card" style="padding:0; overflow:hidden;">
         <div style="padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -171,42 +250,18 @@ export async function renderAdminPage(container, navigateTo) {
               <div style="font-size:11px; color:var(--text-muted);">총 ${totalUsers}명 등록</div>
             </div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <div style="position:relative;">
-              <input class="form-input" id="admin-user-search" placeholder="🔍 검색..." style="width:180px; font-size:12px; padding:6px 10px; border-radius:6px;" />
-            </div>
-            <select class="form-input" id="admin-filter-plan" style="width:100px; font-size:12px; padding:6px 8px; border-radius:6px;">
-              <option value="all">전체 요금제</option>
-              <option value="free">🆓 Free</option>
-              <option value="pro">⭐ Pro</option>
-              <option value="enterprise">🏢 Enterprise</option>
-            </select>
-          </div>
+          <input class="form-input" id="admin-user-search" placeholder="🔍 이름 / 이메일 검색" style="width:200px; font-size:12px; padding:6px 10px; border-radius:6px;" />
         </div>
-        <div style="max-height:460px; overflow-y:auto;">
-          <table class="data-table" id="admin-users-table" style="margin:0;">
-            <thead style="position:sticky; top:0; z-index:1;"><tr>
-              <th style="padding-left:20px;">사용자</th>
-              <th>요금제</th>
-              <th>가입일</th>
-              <th>최근 접속</th>
-              <th>상태</th>
-              <th style="text-align:center; width:120px;">관리</th>
-            </tr></thead>
-            <tbody>
-              ${allUsers.length > 0 ? allUsers.map(u => renderUserRow(u)).join('') : `
-                <tr>
-                  <td colspan="6" style="text-align:center; padding:48px; color:var(--text-muted);">
-                    <div style="font-size:36px; margin-bottom:12px;">👥</div>
-                    <div style="font-size:14px; font-weight:600; margin-bottom:4px;">아직 가입된 사용자가 없습니다</div>
-                    <div style="font-size:12px;">사용자가 회원가입하면 자동으로 이곳에 표시됩니다.</div>
-                  </td>
-                </tr>
-              `}
-            </tbody>
-          </table>
+        <div style="max-height:500px; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;" id="admin-user-cards">
+          ${allUsers.length > 0 ? allUsers.map(u => renderUserCard(u)).join('') : `
+            <div style="text-align:center; padding:48px; color:var(--text-muted);">
+              <div style="font-size:36px; margin-bottom:12px;">👥</div>
+              <div style="font-size:14px; font-weight:600;">아직 가입된 사용자가 없습니다</div>
+            </div>
+          `}
         </div>
       </div>
+
 
       <!-- 오른쪽 패널 -->
       <div style="display:flex; flex-direction:column; gap:16px;">
@@ -350,41 +405,7 @@ export async function renderAdminPage(container, navigateTo) {
     filterUsers(container);
   });
 
-  // 요금제 변경
-  container.querySelectorAll('.btn-plan-user').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      if (u) showPlanChangeModal(u, container, navigateTo);
-    });
-  });
-
-  // 사용자 상세
-  container.querySelectorAll('.btn-detail-user').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const u = allUsers.find(x => x.id === uid);
-      if (u) showUserDetailModal(u);
-    });
-  });
-
-  // 사용자 정지/활성
-  container.querySelectorAll('.btn-suspend-user').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const uid = btn.dataset.uid;
-      const current = btn.dataset.status;
-      const newStatus = current === 'suspended' ? 'active' : 'suspended';
-      try {
-        if (isConfigured && db) {
-          await updateDoc(doc(db, 'users', uid), { status: newStatus });
-        }
-        showToast(newStatus === 'suspended' ? '사용자를 정지했습니다.' : '사용자를 활성화했습니다.', newStatus === 'suspended' ? 'warning' : 'success');
-        renderAdminPage(container, navigateTo);
-      } catch (e) {
-        showToast('처리 실패: ' + e.message, 'error');
-      }
-    });
-  });
+  // (관리 버튼은 onclick="window._invexAdminAction(this)" 인라인으로 처리됨)
 
   // 공지 작성
   container.querySelector('#btn-add-notice')?.addEventListener('click', () => {
@@ -471,7 +492,6 @@ function renderUserRow(u) {
           ${planInfo.icon} ${planId.toUpperCase()}
         </span>
       </td>
-      <td style="font-size:11px; color:var(--text-muted);">${fmt(u.createdAt)}</td>
       <td>
         <div style="font-size:11px; ${isOnline ? 'color:#22c55e; font-weight:600;' : 'color:var(--text-muted);'}">
           ${isOnline ? '🟢 온라인' : timeAgo(u.lastLogin)}
@@ -488,9 +508,9 @@ function renderUserRow(u) {
       </td>
       <td style="text-align:center;">
         <div style="display:flex; gap:2px; justify-content:center;">
-          <button class="btn btn-ghost btn-sm btn-detail-user" data-uid="${u.id}" title="상세 보기" style="font-size:12px; padding:4px 6px;">👁️</button>
-          <button class="btn btn-ghost btn-sm btn-plan-user" data-uid="${u.id}" title="요금제 변경" style="font-size:12px; padding:4px 6px;">💎</button>
-          <button class="btn btn-ghost btn-sm btn-suspend-user" data-uid="${u.id}" data-status="${u.status || 'active'}" title="${isActive ? '정지' : '활성화'}" style="font-size:12px; padding:4px 6px;">
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="detail" data-uid="${u.id}" title="상세 보기" style="font-size:12px; padding:4px 6px;">👁️</button>
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="plan" data-uid="${u.id}" title="요금제 변경" style="font-size:12px; padding:4px 6px;">💎</button>
+          <button class="btn btn-ghost btn-sm" onclick="window._invexAdminAction(this)" data-action="suspend" data-uid="${u.id}" data-status="${u.status || 'active'}" title="${isActive ? '정지' : '활성화'}" style="font-size:12px; padding:4px 6px;">
             ${isActive ? '● 활성' : '● 정지'}
           </button>
         </div>
@@ -500,21 +520,72 @@ function renderUserRow(u) {
 }
 
 // ═══════════════════════════════════════════
-// 필터링
+// 사용자 카드 렌더
+// ═══════════════════════════════════════════
+function renderUserCard(u) {
+  const planId = u.plan || 'free';
+  const planInfo = PLANS[planId] || PLANS.free;
+  const isActive = u.status !== 'suspended';
+  const isOnline = u.lastLogin && (Date.now() - new Date(u.lastLogin).getTime()) < 15 * 60 * 1000;
+
+  return `
+    <div style="
+      display:flex; align-items:center; gap:12px;
+      padding:12px 14px; border-radius:10px;
+      border:1px solid var(--border);
+      background:var(--bg-secondary);
+    " data-email="${u.email || ''}" data-name="${u.name || ''}" data-plan="${planId}">
+
+      <!-- 아바타 -->
+      <div style="position:relative; flex-shrink:0;">
+        ${u.photoURL
+          ? `<img src="${u.photoURL}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" />`
+          : `<div style="width:38px;height:38px;border-radius:50%;background:${planInfo.color}25;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:${planInfo.color};">${(u.name||'?').charAt(0)}</div>`
+        }
+        ${isOnline ? `<div style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:#22c55e;border:2px solid var(--bg-secondary);"></div>` : ''}
+      </div>
+
+      <!-- 사용자 정보 -->
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.name || '(이름 없음)'}</div>
+        <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.email || '-'}</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+          <span style="font-size:10px; padding:1px 6px; border-radius:4px; background:${planInfo.color}15; color:${planInfo.color}; font-weight:600;">${planInfo.icon} ${planId.toUpperCase()}</span>
+          <span style="font-size:10px; padding:1px 6px; border-radius:4px; background:${isActive ? '#22c55e15' : '#ef444415'}; color:${isActive ? '#22c55e' : '#ef4444'}; font-weight:600;">${isActive ? '● 활성' : '● 정지'}</span>
+          ${isOnline ? `<span style="font-size:10px; color:#22c55e;">🟢 온라인</span>` : `<span style="font-size:10px; color:var(--text-muted);">${timeAgo(u.lastLogin)}</span>`}
+        </div>
+      </div>
+
+      <!-- 액션 버튼 -->
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="detail" data-uid="${u.id}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-primary); cursor:pointer; font-size:12px; color:var(--text-primary); white-space:nowrap;"
+          title="상세 보기">👁 상세</button>
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="plan" data-uid="${u.id}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-primary); cursor:pointer; font-size:12px; color:var(--text-primary); white-space:nowrap;"
+          title="요금제 변경">💎 요금제</button>
+        <button type="button" onclick="window._invexAdminAction(this)" data-action="suspend" data-uid="${u.id}" data-status="${u.status || 'active'}"
+          style="padding:6px 10px; border-radius:6px; border:1px solid ${isActive ? '#ef444430' : '#22c55e30'}; background:${isActive ? '#ef444410' : '#22c55e10'}; cursor:pointer; font-size:12px; color:${isActive ? '#ef4444' : '#22c55e'}; white-space:nowrap;"
+          title="${isActive ? '정지' : '활성화'}">${isActive ? '🚫 정지' : '✅ 활성화'}</button>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// 필터링 (카드 기반)
 // ═══════════════════════════════════════════
 function filterUsers(container) {
   const q = (container.querySelector('#admin-user-search')?.value || '').toLowerCase();
-  const plan = container.querySelector('#admin-filter-plan')?.value || 'all';
 
-  container.querySelectorAll('#admin-users-table tbody tr').forEach(row => {
-    const email = (row.dataset.email || '').toLowerCase();
-    const name = (row.dataset.name || '').toLowerCase();
-    const rowPlan = row.dataset.plan || 'free';
+  container.querySelectorAll('#admin-user-cards > div[data-email]').forEach(card => {
+    const email = (card.dataset.email || '').toLowerCase();
+    const name = (card.dataset.name || '').toLowerCase();
+    const rowPlan = card.dataset.plan || 'free';
 
     const matchText = !q || email.includes(q) || name.includes(q);
-    const matchPlan = plan === 'all' || rowPlan === plan;
 
-    row.style.display = (matchText && matchPlan) ? '' : 'none';
+    card.style.display = matchText ? '' : 'none';
   });
 }
 
@@ -622,9 +693,11 @@ function showPlanChangeModal(user, container, navigateTo) {
     card.addEventListener('click', async () => {
       const planId = card.dataset.plan;
       try {
-        if (isConfigured && db) {
-          await updateDoc(doc(db, 'users', user.id), { plan: planId });
-        }
+        const { error } = await supabase
+          .from('profiles')
+          .update({ plan: planId })
+          .eq('id', user.id);
+        if (error) throw error;
         modal.remove();
         showToast(`${user.name || '사용자'}님의 요금제를 ${PLANS[planId].name}으로 변경했습니다.`, 'success');
         renderAdminPage(container, navigateTo);
@@ -692,23 +765,24 @@ const TICKET_STATUS = {
 
 async function loadAdminTickets(container) {
   const area = container.querySelector('#admin-tickets-area');
-  if (!area || !isConfigured) return;
+  if (!area) return;
 
   try {
-    const q = query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (snap.empty) {
+    if (error || !tickets || tickets.length === 0) {
       area.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:13px;">접수된 문의가 없습니다.</div>';
       return;
     }
 
     area.innerHTML = '';
-    snap.forEach(docSnap => {
-      const d = docSnap.data();
+    tickets.forEach(d => {
       const st = TICKET_STATUS[d.status] || TICKET_STATUS.open;
-      const date = d.createdAt?.toDate
-        ? d.createdAt.toDate().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      const date = d.created_at
+        ? new Date(d.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '-';
 
       const row = document.createElement('div');
@@ -717,11 +791,11 @@ async function loadAdminTickets(container) {
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
             <span style="font-size:10px; padding:1px 6px; border-radius:3px; background:${st.bg}; color:${st.color}; font-weight:600;">${st.label}</span>
-            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title}</span>
+            <span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.title || ''}</span>
           </div>
-          <div style="font-size:10px; color:var(--text-muted);">${d.userName || ''} (${d.userEmail || ''}) · ${date}</div>
+          <div style="font-size:10px; color:var(--text-muted);">${d.user_name || ''} (${d.user_email || ''}) · ${date}</div>
         </div>
-        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${docSnap.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
+        <button class="btn btn-ghost btn-sm btn-reply-ticket" data-id="${d.id}" style="font-size:11px; flex-shrink:0;">${d.reply ? '답변 수정' : '답변하기'}</button>
       `;
       area.appendChild(row);
     });
@@ -730,8 +804,8 @@ async function loadAdminTickets(container) {
     area.querySelectorAll('.btn-reply-ticket').forEach(btn => {
       btn.addEventListener('click', async () => {
         const ticketId = btn.dataset.id;
-        const ticketDoc = snap.docs.find(d => d.id === ticketId);
-        if (ticketDoc) showReplyModal(ticketId, ticketDoc.data(), container);
+        const ticket = tickets.find(t => t.id === ticketId);
+        if (ticket) showReplyModal(ticketId, ticket, container);
       });
     });
   } catch (e) {
@@ -782,11 +856,11 @@ function showReplyModal(ticketId, data, container) {
     if (!reply) { showToast('답변 내용을 입력하세요.', 'warning'); return; }
 
     try {
-      await updateDoc(doc(db, 'support_tickets', ticketId), {
-        reply,
-        status: 'closed',
-        repliedAt: new Date(),
-      });
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ reply, status: 'closed', replied_at: new Date().toISOString() })
+        .eq('id', ticketId);
+      if (error) throw error;
       modal.remove();
       showToast('답변이 저장되었습니다.', 'success');
       loadAdminTickets(container);

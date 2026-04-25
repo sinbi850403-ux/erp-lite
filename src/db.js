@@ -10,6 +10,21 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase-client.js';
+import { getCurrentUser } from './auth.js';
+
+const DB_TIMEOUT_MS = 15_000;
+
+/**
+ * Supabase 쿼리에 타임아웃을 적용하는 래퍼
+ * 왜 필요? → 네트워크 지연 시 무한 대기 → UI 스피너 갇힘 방지
+ */
+function withDbTimeout(queryPromise, label = 'DB query') {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timeout (${DB_TIMEOUT_MS}ms)`)), DB_TIMEOUT_MS);
+  });
+  return Promise.race([queryPromise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * 에러 핸들링 유틸 — Supabase 에러를 통일된 형태로 변환
@@ -25,9 +40,11 @@ function handleError(error, context) {
  * 현재 로그인한 사용자 ID를 안전하게 가져오기
  */
 async function getUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('로그인이 필요합니다.');
-  return user.id;
+  const user = getCurrentUser();
+  if (!user || (!user.uid && !user.id)) {
+    throw new Error('로그인이 필요합니다.');
+  }
+  return user.uid || user.id;
 }
 
 // ============================================================
@@ -72,11 +89,11 @@ export const items = {
    * 품목 1건 조회
    */
   async get(itemId) {
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('id', itemId)
-      .single();
+    const userId = await getUserId();
+    const { data, error } = await withDbTimeout(
+      supabase.from('items').select('*').eq('id', itemId).eq('user_id', userId).single(),
+      '품목 상세 조회'
+    );
     handleError(error, '품목 상세 조회');
     return data;
   },
@@ -87,11 +104,10 @@ export const items = {
    */
   async create(item) {
     const userId = await getUserId();
-    const { data, error } = await supabase
-      .from('items')
-      .insert({ ...item, user_id: userId })
-      .select()
-      .single();
+    const { data, error } = await withDbTimeout(
+      supabase.from('items').insert({ ...item, user_id: userId }).select().single(),
+      '품목 생성'
+    );
     handleError(error, '품목 생성');
     return data;
   },
@@ -128,10 +144,12 @@ export const items = {
    * 품목 수정
    */
   async update(itemId, updates) {
+    const userId = await getUserId();
     const { data, error } = await supabase
       .from('items')
       .update(updates)
       .eq('id', itemId)
+      .eq('user_id', userId)
       .select()
       .single();
     handleError(error, '품목 수정');
@@ -142,10 +160,12 @@ export const items = {
    * 품목 삭제
    */
   async remove(itemId) {
+    const userId = await getUserId();
     const { error } = await supabase
       .from('items')
       .delete()
-      .eq('id', itemId);
+      .eq('id', itemId)
+      .eq('user_id', userId);
     handleError(error, '품목 삭제');
   },
 
@@ -572,7 +592,11 @@ export const employees = {
     return (data || []).map(dbEmployeeToStore);
   },
   async get(id) {
-    const { data, error } = await supabase.from('employees').select('*').eq('id', id).single();
+    const userId = await getUserId();
+    const { data, error } = await withDbTimeout(
+      supabase.from('employees').select('*').eq('id', id).eq('user_id', userId).single(),
+      '직원 상세'
+    );
     handleError(error, '직원 상세');
     return dbEmployeeToStore(data);
   },
@@ -580,7 +604,10 @@ export const employees = {
     const userId = await getUserId();
     const rrnPlain = emp._rrnPlain;
     const row = storeEmployeeToDb(emp);
-    const { data, error } = await supabase.from('employees').insert({ ...row, user_id: userId }).select().single();
+    const { data, error } = await withDbTimeout(
+      supabase.from('employees').insert({ ...row, user_id: userId }).select().single(),
+      '직원 등록'
+    );
     handleError(error, '직원 등록');
     if (rrnPlain && data?.id) {
       const { error: e2 } = await supabase.rpc('set_employee_rrn', { emp_id: data.id, plain: rrnPlain });
@@ -600,7 +627,14 @@ export const employees = {
     return dbEmployeeToStore(data);
   },
   async remove(id) {
-    const { error } = await supabase.from('employees').delete().eq('id', id);
+    const userId = await getUserId();
+    // 소유권 확인
+    const { data: emp } = await supabase.from('employees').select('id').eq('id', id).eq('user_id', userId).single();
+    if (!emp) throw new Error('삭제 권한이 없거나 존재하지 않는 직원입니다.');
+    // 관련 데이터 cascade 삭제 (FK CASCADE가 없는 경우 대비)
+    await supabase.from('attendance').delete().eq('employee_id', id).eq('user_id', userId);
+    await supabase.from('payrolls').delete().eq('employee_id', id).eq('user_id', userId);
+    const { error } = await supabase.from('employees').delete().eq('id', id).eq('user_id', userId);
     handleError(error, '직원 삭제');
   },
   async bulkUpsert(arr) {
@@ -611,8 +645,12 @@ export const employees = {
     handleError(error, '직원 일괄 저장');
     return (data || []).map(dbEmployeeToStore);
   },
-  /** 주민번호 평문 조회 (admin 전용, 감사로그 자동 기록) */
+  /** 주민번호 평문 조회 (admin 전용, 소유권 검증 후 RPC 호출) */
   async getRRN(id) {
+    const userId = await getUserId();
+    // 이 직원이 현재 사용자 소유인지 먼저 확인
+    const { data: emp } = await supabase.from('employees').select('id').eq('id', id).eq('user_id', userId).single();
+    if (!emp) throw new Error('조회 권한이 없습니다.');
     const { data, error } = await supabase.rpc('decrypt_rrn', { emp_id: id });
     handleError(error, '주민번호 조회');
     return data;
@@ -826,6 +864,45 @@ export async function loadAllData() {
     costMethod: settingsData.costMethod || 'weighted-avg',
     currency: settingsData.currency || { code: 'KRW', symbol: '₩', rate: 1 },
   };
+}
+
+// ============================================================
+// 현재 사용자 데이터 전체 삭제 (설정 페이지 전체초기화용)
+// ============================================================
+export async function clearAllUserData() {
+  const userId = await getUserId();
+  const tableNames = [
+    'transactions',
+    'transfers',
+    'stocktakes',
+    'audit_logs',
+    'account_entries',
+    'purchase_orders',
+    'pos_sales',
+    'custom_fields',
+    'items',
+    'vendors',
+    'employees',
+    'attendance',
+    'payrolls',
+    'leaves',
+    'salary_items',
+    'user_settings',
+  ];
+
+  const failures = [];
+  for (const tableName of tableNames) {
+    const { error } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('user_id', userId);
+    if (error) failures.push({ tableName, error });
+  }
+
+  if (failures.length > 0) {
+    const tableSummary = failures.map((entry) => entry.tableName).join(', ');
+    throw new Error(`클라우드 초기화 실패: ${tableSummary}`);
+  }
 }
 
 // ============================================================
