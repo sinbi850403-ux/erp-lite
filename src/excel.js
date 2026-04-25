@@ -51,7 +51,17 @@ export async function readExcelFile(file) {
     const normalized = rows.map((row) => {
       const filled = row.slice();
       while (filled.length < maxCols) filled.push('');
-      return filled.map((cell) => (cell == null ? '' : cell));
+      return filled.map((cell) => {
+        if (cell == null) return '';
+        if (typeof cell !== 'object') return cell;
+        // ExcelJS richText
+        if (cell.richText) return cell.richText.map(r => r.text || '').join('');
+        // ExcelJS formula → use result
+        if ('result' in cell) return cell.result ?? '';
+        // ExcelJS hyperlink
+        if (cell.text != null) return String(cell.text);
+        return '';
+      });
     });
 
     sheets[worksheet.name] = normalized;
