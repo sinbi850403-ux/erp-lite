@@ -358,13 +358,13 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th class="text-right">합계금액</th>
         <th style="width:50px;">삭제</th>`;
     } else if (isOutMode) {
-      // 출고관리: 자산|출고일자|매장명|상품코드|품명|규격|단위|출고수량|출고단가|출고금액|출고합|공급가|부가세|공가합|매입원가|이익액|이익률|매출원가율
+      // 출고관리: 자산|출고일자|거래처|상품코드|품명|규격|단위|출고수량|출고단가|출고금액|출고합|공급가|부가세|공가합|매입원가|이익액|이익률|매출원가율
       cols = `
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
         <th class="col-num">#</th>
         <th>자산</th>
         ${sortableTh('date', '출고일자')}
-        ${sortableTh('vendor', '매장명')}
+        ${sortableTh('vendor', '거래처')}
         <th>상품코드</th>
         ${sortableTh('itemName', '품명')}
         <th>규격</th>
@@ -1084,7 +1084,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         return {
           '자산':       it.category || tx.category || '',
           '출고일자':   tx.date || '',
-          '매장명':     tx.vendor || '',
+          '거래처':     tx.vendor || '',
           '상품코드':   tx.itemCode || it.itemCode || '',
           '품명':       tx.itemName || '',
           '규격':       tx.spec || it.spec || '',
@@ -1216,7 +1216,7 @@ function openBulkUploadModal(container, navigateTo, items, modeDefault = null) {
 
     if (modeDefault === 'out') {
       // 출고 양식: 사용자 입력 필드만 (계산값은 시스템이 자동 산출)
-      const outHeaders = ['자산', '출고일자', '매장명', '상품코드', '품명', '규격', '단위', '출고수량', '출고단가'];
+      const outHeaders = ['자산', '출고일자', '거래처', '상품코드', '품명', '규격', '단위', '출고수량', '출고단가'];
       templateRows = [
         outHeaders,
         ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 10, 1500000],
@@ -1644,7 +1644,18 @@ function openTxModal(container, navigateTo, type, items) {
               <div class="form-input" style="background:var(--bg-lighter); cursor:default; font-weight:600;" id="tx-margin-value">-</div>
               <div class="smart-inline-note">이익률 = (실판매가 - 원가) ÷ 원가 × 100</div>
             </div>
-            ` : ''}
+            ` : `
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">출고단가 <span style="font-size:11px; color:var(--text-muted);">(판매가)</span></label>
+                <input class="form-input" type="number" id="tx-selling-price" placeholder="선택 사항" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" style="color:transparent;">-</label>
+                <div id="tx-out-profit-display" style="padding:8px 12px; background:var(--bg-lighter); border-radius:var(--radius); font-size:13px; color:var(--text-muted);">출고단가 입력 시 이익 자동 계산</div>
+              </div>
+            </div>
+            `}
 
             <details class="smart-details" open>
               <summary>날짜와 메모 더 보기</summary>
@@ -1800,7 +1811,7 @@ function openTxModal(container, navigateTo, type, items) {
       ? `${qty.toLocaleString('ko-KR')}개 × ${formatMoney(price)} 기준 금액입니다.`
       : '수량과 원가를 넣으면 금액을 즉시 계산합니다.';
 
-    // 이익률 계산 (입고 전용)
+    // 이익 계산 표시
     if (type === 'in') {
       const actualPrice = parseFloat(inputs.actualPrice?.value) || 0;
       const marginDisplayEl = overlay.querySelector('#tx-margin-display');
@@ -1823,6 +1834,19 @@ function openTxModal(container, navigateTo, type, items) {
       } else {
         if (marginDisplayEl) marginDisplayEl.style.display = 'none';
         if (summaryMarginWrap) summaryMarginWrap.style.display = 'none';
+      }
+    } else if (type === 'out') {
+      const salePrice = parseFloat(inputs.sellingPrice?.value) || 0;
+      const profitEl = overlay.querySelector('#tx-out-profit-display');
+      if (profitEl && salePrice > 0 && price > 0 && qty > 0) {
+        const outAmt = Math.round(salePrice * qty);
+        const costAmt = Math.round(price * qty);
+        const profit = outAmt - costAmt;
+        const profitRate = ((profit / costAmt) * 100).toFixed(1);
+        const color = profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : 'var(--text-muted)';
+        profitEl.innerHTML = `이익액 <strong style="color:${color};">₩${profit.toLocaleString('ko-KR')}</strong> &nbsp; 이익률 <strong style="color:${color};">${profit >= 0 ? '+' : ''}${profitRate}%</strong>`;
+      } else if (profitEl) {
+        profitEl.textContent = '출고단가 입력 시 이익 자동 계산';
       }
     }
 
