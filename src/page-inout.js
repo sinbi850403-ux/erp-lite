@@ -1293,11 +1293,16 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       vendor:             findCol('거래처', '매장명'),
       itemName:           findCol('품명', '품목명'),
       itemCode:           findCol('상품코드', '품목코드'),
-      quantity:           findCol('입고수량', '출고수량', '수량'),
+      // 출고 모드는 출고수량 우선, 입고 모드는 입고수량 우선
+      quantity:           modeDefault === 'out'
+        ? findCol('출고수량', '입고수량', '수량')
+        : findCol('입고수량', '출고수량', '수량'),
       unitPrice:          findCol('단가', '원가'),
       sellingPrice:       findCol('판매가', '출고단가'),
       actualSellingPrice: findCol('실판매가'),
-      date:               findCol('입고일자', '출고일자', '날짜'),
+      date:               modeDefault === 'out'
+        ? findCol('출고일자', '입고일자', '날짜')
+        : findCol('입고일자', '출고일자', '날짜'),
       note:               findCol('비고'),
       spec:               findCol('규격'),
       unit:               findCol('단위'),
