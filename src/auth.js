@@ -16,8 +16,11 @@ let userProfile = null;
 let authChangeCallbacks = [];
 let authSubscription = null;
 let authInitialized = false;
-// 세션 동안 RLS/권한 오류로 프로필 부트스트랩이 실패했으면 재시도하지 않음
-let profileBootstrapBlocked = false;
+// RLS/권한 오류로 프로필 부트스트랩이 실패했으면 재시도하지 않음 (localStorage 영속)
+const _BS_BLOCKED_KEY = 'invex-profile-bs-blocked';
+let profileBootstrapBlocked = (() => {
+  try { return localStorage.getItem(_BS_BLOCKED_KEY) === '1'; } catch (_) { return false; }
+})();
 // 동시 부트스트랩 방지 — 진행 중이면 같은 Promise를 공유
 let profileBootstrapInflight = null;
 
@@ -210,6 +213,7 @@ async function loadProfile(user) {
                 if (!profileBootstrapBlocked) {
                   console.info('[Auth] profile 부트스트랩 차단 (RLS) — 폴백 프로필로 동작');
                   profileBootstrapBlocked = true;
+                  try { localStorage.setItem(_BS_BLOCKED_KEY, '1'); } catch (_) {}
                 }
               } else {
                 console.warn('[Auth] profile insert error:', insertError.message);
