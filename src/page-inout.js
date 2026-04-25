@@ -81,15 +81,46 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
   ];
   const todayTxIn = countToday(transactions, 'in');
   const todayTxOut = countToday(transactions, 'out');
+  const inTxList  = transactions.filter(tx => tx.type === 'in');
+  const outTxList = transactions.filter(tx => tx.type === 'out');
   const vendorMissingCount = transactions.filter(tx => !String(tx.vendor || '').trim()).length;
-  const quickTxFilters = [
-    { value: 'all', label: '전체 보기' },
-    { value: 'today', label: '오늘 기록' },
-    { value: 'in', label: '입고만' },
-    { value: 'out', label: '출고만' },
-    { value: 'missingVendor', label: '거래처 미입력' },
-    { value: 'recent3', label: '최근 3일' },
-  ];
+
+  // 모드별 통계
+  const statTotalLabel = isInMode ? '전체 입고' : isOutMode ? '전체 출고' : '전체 기록';
+  const statTotalValue = isInMode ? inTxList.length : isOutMode ? outTxList.length : transactions.length;
+  const statTodayLabel = isInMode ? '오늘 입고' : isOutMode ? '오늘 출고' : '오늘 입고';
+  const statTodayValue = isInMode ? todayTxIn : isOutMode ? todayTxOut : todayTxIn;
+  const statTodayClass = isInMode ? 'text-success' : isOutMode ? 'text-danger' : 'text-success';
+  const stat3Label    = isInMode ? '이번달 입고' : isOutMode ? '이번달 출고' : '오늘 출고';
+  const now = new Date(); const monthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthInCount  = inTxList.filter(tx => String(tx.date||'').startsWith(monthKey)).length;
+  const monthOutCount = outTxList.filter(tx => String(tx.date||'').startsWith(monthKey)).length;
+  const stat3Value    = isInMode ? monthInCount : isOutMode ? monthOutCount : todayTxOut;
+  const stat3Class    = isInMode ? 'text-success' : isOutMode ? 'text-danger' : 'text-danger';
+
+  // 모드별 빠른 필터 칩
+  const quickTxFilters = isInMode
+    ? [
+        { value: 'in',     label: '전체 보기' },
+        { value: 'today',  label: '오늘 기록' },
+        { value: 'recent3',label: '최근 3일' },
+        { value: 'missingVendor', label: '거래처 미입력' },
+      ]
+    : isOutMode
+      ? [
+          { value: 'out',    label: '전체 보기' },
+          { value: 'today',  label: '오늘 기록' },
+          { value: 'recent3',label: '최근 3일' },
+          { value: 'missingVendor', label: '거래처 미입력' },
+        ]
+      : [
+          { value: 'all',   label: '전체 보기' },
+          { value: 'today', label: '오늘 기록' },
+          { value: 'in',    label: '입고만' },
+          { value: 'out',   label: '출고만' },
+          { value: 'missingVendor', label: '거래처 미입력' },
+          { value: 'recent3', label: '최근 3일' },
+        ];
 
   container.innerHTML = `
     <div class="page-header">
@@ -102,26 +133,27 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         }</div>
       </div>
       <div class="page-actions">
+        ${!isOutMode ? '' : ''}
         <button class="btn btn-outline" id="btn-export-tx">이력 내보내기</button>
         <button class="btn btn-outline" id="btn-bulk-upload">엑셀 일괄 등록</button>
-        <button class="btn btn-success" id="btn-in">입고 등록</button>
-        <button class="btn btn-danger" id="btn-out">출고 등록</button>
+        ${!isOutMode ? `<button class="btn btn-success" id="btn-in">입고 등록</button>` : ''}
+        ${!isInMode  ? `<button class="btn btn-danger"  id="btn-out">출고 등록</button>` : ''}
       </div>
     </div>
 
-    <!-- 오늘 통계 -->
+    <!-- 모드별 통계 -->
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="stat-label">전체 기록</div>
-        <div class="stat-value text-accent">${transactions.length}건</div>
+        <div class="stat-label">${statTotalLabel}</div>
+        <div class="stat-value text-accent">${statTotalValue}건</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">오늘 입고</div>
-        <div class="stat-value text-success">${countToday(transactions, 'in')}건</div>
+        <div class="stat-label">${statTodayLabel}</div>
+        <div class="stat-value ${statTodayClass}">${statTodayValue}건</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">오늘 출고</div>
-        <div class="stat-value text-danger">${countToday(transactions, 'out')}건</div>
+        <div class="stat-label">${stat3Label}</div>
+        <div class="stat-value ${stat3Class}">${stat3Value}건</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">등록 품목 수</div>
@@ -132,17 +164,20 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
     ${renderQuickFilterRow({
       label: '빠른 조건',
       attr: 'data-tx-quick',
-      chips: quickTxFilters.map(chip => ({ ...chip, active: chip.value === initialQuick })),
+      chips: quickTxFilters.map((chip, i) => ({ ...chip, active: i === 0 })),
     })}
 
-    <!-- ?꾪꽣 -->
+    <!-- 검색 툴바 -->
     <div class="toolbar">
       <input type="text" class="search-input" id="tx-search" placeholder="품목명 또는 코드로 검색..." />
+      ${isInMode || isOutMode ? '' : `
       <select class="filter-select" id="tx-type-filter">
         <option value="">전체</option>
         <option value="in">입고만</option>
         <option value="out">출고만</option>
-      </select>
+      </select>`}
+      ${isInMode ? `<select class="filter-select" id="tx-type-filter" style="display:none;"><option value="in" selected>입고만</option></select>` : ''}
+      ${isOutMode ? `<select class="filter-select" id="tx-type-filter" style="display:none;"><option value="out" selected>출고만</option></select>` : ''}
       <select class="filter-select" id="tx-vendor-filter">
         <option value="">전체 거래처</option>
         ${buildOptionTags(getVendorOptions(transactions, items))}
@@ -189,8 +224,9 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
   // mode가 'in'/'out'이면 저장된 필터 무시하고 항상 해당 타입으로 고정
   const savedViewPrefs = (isInMode || isOutMode) ? {} : (state.inoutViewPrefs || {});
   let filter = sanitizeInoutFilter(savedViewPrefs.filter);
-  // mode 고정: in/out 전용 페이지에서는 quick 필터를 mode로 강제 설정
-  if (isInMode || isOutMode) filter.quick = initialQuick;
+  // mode 고정: in/out 전용 페이지에서는 type·quick 필터를 mode로 강제 설정
+  if (isInMode)  { filter.quick = 'in';  filter.type = 'in';  }
+  if (isOutMode) { filter.quick = 'out'; filter.type = 'out'; }
   let sort = sanitizeInoutSort(savedViewPrefs.sort);
   let persistTimer = null;
 
