@@ -1206,12 +1206,14 @@ function openBulkUploadModal(container, navigateTo, items, modeDefault = null) {
     let templateRows, sheetName, fileName;
 
     if (modeDefault === 'out') {
-      // 출고 양식: 이력 내보내기와 동일한 컬럼 (자산|출고일자|매장명|상품코드|품명|규격|단위|출고수량|단가|출고단가)
-      const outHeaders = ['자산', '출고일자', '매장명', '상품코드', '품명', '규격', '단위', '출고수량', '단가', '출고단가'];
+      // 출고 양식: 이력 내보내기와 동일한 16열 컬럼
+      const outHeaders = ['자산', '출고일자', '매장명', '상품코드', '입고수량', '단가', '공급가액', '부가세', '합계금액', '출고단가', '출고수량', '출고금액', '매입원가', '이익액', '이익율', '매출원가율'];
+      const s1 = 1200000 * 10, v1 = Math.floor(s1 * 0.1), sale1 = 1500000 * 10;
+      const s2 = 850000 * 5,   v2 = Math.floor(s2 * 0.1),   sale2 = 1100000 * 5;
       templateRows = [
         outHeaders,
-        ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 10, 1200000, 1500000],
-        ['전자기기', today, '홍대점', 'AP-001', '아이패드 Air', '256GB 스타라이트', 'EA', 5, 850000, 1100000],
+        ['전자기기', today, '강남점', 'SM-S925', 10, 1200000, s1, v1, s1 + v1, 1500000, 10, sale1, s1, sale1 - s1, ((sale1 - s1) / s1 * 100).toFixed(1) + '%', (s1 / sale1 * 100).toFixed(1) + '%'],
+        ['전자기기', today, '홍대점', 'AP-001',  5,  850000, s2, v2, s2 + v2, 1100000, 5,  sale2, s2, sale2 - s2, ((sale2 - s2) / s2 * 100).toFixed(1) + '%', (s2 / sale2 * 100).toFixed(1) + '%'],
       ];
       sheetName = '출고_양식';
       fileName = '출고_일괄등록_양식';
@@ -1307,9 +1309,9 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       }
     });
 
-    if (colMap.itemName === -1 || colMap.quantity === -1) {
-      const missing = [colMap.itemName === -1 && '품명', colMap.quantity === -1 && '수량'].filter(Boolean).join(', ');
-      previewEl.innerHTML = `<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다 (누락: ${missing}). 양식에 "품명"(또는 "품목명"), "입고수량"(또는 "출고수량") 컬럼이 포함되어 있는지 확인해 주세요.</div>`;
+    if ((colMap.itemName === -1 && colMap.itemCode === -1) || colMap.quantity === -1) {
+      const missing = [(colMap.itemName === -1 && colMap.itemCode === -1) && '품명/상품코드', colMap.quantity === -1 && '수량'].filter(Boolean).join(', ');
+      previewEl.innerHTML = `<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다 (누락: ${missing}). 양식에 "품명"(또는 "상품코드"), "입고수량"(또는 "출고수량") 컬럼이 포함되어 있는지 확인해 주세요.</div>`;
       return;
     }
     // 구분 컬럼 없으면 현재 페이지 모드(입고/출고) 기본값 사용
@@ -1321,15 +1323,17 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       if (!row || row.length === 0) continue;
 
       const typeCell = colMap.type >= 0 ? String(row[colMap.type] ?? '').trim() : '';
-      const itemName = String(row[colMap.itemName] ?? '').trim();
+      const rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      let itemName = colMap.itemName >= 0 ? String(row[colMap.itemName] ?? '').trim() : '';
       const quantity = parseBulkNumber(row[colMap.quantity]);
 
-      if (!itemName || quantity <= 0) continue;
-
-      const rawItemCode = colMap.itemCode >= 0 ? String(row[colMap.itemCode] ?? '').trim() : '';
+      // 품명 없을 때 상품코드로 품목 조회
       const matchedItem = items.find((item) =>
-        item.itemName === itemName || (rawItemCode && item.itemCode && item.itemCode === rawItemCode)
+        (itemName && item.itemName === itemName) || (rawItemCode && item.itemCode && item.itemCode === rawItemCode)
       );
+      if (!itemName && matchedItem) itemName = matchedItem.itemName;
+
+      if (!itemName || quantity <= 0) continue;
 
       let dateStr = '';
       if (colMap.date >= 0) {
