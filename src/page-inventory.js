@@ -133,8 +133,46 @@ export function renderInventoryPage(container, navigateTo) {
   }
 
   const state = getState();
-  const data = state.mappedData || [];
   const safetyStock = state.safetyStock || {};
+
+  // transactions 기반으로 품목별 출고/이익 집계 후 data에 병합
+  const rawData = state.mappedData || [];
+  const txAgg = {};
+  (state.transactions || []).forEach(tx => {
+    const k = tx.itemName;
+    if (!k) return;
+    if (!txAgg[k]) txAgg[k] = { inQty: 0, outQty: 0, outAmt: 0, costAmt: 0 };
+    const qty = parseFloat(tx.quantity) || 0;
+    if (tx.type === 'in') {
+      txAgg[k].inQty += qty;
+    } else {
+      txAgg[k].outQty += qty;
+      const sp = parseFloat(tx.actualSellingPrice || tx.sellingPrice) || 0;
+      const cp = parseFloat(tx.unitPrice) || 0;
+      txAgg[k].outAmt  += Math.round(sp * qty);
+      txAgg[k].costAmt += Math.round(cp * qty);
+    }
+  });
+  const data = rawData.map(item => {
+    const agg = txAgg[item.itemName] || {};
+    const outQty       = agg.outQty  || 0;
+    const outAmt       = agg.outAmt  || 0;
+    const costAmt      = agg.costAmt || 0;
+    const profit       = outAmt - costAmt;
+    const unitPrice    = parseFloat(item.unitPrice) || 0;
+    const qty          = parseFloat(item.quantity)  || 0;
+    return {
+      ...item,
+      inQty:                agg.inQty || 0,
+      outQty:               outQty || '',
+      outTotalPrice:        outAmt  || '',
+      purchaseCost:         costAmt || '',
+      profit:               outAmt > 0 ? profit : '',
+      profitMargin:         costAmt > 0 && outAmt > 0 ? ((profit / costAmt) * 100).toFixed(1) + '%' : '',
+      cogsMargin:           outAmt > 0 ? ((costAmt / outAmt) * 100).toFixed(1) + '%' : '',
+      endingInventoryValue: qty > 0 && unitPrice > 0 ? Math.round(qty * unitPrice) : '',
+    };
+  });
 
   if (data.length === 0) {
     container.innerHTML = `
@@ -2083,17 +2121,24 @@ function openItemModal(container, navigateTo, editIdx = null) {
 
 function formatCell(key, value) {
   if (value === '' || value === null || value === undefined) return '';
-  if (['quantity', 'unitPrice', 'salePrice', 'supplyValue', 'vat', 'totalPrice'].includes(key)) {
+  const moneyKeys = ['unitPrice', 'salePrice', 'supplyValue', 'vat', 'totalPrice',
+                     'outTotalPrice', 'purchaseCost', 'profit', 'endingInventoryValue'];
+  const numKeys   = ['quantity', 'inQty', 'outQty'];
+  const pctKeys   = ['profitMargin', 'cogsMargin'];
+  if (moneyKeys.includes(key)) {
     const valStr = typeof value === 'string' ? value.replace(/,/g, '') : value;
     const num = parseFloat(valStr);
     if (!isNaN(num)) {
-      // 왜 Math.round? → 원단위 반올림 (한국 원화는 소수점 없음)
-      if (key === 'unitPrice' || key === 'salePrice' || key === 'supplyValue' || key === 'vat' || key === 'totalPrice') {
-        return '₩' + Math.round(num).toLocaleString('ko-KR');
-      }
-      return Math.round(num).toLocaleString('ko-KR');
+      const color = key === 'profit' ? (num > 0 ? ' style="color:var(--success);"' : num < 0 ? ' style="color:var(--danger);"' : '') : '';
+      return `<span${color}>₩${Math.round(num).toLocaleString('ko-KR')}</span>`;
     }
   }
+  if (numKeys.includes(key)) {
+    const valStr = typeof value === 'string' ? value.replace(/,/g, '') : value;
+    const num = parseFloat(valStr);
+    if (!isNaN(num)) return Math.round(num).toLocaleString('ko-KR');
+  }
+  if (pctKeys.includes(key)) return escapeHtml(String(value));
   return escapeHtml(String(value));
 }
 
