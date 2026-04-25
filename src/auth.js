@@ -139,11 +139,25 @@ async function loadProfile(user) {
   const fallback = createFallbackProfile(user);
 
   try {
-    const { data, error } = await withTimeout(
+    // 첫 시도: 8초 타임아웃
+    let result = await withTimeout(
       supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle(),
-      15000,
+      8000,
       'load-profile',
-    );
+    ).catch(async (firstErr) => {
+      // 타임아웃 또는 일시 오류 → 2초 뒤 1회 재시도
+      if (firstErr.message?.includes('timeout') || firstErr.message?.includes('fetch')) {
+        console.warn('[Auth] profile load 재시도 중...');
+        await new Promise(r => setTimeout(r, 2000));
+        return withTimeout(
+          supabase.from('profiles').select('*').eq('id', user.uid).maybeSingle(),
+          8000,
+          'load-profile-retry',
+        );
+      }
+      throw firstErr;
+    });
+    const { data, error } = result;
 
     if (error) {
       throw error;

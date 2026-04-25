@@ -916,10 +916,10 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
   });
 
   // 필터/정렬 이벤트
-  container.querySelector('#btn-in').addEventListener('click', () => {
+  container.querySelector('#btn-in')?.addEventListener('click', () => {
     openTxModal(container, navigateTo, 'in', items);
   });
-  container.querySelector('#btn-out').addEventListener('click', () => {
+  container.querySelector('#btn-out')?.addEventListener('click', () => {
     openTxModal(container, navigateTo, 'out', items);
   });
 
