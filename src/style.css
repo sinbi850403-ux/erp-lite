@@ -4641,18 +4641,18 @@ select.is-success {
   background: rgba(255,255,255,0.1);
 }
 
-/* 라이트 모드 */
+/* 라이트 모드 — 사이드바 배경이 항상 다크이므로 텍스트도 항상 밝은 색 유지 */
 html:not(.dark-mode) .snav-direct,
 html:not(.dark-mode) .snav-item {
-  color: rgba(15,25,50,0.78);
+  color: rgba(255,255,255,0.82);
 }
 html:not(.dark-mode) .snav-direct:hover,
-html:not(.dark-mode) .snav-item:hover { color: rgba(5,10,30,1); background: rgba(0,0,0,0.05); }
-html:not(.dark-mode) .snav-direct.active { color: #0f2d6b; font-weight: 700; }
-html:not(.dark-mode) .snav-item.active { color: #0f2d6b; font-weight: 600; background: rgba(0,50,180,0.08); }
-html:not(.dark-mode) .snav-header { color: rgba(15,25,50,0.45); }
-html:not(.dark-mode) .snav-header:hover { color: rgba(15,25,50,0.75); }
-html:not(.dark-mode) .snav-toggle { color: rgba(15,25,50,0.35); }
+html:not(.dark-mode) .snav-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+html:not(.dark-mode) .snav-direct.active { color: #fff; font-weight: 700; }
+html:not(.dark-mode) .snav-item.active { color: #fff; font-weight: 600; background: rgba(255,255,255,0.12); }
+html:not(.dark-mode) .snav-header { color: rgba(255,255,255,0.48); }
+html:not(.dark-mode) .snav-header:hover { color: rgba(255,255,255,0.78); }
+html:not(.dark-mode) .snav-toggle { color: rgba(255,255,255,0.38); }
 
 /* ─────────────────────────────────────────────────────── */
 
