@@ -3,7 +3,7 @@ const COLLAPSE_STORAGE_KEY = 'invex:page-collapse:v1';
 const TARGET_PAGES = new Set([
   // 관리
   'inventory',
-  'inout',
+  'in',
   'bulk',
   'scanner',
   'labels',

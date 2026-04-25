@@ -56,7 +56,6 @@ export const PAGE_LOADERS = {
   upload:          () => import('./page-upload.js').then(m => m.renderUploadPage),
   mapping:         () => import('./page-mapping.js').then(m => m.renderMappingPage),
   inventory:       () => import('./page-inventory.js').then(m => m.renderInventoryPage),
-  inout:           () => import('./page-inout.js').then(m => m.renderInoutPage),
   in:              () => import('./page-inout.js').then(m => m.renderInPage),
   out:             () => import('./page-inout.js').then(m => m.renderOutPage),
   summary:         () => import('./page-summary.js').then(m => m.renderSummaryPage),

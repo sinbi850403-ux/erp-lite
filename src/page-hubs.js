@@ -56,11 +56,19 @@ export function renderHubInventory(container, navigateTo) {
       })}
       ${renderHubCard({
         icon: '📥',
-        title: '입출고 관리',
-        desc: '입고와 출고를 기록하고 재고 수량을 즉시 반영합니다.',
-        nav: 'inout',
+        title: '입고 관리',
+        desc: '입고를 기록하면 재고 수량이 즉시 증가합니다.',
+        nav: 'in',
         color: '#16a34a',
-        meta: `전체 기록 ${txCount}건`,
+        meta: `입고 기록 ${state.transactions?.filter(t=>t.type==='in').length||0}건`,
+      })}
+      ${renderHubCard({
+        icon: '📤',
+        title: '출고 관리',
+        desc: '출고를 기록하면 재고 수량이 즉시 감소합니다.',
+        nav: 'out',
+        color: '#dc2626',
+        meta: `출고 기록 ${state.transactions?.filter(t=>t.type==='out').length||0}건`,
       })}
       ${renderHubCard({
         icon: '🧩',
@@ -441,7 +449,6 @@ export function renderHubSupport(container, navigateTo) {
 export const HUB_MAP = {
   // 재고관리 서브메뉴 페이지 — 사이드바 서브 버튼이 직접 활성화되므로 hub 매핑 제외
   // in, out, inventory, ledger는 매핑하지 않음 (activeId = 자기 자신)
-  inout: 'hub-inventory',
   bulk: 'hub-inventory',
   stocktake: 'hub-inventory',
   warehouses: 'hub-warehouse',
@@ -499,7 +506,6 @@ export const PAGE_LABELS = {
   upload: '파일 업로드',
   mapping: '데이터 확인',
   inventory: '재고현황',
-  inout: '입출고 관리',
   in: '입고관리',
   out: '출고관리',
   bulk: '일괄 처리',

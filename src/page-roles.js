@@ -26,7 +26,7 @@ const DEFAULT_ROLES = [
     color: '#3b82f6',
     description: '데이터 조회/편집 가능. 설정 및 사용자 관리 불가.',
     permissions: [
-      'dashboard', 'inventory', 'inout', 'scanner', 'documents',
+      'dashboard', 'inventory', 'in', 'scanner', 'documents',
       'transfer', 'vendors', 'summary', 'ledger', 'costing',
       'accounts', 'warehouses', 'stocktake', 'bulk', 'labels',
     ],
@@ -39,7 +39,7 @@ const DEFAULT_ROLES = [
     color: '#10b981',
     description: '재고 입출고, 문서 생성 등 일상 업무 수행.',
     permissions: [
-      'dashboard', 'inventory', 'inout', 'scanner', 'documents',
+      'dashboard', 'inventory', 'in', 'scanner', 'documents',
       'transfer', 'labels', 'ledger',
     ],
     isSystem: true,
@@ -63,7 +63,7 @@ const ALL_PERMISSIONS = [
   { id: 'upload', name: '파일 업로드', icon: '', group: '데이터' },
   { id: 'mapping', name: '데이터 확인', icon: '', group: '데이터' },
   { id: 'inventory', name: '재고 현황', icon: '', group: '관리' },
-  { id: 'inout', name: '입출고 관리', icon: '', group: '관리' },
+  { id: 'in', name: '입출고 관리', icon: '', group: '관리' },
   { id: 'bulk', name: '일괄 처리', icon: '', group: '관리' },
   { id: 'scanner', name: '바코드 스캔', icon: '', group: '관리' },
   { id: 'labels', name: '라벨 인쇄', icon: '', group: '관리' },

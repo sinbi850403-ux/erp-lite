@@ -159,7 +159,7 @@ function renderSearchResults(query) {
         icon: tx.type === 'in' ? '📥' : '📤',
         title: `${tx.itemName} (${tx.type === 'in' ? '+' : '-'}${tx.quantity})`,
         subtitle: `${tx.date} | ${tx.note || '-'}`,
-        page: 'inout',
+        page: 'in',
       });
     }
   });
@@ -170,7 +170,7 @@ function renderSearchResults(query) {
     { name: '파일 업로드', page: 'upload', icon: '' },
     { name: '데이터 확인', page: 'mapping', icon: '' },
     { name: '재고 현황', page: 'inventory', icon: '' },
-    { name: '입출고 관리', page: 'inout', icon: '' },
+    { name: '입출고 관리', page: 'in', icon: '' },
     { name: '바코드 스캔', page: 'scanner', icon: '' },
     { name: '창고 이동', page: 'transfer', icon: '' },
     { name: '요약 보고', page: 'summary', icon: '' },

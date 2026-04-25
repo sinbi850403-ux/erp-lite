@@ -38,7 +38,7 @@ export function renderGuidePage(container, navigateTo) {
     { num: 1, icon: '', title: '엑셀 파일 업로드', desc: '기존 재고 데이터가 담긴 엑셀(.xlsx)을 업로드하세요.', page: 'upload' },
     { num: 2, icon: '', title: '데이터 매핑 확인', desc: '엑셀 컬럼과 시스템 필드가 올바르게 매핑되었는지 확인하세요.', page: 'mapping' },
     { num: 3, icon: '', title: '재고 현황 확인', desc: '업로드된 재고 목록을 확인하고 수정하세요.', page: 'inventory' },
-    { num: 4, icon: '', title: '입출고 등록', desc: '물품의 입고와 출고를 등록하세요. 재고가 자동으로 반영됩니다.', page: 'inout' },
+    { num: 4, icon: '', title: '입출고 등록', desc: '물품의 입고와 출고를 등록하세요. 재고가 자동으로 반영됩니다.', page: 'in' },
     { num: 5, icon: '', title: '보고서 확인', desc: '대시보드와 요약 보고에서 경영 현황을 한눈에 파악하세요.', page: 'summary' },
   ];
 
@@ -101,7 +101,7 @@ export function renderGuidePage(container, navigateTo) {
   const features = [
     { icon: '', name: '엑셀 업로드', desc: '기존 데이터를 빠르게 가져오기', page: 'upload' },
     { icon: '', name: '재고 관리', desc: '실시간 재고 현황 모니터링', page: 'inventory' },
-    { icon: '', name: '입출고', desc: '입고·출고 내역 등록 및 추적', page: 'inout' },
+    { icon: '', name: '입출고', desc: '입고·출고 내역 등록 및 추적', page: 'in' },
     { icon: '', name: '자동 발주', desc: 'AI 기반 발주 추천', page: 'auto-order' },
     { icon: '', name: '수요 예측', desc: '과거 데이터 기반 수요 분석', page: 'forecast' },
     { icon: '', name: '원가 분석', desc: '품목별 마진·원가 자동 계산', page: 'costing' },

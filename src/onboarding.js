@@ -188,7 +188,7 @@ function showOnboardingModal(navigateTo) {
     });
     overlay.querySelector('.onb-go-inout')?.addEventListener('click', () => {
       finish();
-      navigateTo('inout');
+      navigateTo('in');
     });
     overlay.querySelector('.onb-go-guide')?.addEventListener('click', () => {
       finish();

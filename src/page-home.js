@@ -127,7 +127,7 @@ export function renderHomePage(container, navigateTo) {
         { title: '거래처 점검', desc: '공급처와 고객 현황을 보고 거래 집중도를 확인합니다.', meta: '거래처 관리로 이동', nav: 'vendors' },
       ]
     : [
-        { title: '입출고 등록', desc: '오늘 들어오고 나간 수량을 바로 반영합니다.', meta: '입출고 페이지 열기', nav: 'inout' },
+        { title: '입출고 등록', desc: '오늘 들어오고 나간 수량을 바로 반영합니다.', meta: '입출고 페이지 열기', nav: 'in' },
         { title: '재고 부족 확인', desc: '부족 품목부터 채워서 현장 리스크를 줄입니다.', meta: '재고 현황 열기', nav: 'inventory' },
         { title: '수불부 보기', desc: '기초재고, 입고, 출고, 기말재고를 바로 확인합니다.', meta: '수불부 열기', nav: 'ledger' },
         { title: '문서 생성', desc: '필요한 보고서나 증빙 문서를 빠르게 만듭니다.', meta: '문서 페이지 열기', nav: 'documents' },
@@ -231,7 +231,7 @@ export function renderHomePage(container, navigateTo) {
             { nav: 'dashboard', label: '고급 분석 열기', variant: 'btn-outline' },
           ]
         : [
-            { nav: 'inout', label: '입출고 등록', variant: 'btn-primary' },
+            { nav: 'in', label: '입출고 등록', variant: 'btn-primary' },
             { nav: 'ledger', label: '수불부 보기', variant: 'btn-outline' },
           ],
     }) : ''}
@@ -417,12 +417,12 @@ export function renderHomePage(container, navigateTo) {
 
   container.querySelector('#btn-home-quick-in')?.addEventListener('click', () => {
     sessionStorage.setItem('invex:quick-open-inbound', '1');
-    navigateTo('inout');
+    navigateTo('in');
   });
 
   container.querySelector('#btn-home-quick-out')?.addEventListener('click', () => {
     sessionStorage.setItem('invex:quick-open-outbound', '1');
-    navigateTo('inout');
+    navigateTo('in');
   });
 
   container.querySelector('#btn-home-quick-item')?.addEventListener('click', () => {
@@ -915,7 +915,7 @@ function buildOperatorTasks(context) {
           kicker: '1순위',
           title: '재고 부족 품목 없음',
           desc: '오늘은 부족 재고보다 입출고 기록 누락 여부를 먼저 보면 됩니다.',
-          nav: 'inout',
+          nav: 'in',
           action: '입출고 열기',
         }
   );
@@ -951,7 +951,7 @@ function buildOperatorTasks(context) {
           kicker: '3순위',
           title: '오늘 거래 기록이 아직 없습니다',
           desc: '입고나 출고가 있었다면 지금 바로 기록해 두는 것이 좋습니다.',
-          nav: 'inout',
+          nav: 'in',
           action: '거래 등록',
         }
   );

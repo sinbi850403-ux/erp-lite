@@ -1297,7 +1297,7 @@ export function renderInventoryPage(container, navigateTo) {
     if (bulkCategoryBtn) bulkCategoryBtn.onclick = applyBulkCategory;
     if (bulkExportBtn) bulkExportBtn.onclick = exportSelectedRows;
     if (bulkDeleteBtn) bulkDeleteBtn.onclick = deleteSelectedRows;
-    if (timelineInoutBtn) timelineInoutBtn.onclick = () => navigateTo('inout');
+    if (timelineInoutBtn) timelineInoutBtn.onclick = () => navigateTo('in');
 
     container.querySelectorAll('#inventory-body tr[data-row-key]').forEach(rowEl => {
       rowEl.addEventListener('click', (event) => {
@@ -1533,7 +1533,7 @@ export function renderInventoryPage(container, navigateTo) {
   });
 
   // 페이지당 행 수
-  container.querySelector('#btn-quick-inout')?.addEventListener('click', () => navigateTo('inout'));
+  container.querySelector('#btn-quick-inout')?.addEventListener('click', () => navigateTo('in'));
   container.querySelector('#btn-quick-guide')?.addEventListener('click', () => navigateTo('guide'));
   container.querySelector('#btn-quick-dashboard')?.addEventListener('click', () => navigateTo('home'));
   container.querySelector('#btn-add-item-inline')?.addEventListener('click', () => openItemModal(container, navigateTo));
