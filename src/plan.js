@@ -44,7 +44,7 @@ export const PLANS = {
       'bulk', 'scanner', 'labels', 'transfer', 'stocktake', 'vendors',
       'summary', 'dashboard', 'costing', 'accounts', 'ledger', 'documents', 'auditlog',
       'billing', 'admin', 'mypage', 'guide', 'support', 'team', 'backup', 'referral',
-      'tax-reports', 'auto-order', 'orders', 'profit', 'forecast', 'weekly-report',
+      'tax-reports', 'orders', 'profit', 'forecast', 'weekly-report',
       'pos', 'scanner', 'labels',
       // 허브 페이지 — 요금제와 무관하게 항상 접근 가능
       'hub-inventory', 'hub-warehouse', 'hub-order',
@@ -81,7 +81,7 @@ const PAGE_MIN_PLAN = {
   bulk: 'pro', scanner: 'pro', labels: 'pro', transfer: 'pro',
   stocktake: 'pro', vendors: 'pro', summary: 'pro', dashboard: 'pro',
   costing: 'pro', accounts: 'pro', ledger: 'pro', documents: 'pro', auditlog: 'pro',
-  'tax-reports': 'pro', 'auto-order': 'pro', orders: 'pro', profit: 'pro', forecast: 'pro', 'weekly-report': 'pro',
+  'tax-reports': 'pro', orders: 'pro', profit: 'pro', forecast: 'pro', 'weekly-report': 'pro',
   // Enterprise 기능
   warehouses: 'enterprise', roles: 'enterprise', api: 'enterprise',
 };

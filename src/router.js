@@ -81,7 +81,7 @@ export const PAGE_LOADERS = {
   support:         () => import('./page-support.js').then(m => m.renderSupportPage),
   team:            () => import('./page-team.js').then(m => m.renderTeamPage),
   'tax-reports':   () => import('./page-tax-reports.js').then(m => m.renderTaxReportsPage),
-  'auto-order':    () => import('./page-auto-order.js').then(m => m.renderAutoOrderPage),
+
   profit:          () => import('./page-profit.js').then(m => m.renderProfitPage),
   backup:          () => import('./page-backup.js').then(m => m.renderBackupPage),
   orders:          () => import('./page-orders.js').then(m => m.renderOrdersPage),

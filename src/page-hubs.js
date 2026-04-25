@@ -147,13 +147,6 @@ export function renderHubOrder(container, navigateTo) {
     <div style="margin-bottom:8px;font-size:12px;color:var(--text-muted);font-weight:600;">구매 흐름</div>
     <div class="hub-grid" style="margin-bottom:20px;">
       ${renderHubCard({
-        icon: '🤖',
-        title: '자동 발주 추천',
-        desc: '부족 품목을 감지하고 발주 후보를 자동으로 추천합니다.',
-        nav: 'auto-order',
-        color: '#0284c7',
-      })}
-      ${renderHubCard({
         icon: '📄',
         title: '발주 관리',
         desc: '발주 진행 상태와 이력을 조회합니다.',
@@ -454,7 +447,6 @@ export const HUB_MAP = {
   warehouses: 'hub-warehouse',
   transfer: 'hub-warehouse',
   vendors: 'hub-warehouse',
-  'auto-order': 'hub-order',
   orders: 'hub-order',
   sales: 'hub-order',
   forecast: 'hub-order',
@@ -513,7 +505,6 @@ export const PAGE_LABELS = {
   warehouses: '창고 관리',
   transfer: '창고 이동',
   vendors: '거래처 관리',
-  'auto-order': '자동 발주 추천',
   orders: '발주 관리',
   sales: '수주 관리',
   forecast: 'AI 수요 예측',

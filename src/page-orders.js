@@ -78,7 +78,6 @@ export function renderOrdersPage(container, navigateTo) {
         <div class="page-desc">발주서 작성 → 발주 확정 → 입고 처리 → 세금계산서 생성까지 전체 구매 플로우를 관리합니다.</div>
       </div>
       <div class="page-actions">
-        <button class="btn btn-outline" id="btn-auto-order" title="자동발주 추천 페이지">🤖 자동발주 추천</button>
         <button class="btn btn-primary" id="btn-new-order">+ 신규 발주</button>
       </div>
     </div>
@@ -160,7 +159,6 @@ export function renderOrdersPage(container, navigateTo) {
     });
   });
 
-  container.querySelector('#btn-auto-order').addEventListener('click', () => navigateTo('auto-order'));
   container.querySelector('#btn-new-order').addEventListener('click', () => openOrderModal(container, null, navigateTo));
   container.querySelector('#order-modal-close').addEventListener('click', () => { container.querySelector('#order-modal').style.display = 'none'; });
   container.querySelector('#order-detail-overlay').addEventListener('click', e => {

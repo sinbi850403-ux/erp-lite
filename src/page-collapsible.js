@@ -11,7 +11,6 @@ const TARGET_PAGES = new Set([
   'transfer',
   'stocktake',
   'vendors',
-  'auto-order',
   'orders',
   'forecast',
   // 보고 · 분석

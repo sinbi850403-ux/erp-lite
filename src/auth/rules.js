@@ -38,7 +38,6 @@ export const PAGE_MIN_ROLE = {
   accounts: 'manager',
   orders: 'manager',
   sales: 'manager',
-  'auto-order': 'manager',
   profit: 'manager',
   'weekly-report': 'manager',
   'tax-reports': 'manager',

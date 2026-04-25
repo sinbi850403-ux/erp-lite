@@ -102,7 +102,6 @@ export function renderGuidePage(container, navigateTo) {
     { icon: '', name: '엑셀 업로드', desc: '기존 데이터를 빠르게 가져오기', page: 'upload' },
     { icon: '', name: '재고 관리', desc: '실시간 재고 현황 모니터링', page: 'inventory' },
     { icon: '', name: '입출고', desc: '입고·출고 내역 등록 및 추적', page: 'in' },
-    { icon: '', name: '자동 발주', desc: 'AI 기반 발주 추천', page: 'auto-order' },
     { icon: '', name: '수요 예측', desc: '과거 데이터 기반 수요 분석', page: 'forecast' },
     { icon: '', name: '원가 분석', desc: '품목별 마진·원가 자동 계산', page: 'costing' },
     { icon: '', name: '손익 분석', desc: '매출/매입/이익 대시보드', page: 'profit' },

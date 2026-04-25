@@ -253,7 +253,7 @@ function normalizeTitle(value) {
 
 function initCardCollapsibles(container, pageName) {
   const collapsiblePages = new Set([
-    'inventory', 'in', 'bulk', 'warehouses', 'transfer', 'stocktake', 'vendors', 'auto-order', 'orders', 'forecast',
+    'inventory', 'in', 'bulk', 'warehouses', 'transfer', 'stocktake', 'vendors', 'orders', 'forecast',
     'summary', 'weekly-report', 'profit', 'accounts', 'costing', 'dashboard', 'tax-reports', 'documents',
   ]);
   if (!collapsiblePages.has(pageName)) return;
