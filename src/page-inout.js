@@ -1125,7 +1125,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
 
   // ?묒? ?쇨큵 ?깅줉
   container.querySelector('#btn-bulk-upload').addEventListener('click', () => {
-    openBulkUploadModal(container, navigateTo, items);
+    openBulkUploadModal(container, navigateTo, items, isInMode ? 'in' : isOutMode ? 'out' : null);
   });
 
   //   같은 품목을 여러 거래처에서 입고할 수 있으므로 트랜잭션 기준이 정확
@@ -1156,7 +1156,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
  * 왜 필요? → 건별 등록은 수십 건 이상일 때 비효율적.
  * 왜 필요? → 건별 등록은 수십 건 이상일 때 비효율적.
  */
-function openBulkUploadModal(container, navigateTo, items) {
+function openBulkUploadModal(container, navigateTo, items, modeDefault = null) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -1229,11 +1229,11 @@ function openBulkUploadModal(container, navigateTo, items) {
     e.preventDefault();
     dropzone.style.borderColor = 'var(--border)';
     const file = e.dataTransfer.files[0];
-    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close);
+    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close, modeDefault);
   });
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close);
+    if (file) processUploadedFile(file, overlay, container, navigateTo, items, close, modeDefault);
   });
 }
 
@@ -1241,7 +1241,7 @@ function openBulkUploadModal(container, navigateTo, items) {
  * 업로드된 엑셀 파일을 파싱하여 미리보기 + 일괄 등록
  * 입출고 관리 페이지 렌더링
  */
-async function processUploadedFile(file, overlay, container, navigateTo, items, closeModal) {
+async function processUploadedFile(file, overlay, container, navigateTo, items, closeModal, modeDefault = null) {
   const previewEl = overlay.querySelector('#bulk-preview');
   previewEl.style.display = 'block';
   previewEl.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">엑셀 파일을 분석하고 있습니다...</div>';
@@ -1290,8 +1290,8 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
       previewEl.innerHTML = '<div class="alert alert-danger">필수 컬럼을 찾을 수 없습니다. 양식에 "품명"(또는 "품목명"), "입고수량"(또는 "수량") 컬럼이 포함되어 있는지 확인해 주세요.</div>';
       return;
     }
-    // 구분 컬럼 없는 입고 전용 양식이면 기본값 'in'
-    const defaultTxType = colMap.type === -1 ? 'in' : null;
+    // 구분 컬럼 없으면 현재 페이지 모드(입고/출고) 기본값 사용
+    const defaultTxType = colMap.type === -1 ? (modeDefault ?? 'in') : null;
 
     const rows = [];
     for (let index = dataStartIndex; index < sheetData.length; index += 1) {
