@@ -42,7 +42,11 @@
       "Bash(python -c \"import sys, json; [print\\(d['name']\\) for d in json.load\\(sys.stdin\\)]\")",
       "Bash(mktemp -d)",
       "Bash(mktemp -d -t harness100)",
-      "Bash(git clone *)"
+      "Bash(git clone *)",
+      "Bash(grep -i \"claude.md$\")",
+      "Bash(grep -i \"^.* claude.md$\" -i)",
+      "Bash(git hash-object *)",
+      "Bash(git update-index *)"
     ]
   }
 }
