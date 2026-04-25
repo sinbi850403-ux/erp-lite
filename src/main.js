@@ -724,11 +724,15 @@ overlay?.addEventListener('click', closeSidebar);
 
 // 사이드바 nav 클릭 — #sidebar 범위에서만 이벤트 위임
 sidebar?.addEventListener('click', (e) => {
-  // 재고관리 아코디언 헤더 토글
-  const groupHeader = e.target.closest('#nav-group-inventory-toggle');
-  if (groupHeader) {
-    const group = document.getElementById('nav-group-inventory');
-    if (group) group.classList.toggle('open');
+  // snav 아코디언 섹션 헤더 토글
+  const snavHeader = e.target.closest('.snav-header');
+  if (snavHeader) {
+    const section = snavHeader.closest('.snav-section');
+    if (section) {
+      const isOpen = section.classList.toggle('open');
+      const toggle = snavHeader.querySelector('.snav-toggle');
+      if (toggle) toggle.textContent = isOpen ? '−' : '+';
+    }
     return;
   }
 

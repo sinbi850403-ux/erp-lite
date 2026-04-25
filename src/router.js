@@ -239,19 +239,18 @@ export async function navigateTo(pageName) {
 
     const token = ++_token;
 
-    // 사이드바 활성 하이라이트 (자식 페이지는 부모 허브를 활성화)
-    const activeId = HUB_MAP[pageName] || pageName;
-    document.querySelectorAll('[data-page]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.page === activeId);
+    // ── snav 아코디언 active 상태 갱신 ──────────────────────
+    // 모든 .snav-item, .snav-direct에서 active 제거 후 현재 페이지만 활성화
+    document.querySelectorAll('.snav-item, .snav-direct').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.page === pageName);
     });
 
-    // 재고관리 아코디언: in/out/inventory/ledger 진입 시 자동 펼침
-    const inventorySubPages = new Set(['in', 'out', 'inventory', 'ledger', 'inout']);
-    const invGroup = document.getElementById('nav-group-inventory');
-    if (invGroup) {
-      const shouldOpen = inventorySubPages.has(pageName);
-      invGroup.classList.toggle('open', shouldOpen);
-    }
+    // 기존 nav-btn[data-page]도 지원 (admin/pos 등)
+    document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
+      if (!btn.classList.contains('snav-item') && !btn.classList.contains('snav-direct')) {
+        btn.classList.toggle('active', btn.dataset.page === pageName);
+      }
+    });
 
     updateBreadcrumb(pageName);
 

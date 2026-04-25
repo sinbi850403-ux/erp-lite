@@ -4527,6 +4527,136 @@ select.is-success {
   margin: 0;
 }
 
+/* ═══════════════════════════════════════════════════════
+   새 사이드바 아코디언 (snav)
+   스크린샷 스타일: 이모지 없음, 클린 텍스트, 접기/펼치기
+   ═══════════════════════════════════════════════════════ */
+
+/* 전체 컨테이너 */
+.snav {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 대시보드 단독 버튼 */
+.snav-direct {
+  display: block;
+  width: 100%;
+  padding: 8px 20px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: var(--font-family);
+}
+.snav-direct:hover { color: #fff; }
+.snav-direct.active {
+  color: #fff;
+  font-weight: 650;
+}
+
+/* 섹션 래퍼 */
+.snav-section {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 섹션 헤더 (클릭하면 접기/펼치기) */
+.snav-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px 5px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: var(--font-family);
+  user-select: none;
+}
+.snav-header:hover { color: rgba(255,255,255,0.7); }
+
+/* 토글 기호 [-]/[+] */
+.snav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.snav-header:hover .snav-toggle { color: rgba(255,255,255,0.6); }
+
+/* 섹션 바디 — open일 때만 표시 */
+.snav-body {
+  display: none;
+  flex-direction: column;
+  padding: 0 0 6px;
+}
+.snav-section.open .snav-body { display: flex; }
+
+/* 서브 메뉴 아이템 */
+.snav-item {
+  display: block;
+  width: 100%;
+  padding: 6px 20px 6px 28px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.62);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+  font-family: var(--font-family);
+  line-height: 1.4;
+}
+.snav-item:hover {
+  color: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.04);
+}
+.snav-item.active {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(255,255,255,0.07);
+}
+
+/* 라이트 모드 대응 */
+html:not(.dark-mode) .snav-direct,
+html:not(.dark-mode) .snav-item {
+  color: rgba(30,40,60,0.65);
+}
+html:not(.dark-mode) .snav-direct:hover,
+html:not(.dark-mode) .snav-item:hover { color: rgba(10,20,40,0.9); }
+html:not(.dark-mode) .snav-direct.active,
+html:not(.dark-mode) .snav-item.active { color: #1a3a6b; font-weight: 600; }
+html:not(.dark-mode) .snav-header { color: rgba(30,40,60,0.4); }
+html:not(.dark-mode) .snav-header:hover { color: rgba(30,40,60,0.65); }
+html:not(.dark-mode) .snav-toggle { color: rgba(30,40,60,0.3); }
+html:not(.dark-mode) .snav-item:hover { background: rgba(0,0,0,0.04); }
+html:not(.dark-mode) .snav-item.active { background: rgba(0,60,160,0.06); }
+
+/* ─────────────────────────────────────────────────────── */
+
 /* === UX 개선 유틸리티 === */
 
 /* 사이드바 상단 도구 바 — 검색/알림/테마를 로고 아래로 이동 */
