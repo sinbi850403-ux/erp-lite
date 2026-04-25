@@ -18,6 +18,8 @@ let authSubscription = null;
 let authInitialized = false;
 // 세션 동안 RLS/권한 오류로 프로필 부트스트랩이 실패했으면 재시도하지 않음
 let profileBootstrapBlocked = false;
+// 동시 부트스트랩 방지 — 진행 중이면 같은 Promise를 공유
+let profileBootstrapInflight = null;
 
 // ─── 이중 클릭 / 중복 요청 방지 플래그 ─────────────────────────────────────
 // isLoggingIn: 이메일 로그인 진행 중 이중 클릭 방지 (Google OAuth 에는 사용 X)
@@ -196,21 +198,27 @@ async function loadProfile(user) {
       }
 
       const newProfile = createBootstrapProfile(user);
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .upsert(newProfile, { onConflict: 'id', ignoreDuplicates: true });
 
-      if (insertError) {
-        if (isRlsOrAuthError(insertError)) {
-          // RLS INSERT 정책 미설치 — 세션 동안 더 이상 시도하지 않음
-          if (!profileBootstrapBlocked) {
-            console.info('[Auth] profile 부트스트랩 차단 (RLS) — 폴백 프로필로 동작');
-            profileBootstrapBlocked = true;
-          }
-        } else {
-          console.warn('[Auth] profile insert error:', insertError.message);
-        }
+      // 동시 호출이 같은 upsert를 중복 발사하지 않도록 in-flight Promise 공유
+      if (!profileBootstrapInflight) {
+        profileBootstrapInflight = supabase
+          .from('profiles')
+          .upsert(newProfile, { onConflict: 'id', ignoreDuplicates: true })
+          .then(({ error: insertError }) => {
+            if (insertError) {
+              if (isRlsOrAuthError(insertError)) {
+                if (!profileBootstrapBlocked) {
+                  console.info('[Auth] profile 부트스트랩 차단 (RLS) — 폴백 프로필로 동작');
+                  profileBootstrapBlocked = true;
+                }
+              } else {
+                console.warn('[Auth] profile insert error:', insertError.message);
+              }
+            }
+          })
+          .catch(() => {});
       }
+      await profileBootstrapInflight;
       return { ...fallback, createdAt: newProfile.created_at };
     }
 
