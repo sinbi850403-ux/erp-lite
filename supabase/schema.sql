@@ -135,16 +135,28 @@ CREATE TABLE IF NOT EXISTS transactions (
   item_id UUID REFERENCES items(id) ON DELETE SET NULL,
   item_code TEXT,                        -- 상품코드 (비정규화 저장 → 조회 성능)
   quantity NUMERIC NOT NULL DEFAULT 0,
-  unit_price NUMERIC DEFAULT 0,
+  unit_price NUMERIC DEFAULT 0,          -- 입고가/원가
   supply_value NUMERIC DEFAULT 0,        -- 공급가액 (unit_price × quantity)
   vat NUMERIC DEFAULT 0,                 -- 부가세 (supply_value × 0.1)
   total_amount NUMERIC DEFAULT 0,        -- 합계금액 (supply_value + vat)
+  selling_price NUMERIC DEFAULT 0,       -- 출고단가 (판매가, 출고 시)
+  actual_selling_price NUMERIC DEFAULT 0,-- 실제 판매가 (할인 후 등)
+  spec TEXT,                             -- 규격
+  unit TEXT,                             -- 단위
+  category TEXT,                         -- 자산구분 (상품/원자재/비품 등)
   date TEXT,
   vendor TEXT,
   warehouse TEXT,
   note TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- 기존 DB 호환: 새 컬럼 ADD COLUMN IF NOT EXISTS
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS selling_price NUMERIC DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS actual_selling_price NUMERIC DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS spec TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS unit TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(user_id, date DESC);

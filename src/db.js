@@ -1020,6 +1020,7 @@ function dbItemToStoreItem(dbItem) {
     vat: dbItem.vat,
     totalPrice: dbItem.total_price,
     salePrice: dbItem.sale_price,
+    sellingPrice: dbItem.sale_price,    // page-inout.js 호환 별칭
     warehouse: dbItem.warehouse,
     location: dbItem.location,
     vendor: dbItem.vendor,
@@ -1071,12 +1072,17 @@ function dbTxToStoreTx(dbTx) {
     id: dbTx.id,
     type: dbTx.type,
     itemName: dbTx.item_name,
-    itemCode: dbTx.item_code,        // 상품코드
+    itemCode: dbTx.item_code,                       // 상품코드
     quantity: dbTx.quantity,
     unitPrice: dbTx.unit_price,
-    supplyValue: dbTx.supply_value,  // 공급가액
-    vat: dbTx.vat,                   // 부가세
-    totalAmount: dbTx.total_amount,  // 합계금액
+    supplyValue: dbTx.supply_value,                 // 공급가액
+    vat: dbTx.vat,                                  // 부가세
+    totalAmount: dbTx.total_amount,                 // 합계금액
+    sellingPrice: dbTx.selling_price,               // 출고단가
+    actualSellingPrice: dbTx.actual_selling_price,  // 실판매가
+    spec: dbTx.spec,                                // 규격
+    unit: dbTx.unit,                                // 단위
+    category: dbTx.category,                        // 자산구분
     date: dbTx.date,
     vendor: dbTx.vendor,
     warehouse: dbTx.warehouse,
