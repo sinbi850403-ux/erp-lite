@@ -55,11 +55,13 @@ export function renderHomePage(container, navigateTo) {
   const weekData = getLast7Days(transactions);
   const hasData = totalItems > 0;
 
+  const dateStr = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
   container.innerHTML = `
     <div class="page-header">
       <div>
         <h1 class="page-title">대시보드</h1>
-        <div class="page-desc">${today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
+        <div class="page-desc">${dateStr}</div>
       </div>
       <div class="page-actions">
         ${notifications.length > 0 ? `<button type="button" class="badge badge-danger dashboard-notif-trigger">알림 ${notifications.length}건</button>` : ''}
@@ -80,53 +82,62 @@ export function renderHomePage(container, navigateTo) {
     </div>
     ` : `
 
-    <!-- 핵심 지표 6개 -->
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-label">총 품목</div>
-        <div class="stat-value text-accent">${totalItems}</div>
+    <!-- KPI 6개 -->
+    <div class="db-kpi-grid">
+      <div class="db-kpi-card" data-nav="inventory">
+        <div class="db-kpi-icon">📦</div>
+        <div class="db-kpi-label">총 품목</div>
+        <div class="db-kpi-value text-accent">${totalItems.toLocaleString('ko-KR')}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">재고 금액(공급가)</div>
-        <div class="stat-value text-success">${formatCurrency(totalSupplyValue)}</div>
+      <div class="db-kpi-card" data-nav="inventory">
+        <div class="db-kpi-icon">💰</div>
+        <div class="db-kpi-label">재고 금액</div>
+        <div class="db-kpi-value text-success">${formatCurrency(totalSupplyValue)}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">부족 품목</div>
-        <div class="stat-value ${lowStockItems.length > 0 ? 'text-danger' : ''}">${lowStockItems.length > 0 ? `${lowStockItems.length}건` : '없음'}</div>
+      <div class="db-kpi-card ${lowStockItems.length > 0 ? 'db-kpi-danger' : ''}" data-nav="inventory">
+        <div class="db-kpi-icon">⚠️</div>
+        <div class="db-kpi-label">부족 품목</div>
+        <div class="db-kpi-value ${lowStockItems.length > 0 ? 'text-danger' : ''}">${lowStockItems.length > 0 ? `${lowStockItems.length}건` : '없음'}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">오늘 입고</div>
-        <div class="stat-value text-success">${todayInCount}건</div>
+      <div class="db-kpi-card" data-nav="in">
+        <div class="db-kpi-icon">📥</div>
+        <div class="db-kpi-label">오늘 입고</div>
+        <div class="db-kpi-value text-success">${todayInCount}건</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">오늘 출고</div>
-        <div class="stat-value text-danger">${todayOutCount}건</div>
+      <div class="db-kpi-card" data-nav="out">
+        <div class="db-kpi-icon">📤</div>
+        <div class="db-kpi-label">오늘 출고</div>
+        <div class="db-kpi-value text-danger">${todayOutCount}건</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">정체 재고(30일)</div>
-        <div class="stat-value ${deadStockItems.length > 0 ? 'text-warning' : ''}">${deadStockItems.length}건</div>
+      <div class="db-kpi-card ${deadStockItems.length > 0 ? 'db-kpi-warn' : ''}" data-nav="inventory">
+        <div class="db-kpi-icon">🔄</div>
+        <div class="db-kpi-label">정체 재고(30일)</div>
+        <div class="db-kpi-value ${deadStockItems.length > 0 ? 'text-warning' : ''}">${deadStockItems.length}건</div>
       </div>
     </div>
 
-    <!-- 부족 품목 경고 배너 (있을 때만) -->
+    <!-- 재고 부족 경고 바 -->
     ${lowStockItems.length > 0 ? `
-    <div class="card" style="border-left:3px solid var(--danger); padding:12px 16px; cursor:pointer;" data-nav="inventory">
-      <div style="font-weight:600; color:var(--danger); margin-bottom:4px;">재고 부족 경고 ${lowStockItems.length}건</div>
-      <div style="font-size:13px; color:var(--text-muted);">
+    <div class="db-alert-bar" data-nav="inventory">
+      <span class="db-alert-title">⚠ 재고 부족 ${lowStockItems.length}건</span>
+      <span class="db-alert-items">
         ${lowStockItems.slice(0, 3).map(item =>
-          `${escapeHtml(item.itemName)} (현재 ${toNumber(item.quantity)}개 / 안전재고 ${toNumber(safetyStock[item.itemName])}개)`
+          `${escapeHtml(item.itemName)} (현재 ${toNumber(item.quantity)} / 안전 ${toNumber(safetyStock[item.itemName])})`
         ).join(' · ')}${lowStockItems.length > 3 ? ` 외 ${lowStockItems.length - 3}건` : ''}
-      </div>
+      </span>
+      <span class="db-alert-cta">바로가기 →</span>
     </div>
     ` : ''}
 
-    <!-- 최근 거래 이력 + 주간 차트 -->
-    <div class="dashboard-side-grid">
+    <!-- 메인 3열 그리드 -->
+    <div class="db-main-grid">
+
+      <!-- 최근 입출고 이력 -->
       <div class="card">
         <div class="card-title">최근 입출고 이력</div>
         ${recentTransactions.length > 0 ? `
         <div class="table-wrapper" style="border:none; margin:0;">
-          <table class="data-table" style="font-size:13px;">
+          <table class="data-table" style="font-size:12px;">
             <thead>
               <tr>
                 <th>유형</th>
@@ -152,23 +163,25 @@ export function renderHomePage(container, navigateTo) {
         ` : `<div class="empty-state"><div class="msg">아직 기록된 거래가 없습니다</div></div>`}
       </div>
 
+      <!-- 최근 7일 차트 -->
       <div class="card">
         <div class="card-title">최근 7일 입출고 흐름</div>
-        <div style="height:240px; position:relative;">
+        <div style="height:220px; position:relative;">
           <canvas id="chart-weekly"></canvas>
         </div>
       </div>
-    </div>
 
-    <!-- 분류별 차트 -->
-    ${categories.length > 0 ? `
-    <div class="card">
-      <div class="card-title">분류별 재고 비중</div>
-      <div style="height:220px; position:relative;">
-        <canvas id="chart-category"></canvas>
+      <!-- 분류별 비중 -->
+      ${categories.length > 0 ? `
+      <div class="card">
+        <div class="card-title">분류별 재고 비중</div>
+        <div style="height:220px; position:relative;">
+          <canvas id="chart-category"></canvas>
+        </div>
       </div>
+      ` : ''}
+
     </div>
-    ` : ''}
 
     `}
   `;

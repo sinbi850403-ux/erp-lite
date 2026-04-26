@@ -3011,6 +3011,104 @@ html.dark-mode .report-spotlight-card {
   margin-bottom: 16px;
 }
 
+/* ── 홈 대시보드 리뉴얼 ── */
+.db-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.db-kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.db-kpi-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.db-kpi-card.db-kpi-danger {
+  border-color: rgba(239,68,68,0.45);
+  background: rgba(239,68,68,0.06);
+}
+
+.db-kpi-card.db-kpi-warn {
+  border-color: rgba(234,179,8,0.45);
+  background: rgba(234,179,8,0.05);
+}
+
+.db-kpi-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.db-kpi-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.db-kpi-value {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.db-alert-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(239,68,68,0.35);
+  background: rgba(239,68,68,0.07);
+  margin-bottom: 14px;
+  cursor: pointer;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.db-alert-bar:hover { background: rgba(239,68,68,0.12); }
+
+.db-alert-title {
+  font-weight: 700;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+.db-alert-items {
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.db-alert-cta {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.db-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1.4fr;
+  gap: 14px;
+}
+
 .dashboard-side-grid {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
@@ -3604,6 +3702,14 @@ html.dark-mode .report-spotlight-card {
 
   .inventory-bulk-actions .btn {
     flex: 1 1 auto;
+  }
+
+  .db-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .db-main-grid {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-hero-grid,
