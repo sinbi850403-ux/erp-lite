@@ -419,31 +419,25 @@ export function initAuth(callback) {
   authInitialized = true;
   sanitizeAuthStorage();
 
-  // 초기 세션 복구 — seq=0 으로 시작
-  const initSeq = applySessionSeq;
-  withTimeout(supabase.auth.getSession(), 6000, 'initial-session')
-    .then(({ data }) => applySession(data?.session || null, initSeq))
-    .catch(async (error) => {
-      // 타임아웃 시 1회 조용히 재시도 (네트워크 일시 지연 대응)
-      if (error.message?.includes('timeout')) {
-        await new Promise(r => setTimeout(r, 1500));
-        try {
-          const { data } = await withTimeout(supabase.auth.getSession(), 6000, 'initial-session-retry');
-          return applySession(data?.session || null, initSeq);
-        } catch {
-          // 재시도 실패 — 로그인 화면으로 (조용히)
-          return applySession(null, initSeq);
-        }
-      }
-      console.warn('[Auth] Initial session recovery failed:', error.message);
-      applySession(null, initSeq);
-    });
+  // INITIAL_SESSION이 일정 시간 내 오지 않으면 로그인 화면으로 폴백
+  let initialSessionReceived = false;
+  const fallbackTimer = setTimeout(() => {
+    if (!initialSessionReceived) {
+      console.warn('[Auth] INITIAL_SESSION timeout — showing login screen');
+      applySession(null, applySessionSeq);
+    }
+  }, 8000);
 
-  // onAuthStateChange — 내부 에러를 반드시 캐치하여 Supabase 리스너가 죽지 않도록
+  // onAuthStateChange만으로 초기 세션 + 이후 변경 모두 처리
+  // (별도 getSession() 호출 시 Supabase 내부 initialize lock과 충돌 → 5초 지연 발생)
   const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
     try {
+      if (!initialSessionReceived) {
+        initialSessionReceived = true;
+        clearTimeout(fallbackTimer);
+      }
+
       if (_event === 'PASSWORD_RECOVERY') {
-        // 비밀번호 재설정 링크 클릭 시 — 새 비밀번호 입력 모달 표시
         showPasswordRecoveryModal();
         return;
       }
