@@ -355,8 +355,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         ${sortableTh('unitPrice', '단가', 'text-right')}
         <th class="text-right">공급가액</th>
         <th class="text-right">부가세</th>
-        <th class="text-right">합계금액</th>
-        <th style="width:50px;">삭제</th>`;
+        <th class="text-right">합계금액</th>`;
     } else if (isOutMode) {
       // 출고관리: 자산|출고일자|거래처|상품코드|품명|규격|단위|출고수량|출고단가|출고금액|출고합|공급가|부가세|공가합|매입원가|이익액|이익률|매출원가율
       cols = `
@@ -379,8 +378,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th class="text-right">매입원가</th>
         <th class="text-right">이익액</th>
         <th class="text-right">이익률</th>
-        <th class="text-right">매출원가율</th>
-        <th style="width:50px;">삭제</th>`;
+        <th class="text-right">매출원가율</th>`;
     } else {
       // 전체(all) 모드
       cols = `
@@ -396,8 +394,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th class="text-right">실판매가</th>
         <th class="text-right">이익률</th>
         ${sortableTh('date', '날짜')}
-        <th>비고</th>
-        <th style="width:50px;">삭제</th>`;
+        <th>비고</th>`;
     }
 
     thead.innerHTML = `<tr>${cols}</tr>`;
@@ -513,7 +510,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
 
     const tbody = container.querySelector('#tx-body');
     if (!tbody) return;
-    const totalColCount = isInMode ? 15 : isOutMode ? 23 : 14;
+    const totalColCount = isInMode ? 14 : isOutMode ? 22 : 13;
     if (sorted.length === 0) {
       tbody.innerHTML = `<tr><td colspan="${totalColCount}" style="text-align:center; padding:32px; color:var(--text-muted);">
         ${transactions.length === 0 ? '아직 입출고 기록이 없습니다. 위 버튼으로 먼저 등록해 주세요.' : '검색 결과가 없습니다.'}
@@ -575,7 +572,6 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         const indent = isChild ? 'padding-left:24px;' : '';
         const it = itemMap.get(tx.itemName) || {};
         const chk = `<td style="text-align:center;"><input type="checkbox" class="tx-select-row" value="${safeAttr(tx.id)}" ${selectedTxIds.has(tx.id) ? 'checked' : ''} /></td>`;
-        const del = `<td class="text-center"><button class="btn-icon btn-icon-danger btn-del-tx" data-id="${safeAttr(tx.id)}" title="삭제">삭제</button></td>`;
 
         if (isInMode) {
           const qty = parseFloat(tx.quantity) || 0;
@@ -597,7 +593,6 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
             <td class="text-right">${supply ? W(supply) : '-'}</td>
             <td class="text-right">${vat ? W(vat) : '-'}</td>
             <td class="text-right">${supply ? W(supply + vat) : '-'}</td>
-            ${del}
           </tr>`;
         }
 
@@ -635,7 +630,6 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
             <td class="text-right" style="color:${profitColor}; font-weight:600;">${purchase > 0 ? W(profit) : '-'}</td>
             <td class="text-right" style="color:${profitColor};">${profitRate}</td>
             <td class="text-right">${costRate}</td>
-            ${del}
           </tr>`;
         }
 
@@ -663,7 +657,6 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
             <td data-label="이익률" class="text-right">${renderMargin(tx)}</td>
             <td data-label="날짜">${formatDate(tx.date)}</td>
             <td data-label="비고" style="color:var(--text-muted); font-size:13px;">${escapeHtml(tx.note || '')}</td>
-            ${del}
           </tr>`;
       };
 
@@ -799,39 +792,6 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
       });
     });
 
-    // 삭제 이벤트
-    container.querySelectorAll('.btn-del-tx').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (!canAction('inout:delete')) {
-          showToast('삭제 권한이 없습니다. 매니저 이상만 가능합니다.', 'warning');
-          return;
-        }
-        try {
-          const removed = deleteTransaction(btn.dataset.id);
-          if (!removed || !removed.deleted) {
-            showToast('삭제할 기록을 찾지 못했습니다.', 'warning');
-            return;
-          }
-          const itemName = removed.deleted.itemName || '선택 기록';
-          selectedTxIds.delete(btn.dataset.id);
-          renderInoutPage(container, navigateTo, mode);
-          showToast(`"${itemName}" 기록을 삭제했습니다.`, 'info', 5000, {
-            actionLabel: '실행 취소',
-            onAction: () => {
-              try {
-                restoreTransaction(removed.deleted, removed.index);
-                renderInoutPage(container, navigateTo, mode);
-                showToast(`"${itemName}" 기록을 복원했습니다.`, 'success');
-              } catch (err) {
-                handlePageError(err, { page: 'inout', action: 'restore-transaction' });
-              }
-            },
-          });
-        } catch (err) {
-          handlePageError(err, { page: 'inout', action: 'delete-transaction' });
-        }
-      });
-    });
 
     // 선택 박스 이벤트
     const selectAllCheckbox = container.querySelector('#tx-select-all');
