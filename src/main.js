@@ -779,6 +779,12 @@ async function initAppAfterAuth() {
       });
   }
 
+  // 만료된 JWT로 DB 쿼리 시 RLS가 auth.uid()=null로 보고 0건 반환하는 문제 방지
+  // refreshSession()으로 강제 갱신 후 데이터 로드
+  if (isSupabaseConfigured) {
+    try { await supabase.auth.refreshSession(); } catch (_) {}
+  }
+
   try {
     const uid = getCurrentUser()?.uid || null;
     primeUserIdCache(uid);

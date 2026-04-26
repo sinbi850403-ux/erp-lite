@@ -36,7 +36,10 @@
       "Bash(git stash *)",
       "Bash(git checkout *)",
       "Bash(git commit *)",
-      "Bash(grep -v \"//.*hub-data\")"
+      "Bash(grep -v \"//.*hub-data\")",
+      "mcp__mcp-registry__search_mcp_registry",
+      "mcp__mcp-registry__list_connectors",
+      "Bash(git merge claude/goofy-pascal-b694e2 --no-ff -m ' *)"
     ]
   }
 }
