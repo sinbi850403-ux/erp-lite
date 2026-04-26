@@ -1373,6 +1373,7 @@ html.dark-mode .acc-item-btn.active {
   border-bottom: 1px solid var(--border-light);
   padding: 6px 10px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .data-table tbody tr {
