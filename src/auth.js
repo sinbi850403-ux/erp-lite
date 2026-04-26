@@ -6,7 +6,7 @@ import {
   hasRequiredPlan,
   hasRequiredRole,
 } from './auth/rules.js';
-import { createBootstrapProfile, getFallbackProfile as createFallbackProfile, mapProfileData } from './auth/profile.js';
+import { getFallbackProfile as createFallbackProfile, mapProfileData } from './auth/profile.js';
 import { renderInlineLoginError as renderVanillaLoginError, renderLoginScreen as renderVanillaLoginScreen } from './auth/ui.js';
 import { purgeLegacyAuthStorage as purgeAuthStorage, sanitizeSupabaseStorage as sanitizeAuthStorage } from './auth/storage.js';
 import { withTimeout } from './auth/async.js';
@@ -16,12 +16,8 @@ let userProfile = null;
 let authChangeCallbacks = [];
 let authSubscription = null;
 let authInitialized = false;
-// RLS/권한 오류로 프로필 부트스트랩이 실패했으면 이번 세션만 재시도하지 않음
-// (localStorage에 영구 저장하지 않음 — 정책 수정 후 다음 세션에서 자동 복구)
+// 부트스트랩 관련 상수 (TOKEN_REFRESHED, logout에서 localStorage 정리용으로만 유지)
 const _BS_BLOCKED_KEY = 'invex-profile-bs-blocked';
-let profileBootstrapBlocked = false;
-// 동시 부트스트랩 방지 — 진행 중이면 같은 Promise를 공유
-let profileBootstrapInflight = null;
 
 // ─── 이중 클릭 / 중복 요청 방지 플래그 ─────────────────────────────────────
 // isLoggingIn: 이메일 로그인 진행 중 이중 클릭 방지 (Google OAuth 에는 사용 X)
@@ -194,36 +190,9 @@ async function loadProfile(user) {
     }
 
     if (!data) {
-      // 프로필 미존재 → 부트스트랩 시도. 단, 이전에 RLS로 차단됐으면 건너뜀.
-      if (profileBootstrapBlocked) {
-        return { ...fallback, createdAt: new Date().toISOString() };
-      }
-
-      const newProfile = createBootstrapProfile(user);
-
-      // 동시 호출이 같은 upsert를 중복 발사하지 않도록 in-flight Promise 공유
-      if (!profileBootstrapInflight) {
-        profileBootstrapInflight = supabase
-          .from('profiles')
-          .upsert(newProfile, { onConflict: 'id', ignoreDuplicates: true })
-          .then(({ error: insertError }) => {
-            if (insertError) {
-              if (isRlsOrAuthError(insertError)) {
-                if (!profileBootstrapBlocked) {
-                  console.info('[Auth] profile 부트스트랩 차단 (RLS) — 폴백 프로필로 동작');
-                  profileBootstrapBlocked = true;
-                  // localStorage에 영구 저장하지 않음 — 다음 세션에서 재시도
-                }
-              } else {
-                console.warn('[Auth] profile insert error:', insertError.message);
-              }
-            }
-          })
-          .catch(() => {})
-          .finally(() => { profileBootstrapInflight = null; });
-      }
-      await profileBootstrapInflight;
-      return { ...fallback, createdAt: newProfile.created_at };
+      // 프로필 미존재 → 폴백 프로필 사용
+      // (트리거 handle_new_user가 가입 시 자동 생성하므로 클라이언트 INSERT 불필요)
+      return { ...fallback, createdAt: new Date().toISOString() };
     }
 
     return mapProfileData(data, fallback);
@@ -442,8 +411,7 @@ export function initAuth(callback) {
       }
 
       if (_event === 'TOKEN_REFRESHED') {
-        // 만료 토큰으로 인한 부트스트랩 차단 초기화 — 이번에는 유효한 토큰
-        profileBootstrapBlocked = false;
+        // 혹시 남아있을 수 있는 구 버전 localStorage 플래그 제거
         try { localStorage.removeItem(_BS_BLOCKED_KEY); } catch (_) {}
       }
 
@@ -872,9 +840,7 @@ export async function logout() {
     signOutError = error;
   } finally {
     purgeAuthStorage({ includeSupabaseSession: true });
-    // 부트스트랩 차단 상태 초기화 — 다음 로그인(다른 계정 포함)이 정상 부트스트랩되도록
-    profileBootstrapBlocked = false;
-    profileBootstrapInflight = null;
+    // 구 버전 localStorage 플래그 제거
     try { localStorage.removeItem(_BS_BLOCKED_KEY); } catch (_) {}
     currentUser = null;
     userProfile = null;
