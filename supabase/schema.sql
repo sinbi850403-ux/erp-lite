@@ -630,3 +630,29 @@ BEGIN
   END IF;
 EXCEPTION WHEN OTHERS THEN NULL; -- 이미 추가된 경우 무시
 END $$;
+
+-- ============================================================
+-- 팀 워크스페이스 (team_workspaces)
+-- 여러 브라우저/기기에서 동일한 팀 멤버 목록을 공유하기 위해 필요
+-- ============================================================
+CREATE TABLE IF NOT EXISTS team_workspaces (
+  id TEXT PRIMARY KEY,                        -- 워크스페이스 ID (= 팀장 UID)
+  name TEXT DEFAULT 'My Workspace',
+  owner_id TEXT NOT NULL,                     -- 팀장 UID
+  members JSONB DEFAULT '[]',                 -- [{uid, email, name, role, status, joinedAt}]
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE team_workspaces ENABLE ROW LEVEL SECURITY;
+
+-- 로그인한 모든 사용자가 읽기 가능 (초대 수락/거절을 위해 다른 워크스페이스도 조회 필요)
+CREATE POLICY "tw_select" ON team_workspaces FOR SELECT TO authenticated USING (true);
+-- 본인 워크스페이스만 생성/수정/삭제 가능
+CREATE POLICY "tw_insert" ON team_workspaces FOR INSERT WITH CHECK (auth.uid()::text = owner_id);
+CREATE POLICY "tw_update" ON team_workspaces FOR UPDATE USING (auth.uid()::text = owner_id);
+CREATE POLICY "tw_delete" ON team_workspaces FOR DELETE USING (auth.uid()::text = owner_id);
+
+-- Realtime 활성화
+ALTER TABLE team_workspaces REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE team_workspaces;

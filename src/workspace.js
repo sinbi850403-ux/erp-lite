@@ -1,81 +1,89 @@
-﻿/**
- * workspace.js - 팀 워크스페이스 관리
- * 
- * 핵심 개념:
- *   - 워크스페이스 = 하나의 회사/팀 (데이터 공유 단위)
- *   - 팀장(owner)이 워크스페이스를 생성하고 멤버를 초대
- *   - 같은 워크스페이스에 속한 멤버는 동일한 데이터를 실시간 공유
- * 
- * 공유 저장소 구조:
- *   workspaces/{workspaceId} → 공유 데이터 (재고, 거래, 거래처 등)
- *   workspaces/{workspaceId}/meta → {name, ownerId, createdAt, members[]}
- *   users/{uid} → {workspaceId, role, ...}
+/**
+ * workspace.js - 팀 워크스페이스 관리 (Supabase 기반)
+ *
+ * 저장소 구조:
+ *   team_workspaces 테이블 → 워크스페이스 메타 (이름, 소유자, 멤버 목록)
+ *   user_settings (key: joined_workspace_id) → 각 사용자의 소속 워크스페이스
+ *
+ * 왜 Supabase? → 다중 브라우저/기기에서 동일한 데이터를 보려면 클라우드 저장 필수
  */
 
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, deleteField } from './backend-store.js';
-import { db, isConfigured } from './backend-config.js';
+import { supabase, isSupabaseConfigured } from './supabase-client.js';
+import * as db from './db.js';
 import { getCurrentUser, getUserProfileData } from './auth.js';
 import { getState, setState } from './store.js';
 import { showToast } from './toast.js';
 
-// 실시간 동기화 리스너
-let unsubWorkspace = null;
-let isSyncing = false;
-let lastSyncTime = null;
+export const isConfigured = isSupabaseConfigured;
+
 let currentWorkspaceId = null;
 
+// ── Supabase team_workspaces 헬퍼 ─────────────────────────────
+
+async function wsGet(wsId) {
+  if (!wsId) return null;
+  const { data } = await supabase
+    .from('team_workspaces')
+    .select('*')
+    .eq('id', wsId)
+    .maybeSingle();
+  return data;
+}
+
+async function wsUpsert(wsId, payload) {
+  const { error } = await supabase
+    .from('team_workspaces')
+    .upsert({ id: wsId, ...payload, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+async function wsUpdateMembers(wsId, members) {
+  const { error } = await supabase
+    .from('team_workspaces')
+    .update({ members, updated_at: new Date().toISOString() })
+    .eq('id', wsId);
+  if (error) throw error;
+}
+
+// ── Public API ────────────────────────────────────────────────
+
 /**
- * 워크스페이스 ID 조회
- * 왜? → 사용자가 속한 워크스페이스를 찾아야 데이터를 공유할 수 있음
+ * 사용자가 속한 워크스페이스 ID 반환 (없으면 본인 UID)
  */
 export async function getWorkspaceId(userId) {
-  if (!isConfigured || !userId) return userId; // 미설정 시 개인 ID 사용
-
+  if (!isConfigured || !userId) return userId;
   try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists() && userDoc.data().workspaceId) {
-      return userDoc.data().workspaceId;
-    }
-  } catch (e) {
-    console.warn('[Workspace] 워크스페이스 ID 조회 실패:', e.message);
+    const wsId = await db.settings.get('joined_workspace_id');
+    return wsId || userId;
+  } catch {
+    return userId;
   }
-
-  // 워크스페이스가 없으면 본인 UID가 워크스페이스 ID (1인 사용자)
-  return userId;
 }
 
 /**
- * 워크스페이스 생성 (팀장 전용)
- * 첫 가입 시 자동 생성되거나, 팀 설정에서 수동 생성
+ * 워크스페이스 생성 (최초 1회, 팀장 전용)
  */
 export async function createWorkspace(name) {
   const user = getCurrentUser();
   if (!user || !isConfigured) return null;
 
-  const wsId = user.uid; // 팀장의 UID를 워크스페이스 ID로 사용
+  const wsId = user.uid;
   try {
-    // 메타 정보 저장
-    await setDoc(doc(db, 'workspaces', wsId, 'meta', 'info'), {
+    await wsUpsert(wsId, {
       name: name || 'My Workspace',
-      ownerId: user.uid,
-      ownerEmail: user.email,
-      ownerName: user.displayName || '관리자',
-      createdAt: new Date().toISOString(),
+      owner_id: user.uid,
+      created_at: new Date().toISOString(),
       members: [{
         uid: user.uid,
+        id: user.uid,
         email: user.email,
         name: user.displayName || '관리자',
         role: 'owner',
+        status: 'active',
         joinedAt: new Date().toISOString(),
       }],
     });
-
-    // 사용자 프로필에 워크스페이스 연결
-    await updateDoc(doc(db, 'users', user.uid), {
-      workspaceId: wsId,
-      role: 'admin',
-    });
-
+    await db.settings.set('joined_workspace_id', wsId);
     currentWorkspaceId = wsId;
     showToast(`워크스페이스 "${name}" 생성 완료!`, 'success');
     return wsId;
@@ -86,17 +94,26 @@ export async function createWorkspace(name) {
 }
 
 /**
- * 팀 멤버 초대 (이메일로) — Supabase profiles 테이블에서 사용자 조회
- * 초대된 멤버는 status: 'pending' 상태로 추가되며, 수락 시 'active'로 변경
+ * 워크스페이스 메타 정보 조회 (멤버 목록 포함)
+ */
+export async function getWorkspaceMeta(wsId) {
+  if (!isConfigured || !wsId) return null;
+  try {
+    return await wsGet(wsId);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 팀 멤버 초대 (이메일로) — Supabase profiles에서 사용자 조회 후 pending 상태로 추가
  */
 export async function inviteMember(email, role = 'staff') {
   const user = getCurrentUser();
   if (!user || !isConfigured) return false;
 
   try {
-    const { supabase } = await import('./supabase-client.js');
-
-    // Supabase profiles 테이블에서 이메일로 사용자 조회
+    // Supabase profiles에서 이메일로 사용자 조회
     const { data: targetProfile, error } = await supabase
       .from('profiles')
       .select('id, name, email')
@@ -115,7 +132,6 @@ export async function inviteMember(email, role = 'staff') {
       return false;
     }
 
-    // 워크스페이스 메타에서 기존 멤버 확인
     const wsId = await getWorkspaceId(user.uid);
     const meta = await getWorkspaceMeta(wsId);
     const existingMembers = meta?.members || [];
@@ -134,22 +150,11 @@ export async function inviteMember(email, role = 'staff') {
       role,
       status: 'pending',
       invitedAt: new Date().toISOString(),
+      invitedBy: user.displayName || user.email || '팀장',
+      workspaceName: meta?.name || '워크스페이스',
     };
 
-    // 워크스페이스 메타에 pending 멤버 추가
-    const metaRef = doc(db, 'workspaces', wsId, 'meta', 'info');
-    await updateDoc(metaRef, { members: [...existingMembers, newMember] });
-
-    // 초대받은 사용자의 users 문서에 초대 정보 저장 (수락/거절용)
-    await setDoc(doc(db, 'users', targetProfile.id), {
-      pendingInvite: {
-        workspaceId: wsId,
-        workspaceName: meta?.name || '워크스페이스',
-        invitedBy: user.displayName || user.email || '팀장',
-        role,
-        invitedAt: new Date().toISOString(),
-      },
-    }, { merge: true });
+    await wsUpdateMembers(wsId, [...existingMembers, newMember]);
 
     showToast(`${targetProfile.name || email}님께 초대장을 보냈습니다! 상대방이 수락하면 팀원으로 합류됩니다.`, 'success');
     return true;
@@ -162,53 +167,71 @@ export async function inviteMember(email, role = 'staff') {
 
 /**
  * 현재 사용자의 대기 중 초대장 조회
+ * — team_workspaces에서 내 uid가 pending 상태인 항목 탐색
  */
 export async function getPendingInvite(userId) {
   if (!isConfigured || !userId) return null;
   try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    return userDoc.exists() ? (userDoc.data().pendingInvite || null) : null;
+    // 내가 속하지 않은 워크스페이스 중 pending 초대가 있는지 확인
+    const myWsId = await db.settings.get('joined_workspace_id');
+
+    const { data: workspaces } = await supabase
+      .from('team_workspaces')
+      .select('id, name, owner_id, members');
+
+    if (!workspaces) return null;
+
+    for (const ws of workspaces) {
+      if (ws.id === myWsId) continue; // 이미 속한 워크스페이스는 제외
+      const members = ws.members || [];
+      const myEntry = members.find(m => (m.uid === userId || m.id === userId) && m.status === 'pending');
+      if (myEntry) {
+        return {
+          workspaceId: ws.id,
+          workspaceName: ws.name || '워크스페이스',
+          invitedBy: myEntry.invitedBy || '팀장',
+          role: myEntry.role || 'staff',
+          invitedAt: myEntry.invitedAt,
+        };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
 /**
- * 초대 수락 — 워크스페이스에 active 멤버로 합류
+ * 초대 수락 — 멤버 상태 pending → active, 워크스페이스 ID 저장
  */
 export async function acceptInvite() {
   const user = getCurrentUser();
   if (!user || !isConfigured) return false;
 
   try {
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const pendingInvite = userDoc.exists() ? userDoc.data().pendingInvite : null;
-
+    const pendingInvite = await getPendingInvite(user.uid);
     if (!pendingInvite) {
       showToast('초대장을 찾을 수 없습니다.', 'error');
       return false;
     }
 
     const { workspaceId, role } = pendingInvite;
-
-    // 워크스페이스 메타에서 멤버 상태 pending → active
-    const metaRef = doc(db, 'workspaces', workspaceId, 'meta', 'info');
-    const metaSnap = await getDoc(metaRef);
-    if (metaSnap.exists()) {
-      const members = (metaSnap.data().members || []).map(m =>
-        m.uid === user.uid
-          ? { ...m, status: 'active', joinedAt: new Date().toISOString() }
-          : m
-      );
-      await updateDoc(metaRef, { members });
+    const meta = await getWorkspaceMeta(workspaceId);
+    if (!meta) {
+      showToast('워크스페이스를 찾을 수 없습니다.', 'error');
+      return false;
     }
 
-    // 사용자 문서: workspaceId 설정, pendingInvite 삭제
-    await updateDoc(doc(db, 'users', user.uid), {
-      workspaceId,
-      role: role || 'staff',
-      pendingInvite: deleteField(),
-    });
+    const members = (meta.members || []).map(m =>
+      (m.uid === user.uid || m.id === user.uid)
+        ? { ...m, status: 'active', joinedAt: new Date().toISOString() }
+        : m
+    );
+    await wsUpdateMembers(workspaceId, members);
+
+    // 내 settings에 워크스페이스 ID 저장
+    await db.settings.set('joined_workspace_id', workspaceId);
+    currentWorkspaceId = workspaceId;
 
     showToast('팀 초대를 수락했습니다! 이제 같은 워크스페이스에서 데이터를 공유합니다.', 'success');
     return true;
@@ -220,47 +243,36 @@ export async function acceptInvite() {
 }
 
 /**
- * 초대 거절 — 워크스페이스 멤버 목록에서 제거
+ * 초대 거절 — 워크스페이스 멤버 목록에서 본인 제거
  */
 export async function rejectInvite() {
   const user = getCurrentUser();
   if (!user || !isConfigured) return false;
 
   try {
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const pendingInvite = userDoc.exists() ? userDoc.data().pendingInvite : null;
-
+    const pendingInvite = await getPendingInvite(user.uid);
     if (!pendingInvite) {
       showToast('초대장을 찾을 수 없습니다.', 'error');
       return false;
     }
 
     const { workspaceId } = pendingInvite;
-
-    // 워크스페이스 메타에서 해당 멤버 제거
-    const metaRef = doc(db, 'workspaces', workspaceId, 'meta', 'info');
-    const metaSnap = await getDoc(metaRef);
-    if (metaSnap.exists()) {
-      const members = (metaSnap.data().members || []).filter(m => m.uid !== user.uid);
-      await updateDoc(metaRef, { members });
+    const meta = await getWorkspaceMeta(workspaceId);
+    if (meta) {
+      const members = (meta.members || []).filter(m => m.uid !== user.uid && m.id !== user.uid);
+      await wsUpdateMembers(workspaceId, members);
     }
-
-    // 사용자 문서에서 pendingInvite 삭제
-    await updateDoc(doc(db, 'users', user.uid), {
-      pendingInvite: deleteField(),
-    });
 
     showToast('초대를 거절했습니다.', 'info');
     return true;
   } catch (e) {
-    console.error('[Team] 초대 거절 실패:', e.message);
     showToast('거절 중 오류가 발생했습니다: ' + e.message, 'error');
     return false;
   }
 }
 
 /**
- * 초대 취소 (팀장 전용) — 수락 전에 초대 철회
+ * 초대 취소 (팀장 전용) — pending 멤버 제거
  */
 export async function cancelInvite(targetUid) {
   const user = getCurrentUser();
@@ -269,19 +281,11 @@ export async function cancelInvite(targetUid) {
   const wsId = await getWorkspaceId(user.uid);
 
   try {
-    // 워크스페이스 메타에서 pending 멤버 제거
-    const metaRef = doc(db, 'workspaces', wsId, 'meta', 'info');
-    const metaSnap = await getDoc(metaRef);
-    if (metaSnap.exists()) {
-      const members = (metaSnap.data().members || []).filter(m => m.uid !== targetUid);
-      await updateDoc(metaRef, { members });
+    const meta = await getWorkspaceMeta(wsId);
+    if (meta) {
+      const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
+      await wsUpdateMembers(wsId, members);
     }
-
-    // 초대받은 사용자 문서에서 pendingInvite 삭제
-    await updateDoc(doc(db, 'users', targetUid), {
-      pendingInvite: deleteField(),
-    });
-
     showToast('초대를 취소했습니다.', 'info');
     return true;
   } catch (e) {
@@ -291,7 +295,7 @@ export async function cancelInvite(targetUid) {
 }
 
 /**
- * 팀 멤버 제거
+ * 팀 멤버 제거 (팀장 전용)
  */
 export async function removeMember(targetUid) {
   const user = getCurrentUser();
@@ -300,20 +304,11 @@ export async function removeMember(targetUid) {
   const wsId = await getWorkspaceId(user.uid);
 
   try {
-    // 대상의 워크스페이스 연결 해제 → 본인 UID를 워크스페이스로 복원
-    await updateDoc(doc(db, 'users', targetUid), {
-      workspaceId: targetUid,
-      role: 'admin',
-    });
-
-    // 메타에서 멤버 제거
-    const metaRef = doc(db, 'workspaces', wsId, 'meta', 'info');
-    const metaSnap = await getDoc(metaRef);
-    if (metaSnap.exists()) {
-      const members = (metaSnap.data().members || []).filter(m => m.uid !== targetUid);
-      await updateDoc(metaRef, { members });
+    const meta = await getWorkspaceMeta(wsId);
+    if (meta) {
+      const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
+      await wsUpdateMembers(wsId, members);
     }
-
     showToast('멤버를 제거했습니다.', 'info');
     return true;
   } catch (e) {
@@ -323,129 +318,29 @@ export async function removeMember(targetUid) {
 }
 
 /**
- * 워크스페이스 메타 정보 가져오기
- */
-export async function getWorkspaceMeta(wsId) {
-  if (!isConfigured || !wsId) return null;
-
-  try {
-    const metaRef = doc(db, 'workspaces', wsId, 'meta', 'info');
-    const snap = await getDoc(metaRef);
-    return snap.exists() ? snap.data() : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 워크스페이스 실시간 동기화 시작
- * 왜 onSnapshot? → 다른 멤버가 데이터를 변경하면 즉시 반영되어야 하므로
+ * 워크스페이스 실시간 동기화 — Supabase Realtime으로 대체됨
+ * (store.js의 setupRealtimeSync()가 모든 테이블 변경을 감지하므로 별도 구현 불필요)
  */
 export async function startWorkspaceSync(userId) {
   if (!isConfigured || !userId) return;
-
   const wsId = await getWorkspaceId(userId);
   currentWorkspaceId = wsId;
-
-  const docRef = doc(db, 'workspaces', wsId);
-
-  // 기존 리스너 제거
-  stopWorkspaceSync();
-
-  // 실시간 리스너 등록
-  unsubWorkspace = onSnapshot(docRef, (docSnap) => {
-    if (isSyncing) return; // 내가 올린 변경은 무시
-
-    if (docSnap.exists()) {
-      const cloudData = docSnap.data();
-      const cloudTime = cloudData._lastSync || 0;
-      const localTime = lastSyncTime || 0;
-
-      // 클라우드가 더 최신이면 로컬에 반영
-      if (cloudTime > localTime) {
-        const { _lastSync, _lastEditor, ...data } = cloudData;
-        setState(data);
-        lastSyncTime = cloudTime;
-        console.log('[Workspace] 클라우드 → 로컬 동기화 완료');
-      }
-    }
-  }, (error) => {
-    console.warn('[Workspace] 실시간 동기화 에러:', error.message);
-  });
 }
 
-/**
- * 로컬 → 워크스페이스 클라우드 업로드
- */
-let wsSaveTimer = null;
-
-export function syncWorkspaceToCloud() {
-  if (!isConfigured || !currentWorkspaceId) return;
-
-  const user = getCurrentUser();
-  if (!user) return;
-
-  // 3초 디바운스
-  clearTimeout(wsSaveTimer);
-  wsSaveTimer = setTimeout(async () => {
-    try {
-      isSyncing = true;
-      const state = getState();
-      const now = Date.now();
-
-      const syncData = {
-        mappedData: state.mappedData || [],
-        transactions: state.transactions || [],
-        transfers: state.transfers || [],
-        vendorMaster: state.vendorMaster || [],
-        accountEntries: state.accountEntries || [],
-        purchaseOrders: state.purchaseOrders || [],
-        stocktakeHistory: state.stocktakeHistory || [],
-        customFields: state.customFields || [],
-        safetyStock: state.safetyStock || {},
-        warehouses: state.warehouses || [],
-        costMethod: state.costMethod || 'weighted-avg',
-        currency: state.currency || { code: 'KRW', symbol: '₩', rate: 1 },
-        _lastSync: now,
-        _lastEditor: user.displayName || user.email || 'Unknown',
-      };
-
-      const docRef = doc(db, 'workspaces', currentWorkspaceId);
-      await setDoc(docRef, syncData, { merge: true });
-
-      lastSyncTime = now;
-      isSyncing = false;
-      console.log('[Workspace] 로컬 → 클라우드 동기화 완료');
-    } catch (error) {
-      isSyncing = false;
-      console.warn('[Workspace] 업로드 실패:', error.message);
-    }
-  }, 3000);
-}
-
-/**
- * 동기화 중지
- */
 export function stopWorkspaceSync() {
-  if (unsubWorkspace) {
-    unsubWorkspace();
-    unsubWorkspace = null;
-  }
-  clearTimeout(wsSaveTimer);
-  lastSyncTime = null;
   currentWorkspaceId = null;
 }
 
-/**
- * 현재 워크스페이스 ID
- */
+export function syncWorkspaceToCloud() {
+  // Supabase Realtime + store.js syncToSupabase()가 처리하므로 no-op
+}
+
 export function getCurrentWorkspaceId() {
   return currentWorkspaceId;
 }
 
 /**
- * 무료 기간 계산
- * 왜? → 가입일 기준 1년 무료, 남은 기간을 표시하여 유료 전환 유도
+ * 무료 기간 계산 — 가입일 기준 1년 무료
  */
 export function getFreePeriodInfo(createdAt) {
   if (!createdAt) return { daysLeft: 365, expired: false, endDate: '' };
