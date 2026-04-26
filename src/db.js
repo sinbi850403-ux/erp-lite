@@ -950,19 +950,9 @@ export const salaryItems = {
 // → 점진적 전환을 위해 한번에 전체 로딩 후 캐시하는 함수 제공
 // ============================================================
 export async function loadAllData() {
-  const [
-    itemsData,
-    txData,
-    vendorsData,
-    transfersData,
-    stocktakeData,
-    auditData,
-    accountData,
-    orderData,
-    posData,
-    fieldData,
-    settingsData,
-  ] = await Promise.all([
+  // 왜 allSettled? → 일부 테이블 쿼리가 실패해도(권한/타임아웃/스키마 차이)
+  // 나머지 데이터는 정상 로드되도록 보장. Promise.all이면 단일 실패가 전체 폴백 유발.
+  const results = await Promise.allSettled([
     items.list(),
     transactions.list(),
     vendors.list(),
@@ -975,6 +965,27 @@ export async function loadAllData() {
     customFields.list(),
     settings.getAll(),
   ]);
+
+  const labels = ['items', 'transactions', 'vendors', 'transfers', 'stocktakes',
+    'auditLogs', 'accountEntries', 'purchaseOrders', 'posSales', 'customFields', 'settings'];
+  const pick = (idx, fallback) => {
+    const r = results[idx];
+    if (r.status === 'fulfilled') return r.value;
+    console.warn(`[loadAllData] ${labels[idx]} 로드 실패:`, r.reason?.message || r.reason);
+    return fallback;
+  };
+
+  const itemsData = pick(0, []);
+  const txData = pick(1, []);
+  const vendorsData = pick(2, []);
+  const transfersData = pick(3, []);
+  const stocktakeData = pick(4, []);
+  const auditData = pick(5, []);
+  const accountData = pick(6, []);
+  const orderData = pick(7, []);
+  const posData = pick(8, []);
+  const fieldData = pick(9, []);
+  const settingsData = pick(10, {});
 
   // 기존 store.js의 state 형태로 변환
   // 왜 이렇게? → 60개 페이지 파일이 getState()를 쓰고 있어서

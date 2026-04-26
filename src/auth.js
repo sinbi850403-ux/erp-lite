@@ -580,8 +580,9 @@ export async function loginWithEmail(email, password) {
     // ── Supabase 클라이언트 내부 상태 초기화 ─────────────────────────────────
     // localStorage 정리만으로는 클라이언트 내부 토큰/갱신 상태가 남아
     // signInWithPassword 충돌 또는 fetch timeout의 근본 원인이 됨
+    // 1.2초로 단축: scope: 'local'은 API 호출 없이 끝나야 정상 — 그보다 오래 걸리면 의미 없음
     try {
-      await withTimeout(supabase.auth.signOut({ scope: 'local' }), 3000, 'pre-login-signout');
+      await withTimeout(supabase.auth.signOut({ scope: 'local' }), 1200, 'pre-login-signout');
     } catch {
       // signOut 실패해도 로그인 계속
     }
