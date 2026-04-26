@@ -173,12 +173,28 @@ export function handlePageError(error, context = {}, userMsg = null, toastType =
   return msg;
 }
 
+// 브라우저 확장 프로그램(MetaMask 등) 및 외부 라이브러리 에러 패턴
+const EXTENSION_ERROR_PATTERNS = [
+  /metamask/i,
+  /ethereum/i,
+  /inpage\.js/i,
+  /chrome-extension:\/\//i,
+  /moz-extension:\/\//i,
+  /extension:\/\//i,
+];
+
+function isExternalError(message = '', filename = '') {
+  const text = `${message} ${filename}`;
+  return EXTENSION_ERROR_PATTERNS.some(p => p.test(text));
+}
+
 /**
  * Sentry 미설정 시 콘솔에 에러를 출력하는 폴백 핸들러
  * 왜? → DSN이 없어도 개발 중 에러를 놓치지 않기 위함
  */
 function setupFallbackErrorHandler() {
   window.addEventListener('error', (event) => {
+    if (isExternalError(event.error?.message || event.message, event.filename)) return;
     console.error('[INVEX 미포착 에러]', event.error?.message || event.message, {
       filename: event.filename,
       lineno: event.lineno,
@@ -187,6 +203,9 @@ function setupFallbackErrorHandler() {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('[INVEX 미포착 Promise 거부]', event.reason?.message || event.reason);
+    const msg = event.reason?.message || String(event.reason || '');
+    const stack = event.reason?.stack || '';
+    if (isExternalError(msg, stack)) return;
+    console.error('[INVEX 미포착 Promise 거부]', msg);
   });
 }
