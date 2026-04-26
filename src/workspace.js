@@ -282,10 +282,13 @@ export async function cancelInvite(targetUid) {
 
   try {
     const meta = await getWorkspaceMeta(wsId);
-    if (meta) {
-      const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
-      await wsUpdateMembers(wsId, members);
+    // 오너만 초대 취소 가능
+    if (!meta || (meta.owner_id ?? meta.ownerId) !== user.uid) {
+      showToast('팀장만 초대를 취소할 수 있습니다.', 'error');
+      return false;
     }
+    const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
+    await wsUpdateMembers(wsId, members);
     showToast('초대를 취소했습니다.', 'info');
     return true;
   } catch (e) {
@@ -305,10 +308,13 @@ export async function removeMember(targetUid) {
 
   try {
     const meta = await getWorkspaceMeta(wsId);
-    if (meta) {
-      const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
-      await wsUpdateMembers(wsId, members);
+    // 오너만 멤버 제거 가능
+    if (!meta || (meta.owner_id ?? meta.ownerId) !== user.uid) {
+      showToast('팀장만 멤버를 제거할 수 있습니다.', 'error');
+      return false;
     }
+    const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
+    await wsUpdateMembers(wsId, members);
     showToast('멤버를 제거했습니다.', 'info');
     return true;
   } catch (e) {
