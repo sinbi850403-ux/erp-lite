@@ -429,7 +429,23 @@ export async function restoreState(userId = null) {
       if (!hasSession) {
         // 로그인 안 된 상태는 정상 흐름 — 경고 출력하지 않음, IndexedDB 폴백으로 진행
       } else {
-        const cloudData = await managedQuery(() => db.loadAllData());
+        let cloudData = await managedQuery(() => db.loadAllData());
+
+        // 0건이면 만료 토큰으로 인한 RLS 차단일 수 있음 → 1.5초 후 1회 재시도
+        // (TOKEN_REFRESHED가 아직 처리되지 않았거나 네트워크 지연으로 세션 갱신이 늦는 경우 대응)
+        if (
+          (cloudData.mappedData?.length ?? 0) === 0 &&
+          (cloudData.transactions?.length ?? 0) === 0
+        ) {
+          await new Promise(r => setTimeout(r, 1500));
+          const retry = await managedQuery(() => db.loadAllData());
+          if (
+            (retry.mappedData?.length ?? 0) > 0 ||
+            (retry.transactions?.length ?? 0) > 0
+          ) {
+            cloudData = retry;
+          }
+        }
 
         // 로컬 IndexedDB 전체를 먼저 읽어 두고, Supabase가 담당하는 키만 cloudData로 덮어쓴다.
         const localData = await loadFromDB();
