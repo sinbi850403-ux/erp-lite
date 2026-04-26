@@ -2460,7 +2460,7 @@ html.dark-mode .report-spotlight-card {
 .sort-hitbox {
   width: 100%;
   min-height: 100%;
-  padding: 12px 14px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -4417,7 +4417,7 @@ select.is-success {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: none;
   background: transparent;
   color: inherit;
