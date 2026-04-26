@@ -604,14 +604,9 @@ export async function loginWithEmail(email, password) {
   document.getElementById('login-error-msg')?.remove();
 
   try {
-    // ── Supabase 클라이언트 내부 상태 초기화 ─────────────────────────────────
-    // localStorage 정리만으로는 클라이언트 내부 토큰/갱신 상태가 남아
-    // signInWithPassword 충돌 또는 fetch timeout의 근본 원인이 됨
-    try {
-      await withTimeout(supabase.auth.signOut({ scope: 'local' }), 3000, 'pre-login-signout');
-    } catch {
-      // signOut 실패해도 로그인 계속
-    }
+    // ── Supabase 클라이언트 localStorage 정리 ────────────────────────────────
+    // signOut SDK 호출은 auth lock 경합(5s timeout)을 유발하므로 제거.
+    // localStorage만 직접 정리해도 신규 signInWithPassword가 깨끗하게 동작함.
     purgeAuthStorage({ includeSupabaseSession: true });
 
     // ── 로그인 시도 (재시도 포함) ─────────────────────────────────────────────

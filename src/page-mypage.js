@@ -4,8 +4,7 @@
  */
 import { getCurrentUser, getUserProfileData } from './auth.js';
 import { getAuth, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from './auth-bridge.js';
-import { doc, updateDoc, deleteDoc } from './backend-store.js';
-import { db, isConfigured } from './backend-config.js';
+import { supabase } from './supabase-client.js';
 import { showToast } from './toast.js';
 import { getCurrentPlan, PLANS } from './plan.js';
 
@@ -91,10 +90,13 @@ export function renderMyPage(container) {
   document.getElementById('btn-update-name')?.addEventListener('click', async () => {
     const newName = document.getElementById('my-name').value.trim();
     if (!newName) { showToast('이름을 입력하세요.', 'warning'); return; }
+    if (!user) { showToast('로그인이 필요합니다.', 'error'); return; }
     try {
-      if (isConfigured && user) {
-        await updateDoc(doc(db, 'users', user.uid), { name: newName });
-      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: newName })
+        .eq('id', user.uid);
+      if (error) throw error;
       showToast('이름이 변경되었습니다.', 'success');
     } catch (e) {
       showToast('이름 변경 실패: ' + e.message, 'error');

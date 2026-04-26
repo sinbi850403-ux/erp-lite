@@ -889,46 +889,6 @@ document.getElementById('gate-google-login')?.addEventListener('click', async ()
   if (!user && loadingEl) loadingEl.style.display = 'none';
 });
 
-initAuth((user, profile) => {
-  const gate = document.getElementById('auth-gate');
-  
-  if (user) {
-    // DB 프로필의 요금제를 앱 런타임 상태에 동기화
-    const profilePlan = profile?.plan;
-    if (profilePlan && PLANS[profilePlan]) {
-      setPlan(profilePlan);
-    }
-
-    const landing = document.getElementById('landing-page');
-    if (landing) landing.style.display = 'none';
-    if (gate) {
-      gate.style.opacity = '0';
-      setTimeout(() => { gate.style.display = 'none'; }, 300);
-    }
-    updateUserUI(user, profile);
-    setMonitorUser(user.uid, user.email);
-    
-    const adminBtn = document.querySelector('[data-page="admin"]');
-    const posBtn = document.querySelector('[data-page="pos"]');
-    if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
-    if (posBtn) posBtn.style.display = isAdmin() ? '' : 'none';
-    
-    if (!isAuthReady) {
-      isAuthReady = true;
-      initAppAfterAuth();
-    }
-  } else {
-    updateUserUI(null, null);
-    clearMonitorUser();
-    const gateIsOpen = gate && gate.style.display === 'flex';
-    if (!gateIsOpen) {
-      if (gate) gate.style.display = 'none';
-      const landing = document.getElementById('landing-page');
-      if (landing) landing.style.display = 'block';
-    }
-    isAuthReady = false;
-  }
-});
 // Supabase 미설정(로컬 개발) 시에는 게이트 자동 제거
 import { isSupabaseConfigured, supabase } from './supabase-client.js';
 if (!isSupabaseConfigured) {
