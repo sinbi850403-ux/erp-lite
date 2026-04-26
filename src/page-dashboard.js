@@ -274,9 +274,9 @@ export function renderDashboardPage(container, navigateTo) {
 
   container.querySelectorAll('.data-table').forEach((table) => {
     table.dataset.autoSort = 'off';
-    enableColumnResize(table);
   });
   enableLocalReportSort(container);
+  container.querySelectorAll('.data-table').forEach(enableColumnResize);
 }
 
 // === 遺꾩꽍 ?좏떥 ?⑥닔 ===

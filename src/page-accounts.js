@@ -169,9 +169,9 @@ export function renderAccountsPage(container, navigateTo) {
   bindAccountActions(container, navigateTo);
   container.querySelectorAll('.data-table').forEach((table) => {
     table.dataset.autoSort = 'off';
-    enableColumnResize(table);
   });
   enableLocalReportSort(container);
+  container.querySelectorAll('.data-table').forEach(enableColumnResize);
 }
 
 // ─── 에이징 요약 카드 ────────────────────────────────────────────────────────

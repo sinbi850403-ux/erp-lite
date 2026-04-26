@@ -952,9 +952,9 @@ export function renderProfitPage(container, navigateTo) {
 
   container.querySelectorAll('.data-table').forEach((table) => {
     table.dataset.autoSort = 'off';
-    enableColumnResize(table);
   });
   enableLocalReportSort(container);
+  container.querySelectorAll('.data-table').forEach(enableColumnResize);
 }
 
 function summarizeByCategory(rows) {
