@@ -154,7 +154,12 @@ export async function inviteMember(email, role = 'staff') {
       workspaceName: meta?.name || '워크스페이스',
     };
 
-    await wsUpdateMembers(wsId, [...existingMembers, newMember]);
+    // atomic RPC — Read-Modify-Write 경쟁 방지
+    const { error: rpcErr } = await supabase.rpc('workspace_add_member', {
+      ws_id: wsId,
+      new_member: newMember,
+    });
+    if (rpcErr) throw rpcErr;
 
     showToast(`${targetProfile.name || email}님께 초대장을 보냈습니다! 상대방이 수락하면 팀원으로 합류됩니다.`, 'success');
     return true;
@@ -231,12 +236,13 @@ export async function acceptInvite() {
       return false;
     }
 
-    const members = (meta.members || []).map(m =>
-      (m.uid === user.uid || m.id === user.uid)
-        ? { ...m, status: 'active', joinedAt: new Date().toISOString() }
-        : m
-    );
-    await wsUpdateMembers(workspaceId, members);
+    // atomic RPC — 상태 변경
+    const { error: rpcErr } = await supabase.rpc('workspace_set_member_status', {
+      ws_id: workspaceId,
+      member_uid: user.uid,
+      new_status: 'active',
+    });
+    if (rpcErr) throw rpcErr;
 
     // 내 settings에 워크스페이스 ID 저장
     await db.settings.set('joined_workspace_id', workspaceId);
@@ -266,11 +272,11 @@ export async function rejectInvite() {
     }
 
     const { workspaceId } = pendingInvite;
-    const meta = await getWorkspaceMeta(workspaceId);
-    if (meta) {
-      const members = (meta.members || []).filter(m => m.uid !== user.uid && m.id !== user.uid);
-      await wsUpdateMembers(workspaceId, members);
-    }
+    const { error: rpcErr } = await supabase.rpc('workspace_remove_member', {
+      ws_id: workspaceId,
+      member_uid: user.uid,
+    });
+    if (rpcErr) throw rpcErr;
 
     showToast('초대를 거절했습니다.', 'info');
     return true;
@@ -296,8 +302,11 @@ export async function cancelInvite(targetUid) {
       showToast('팀장만 초대를 취소할 수 있습니다.', 'error');
       return false;
     }
-    const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
-    await wsUpdateMembers(wsId, members);
+    const { error: rpcErr } = await supabase.rpc('workspace_remove_member', {
+      ws_id: wsId,
+      member_uid: targetUid,
+    });
+    if (rpcErr) throw rpcErr;
     showToast('초대를 취소했습니다.', 'info');
     return true;
   } catch (e) {
@@ -322,8 +331,11 @@ export async function removeMember(targetUid) {
       showToast('팀장만 멤버를 제거할 수 있습니다.', 'error');
       return false;
     }
-    const members = (meta.members || []).filter(m => m.uid !== targetUid && m.id !== targetUid);
-    await wsUpdateMembers(wsId, members);
+    const { error: rpcErr } = await supabase.rpc('workspace_remove_member', {
+      ws_id: wsId,
+      member_uid: targetUid,
+    });
+    if (rpcErr) throw rpcErr;
     showToast('멤버를 제거했습니다.', 'info');
     return true;
   } catch (e) {
