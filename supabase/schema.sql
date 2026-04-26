@@ -598,3 +598,35 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+-- ============================================================
+-- Supabase Realtime 활성화
+-- 여러 브라우저/기기에서 실시간 데이터 동기화를 위해 필요
+-- ============================================================
+ALTER TABLE items           REPLICA IDENTITY FULL;
+ALTER TABLE transactions    REPLICA IDENTITY FULL;
+ALTER TABLE vendors         REPLICA IDENTITY FULL;
+ALTER TABLE transfers       REPLICA IDENTITY FULL;
+ALTER TABLE account_entries REPLICA IDENTITY FULL;
+ALTER TABLE purchase_orders REPLICA IDENTITY FULL;
+ALTER TABLE stocktakes      REPLICA IDENTITY FULL;
+ALTER TABLE user_settings   REPLICA IDENTITY FULL;
+ALTER TABLE profiles        REPLICA IDENTITY FULL;
+
+-- supabase_realtime publication에 테이블 추가
+DO $$
+BEGIN
+  -- publication이 없으면 생성, 있으면 테이블만 추가
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime FOR TABLE
+      items, transactions, vendors, transfers,
+      account_entries, purchase_orders, stocktakes,
+      user_settings, profiles;
+  ELSE
+    ALTER PUBLICATION supabase_realtime ADD TABLE
+      items, transactions, vendors, transfers,
+      account_entries, purchase_orders, stocktakes,
+      user_settings, profiles;
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL; -- 이미 추가된 경우 무시
+END $$;

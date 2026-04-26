@@ -236,8 +236,11 @@ function waitForAuthThenSync() {
  * 변경된 데이터만 Supabase에 동기화
  * 왜 전체가 아닌 부분 동기화? → 품목 10,000개를 매번 보내면 느림
  */
+let _lastLocalSyncTime = 0; // 내가 마지막으로 Supabase에 쓴 시각 (내 변경이 Realtime으로 돌아오면 무시)
+
 async function syncToSupabase() {
   if (!isSupabaseConfigured || _dirtyKeys.size === 0) return;
+  _lastLocalSyncTime = Date.now();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
     waitForAuthThenSync();
@@ -380,6 +383,54 @@ function scheduleSyncToSupabase(changedKeys) {
   _supabaseSyncTimer = setTimeout(() => {
     syncToSupabase();
   }, 2000);
+}
+
+// === Realtime 실시간 동기화 ===
+
+let _realtimeChannel = null;
+let _realtimeReloadTimer = null;
+
+const REALTIME_TABLES = [
+  'items', 'transactions', 'vendors', 'transfers',
+  'account_entries', 'purchase_orders', 'stocktakes',
+  'user_settings', 'profiles',
+];
+
+function scheduleRealtimeReload() {
+  // 3초 이내에 내가 직접 Supabase에 썼으면 내 변경이 돌아온 것 → 무시
+  if (Date.now() - _lastLocalSyncTime < 3000) return;
+
+  if (_realtimeReloadTimer) clearTimeout(_realtimeReloadTimer);
+  _realtimeReloadTimer = setTimeout(async () => {
+    console.log('[Realtime] 외부 변경 감지 → 데이터 새로고침');
+    await restoreState();
+    window.dispatchEvent(new CustomEvent('invex:realtime-reload'));
+  }, 1500);
+}
+
+export function setupRealtimeSync() {
+  if (!isSupabaseConfigured) return;
+  cleanupRealtimeSync();
+
+  const channel = supabase.channel('invex-realtime-v1');
+  REALTIME_TABLES.forEach(table => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRealtimeReload);
+  });
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') console.log('[Realtime] 실시간 동기화 활성화');
+  });
+  _realtimeChannel = channel;
+}
+
+export function cleanupRealtimeSync() {
+  if (_realtimeChannel) {
+    supabase.removeChannel(_realtimeChannel).catch(() => {});
+    _realtimeChannel = null;
+  }
+  if (_realtimeReloadTimer) {
+    clearTimeout(_realtimeReloadTimer);
+    _realtimeReloadTimer = null;
+  }
 }
 
 // === Public API ===

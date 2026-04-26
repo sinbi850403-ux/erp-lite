@@ -14,7 +14,7 @@ import { showToast } from './toast.js';
 import { isAdmin } from './admin-auth.js';
 import { navigateTo, injectRouterCallbacks, PAGE_LOADERS, LAST_PAGE_KEY, renderQuickAccess } from './router.js';
 import { initGlobalSearch, toggleGlobalSearch } from './global-search.js';
-import { restoreState, getState } from './store.js';
+import { restoreState, getState, setupRealtimeSync, cleanupRealtimeSync } from './store.js';
 import { primeUserIdCache } from './db.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initSidebarCustomize } from './sidebar-customize.js';
@@ -828,6 +828,7 @@ async function initAppAfterAuth() {
     initSidebarCustomize();
     await navigateTo(startPage);
     checkAndShowOnboarding(navigateTo);
+    setupRealtimeSync();
 
     // TOKEN_REFRESHED가 initAppAfterAuth 실행 도중 도착했으면 여기서 재로드
     if (pendingTokenRefresh) {
@@ -841,6 +842,14 @@ async function initAppAfterAuth() {
 
 initNavigationShortcuts();
 initSmartDetailsToggles();
+
+// 다른 브라우저/기기에서 변경 감지 → 현재 페이지 자동 재렌더링
+window.addEventListener('invex:realtime-reload', async () => {
+  const { currentPage } = await import('./router.js');
+  if (currentPage) {
+    navigateTo(currentPage);
+  }
+});
 
 // ?ъ슜??UI ?낅뜲?댄듃 (濡쒓렇??濡쒓렇?꾩썐 ???몄텧)
 function updateUserUI(user, profile) {
@@ -865,6 +874,7 @@ function updateUserUI(user, profile) {
       const btn = document.getElementById('btn-logout');
       if (btn) btn.disabled = true;
       try {
+        cleanupRealtimeSync();
         await logout();
       } finally {
         if (btn) btn.disabled = false;
