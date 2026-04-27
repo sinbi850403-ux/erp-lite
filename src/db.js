@@ -392,9 +392,11 @@ export const transactions = {
   async bulkCreate(txArray) {
     const userId = await getUserId();
     const rows = txArray.map(tx => ({ ...tx, user_id: userId }));
+    // ★ insert → upsert(onConflict: 'id')
+    //   클라이언트 UUID가 id로 전달되므로 재시도 시 중복 생성 없음 (멱등)
     const { data, error } = await supabase
       .from('transactions')
-      .insert(rows)
+      .upsert(rows, { onConflict: 'id' })
       .select();
     handleError(error, '입출고 일괄 등록');
     return data || [];

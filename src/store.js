@@ -268,7 +268,20 @@ async function syncToSupabase() {
       const items = (state.mappedData || []).map(item => storeItemToDb(item));
       promises.push(
         managedQuery(() => db.items.bulkUpsert(items))
-          .then(() => {})
+          .then((savedItems) => {
+            // ★ Supabase가 반환한 UUID를 state.mappedData._id에 반영
+            // → 같은 세션 내 deleteItem이 정확한 UUID로 Supabase 삭제 가능
+            if (Array.isArray(savedItems) && savedItems.length > 0) {
+              savedItems.forEach(saved => {
+                const storeItem = state.mappedData.find(m =>
+                  (saved.item_name && m.itemName === saved.item_name) ||
+                  (m._id && m._id === saved.id)
+                );
+                if (storeItem) storeItem._id = saved.id;
+              });
+              saveToDB();
+            }
+          })
           .catch(err => {
             console.warn('[Sync] 품목 동기화 실패:', getErrorMessage(err));
             if (isAuthLikeSyncError(err)) authBlocked = true;
@@ -282,6 +295,7 @@ async function syncToSupabase() {
       const newTxs = (state.transactions || [])
         .filter(tx => !tx._synced)
         .map(tx => ({
+          id: tx.id,            // ★ 클라이언트 UUID → Supabase와 동일 ID 공유 (upsert 멱등성 보장)
           type: tx.type,
           item_name: tx.itemName,
           item_code: tx.itemCode || null,
@@ -575,6 +589,19 @@ export async function restoreState(userId = null) {
           (cloudData.mappedData?.length ?? 0) > 0 ||
           (cloudData.transactions?.length ?? 0) > 0;
 
+        // ★ 오프라인에서 입력한 미동기화 트랜잭션 보호
+        // Supabase에 기존 데이터가 있어도 로컬의 _synced:false 건은 유실되지 않도록 merge
+        const localTxs = localData?.transactions || [];
+        const unsyncedLocal = localTxs.filter(tx => !tx._synced);
+        if (unsyncedLocal.length > 0 && cloudData.transactions) {
+          // Supabase 트랜잭션 ID 셋으로 중복 방지
+          const cloudIds = new Set(cloudData.transactions.map(t => t.id));
+          const trulyUnsynced = unsyncedLocal.filter(tx => !cloudIds.has(tx.id));
+          if (trulyUnsynced.length > 0) {
+            cloudData.transactions = [...trulyUnsynced, ...cloudData.transactions];
+          }
+        }
+
         // Supabase가 빈 배열을 반환했지만 로컬에 실제 데이터가 있으면 보호
         // — 토큰 갱신 타이밍, RLS 일시 차단, 네트워크 오류로 인한 데이터 소실 방지
         const safeCloudData = { ...cloudData };
@@ -584,6 +611,13 @@ export async function restoreState(userId = null) {
         if ((safeCloudData.transactions?.length ?? 0) === 0 && (localData?.transactions?.length ?? 0) > 0) {
           delete safeCloudData.transactions;
         }
+        // ★ 주요 데이터 추가 보호 (빈 배열로 덮어쓰기 방지)
+        const protectKeys = ['vendorMaster', 'transfers', 'safetyStock'];
+        protectKeys.forEach(key => {
+          if ((safeCloudData[key]?.length ?? 0) === 0 && (localData?.[key]?.length ?? 0) > 0) {
+            delete safeCloudData[key];
+          }
+        });
 
         state = { ...DEFAULT_STATE, ...(localData || {}), ...safeCloudData };
         window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
@@ -668,8 +702,12 @@ export function recalcItemAmounts(item) {
  * @param {object} tx - {type:'in'|'out', itemName, quantity, date, note, unitPrice}
  */
 export function addTransaction(tx) {
+  // ★ 클라이언트 UUID 사용 → Supabase와 동일 ID 공유 → 삭제/upsert 정확히 동작
+  const clientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const newTx = {
-    id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    id: clientId,
     createdAt: new Date().toISOString(),
     ...tx,
   };
@@ -856,12 +894,27 @@ export function deleteItem(index) {
   saveToDB();
 
   // Supabase에서도 삭제
-  if (isSupabaseConfigured && deleted?._id) {
-    db.items.remove(deleted._id).catch(err =>
-      console.warn('[Store] 품목 삭제 동기화 실패:', err.message)
-    );
-  }
   if (isSupabaseConfigured) {
+    if (deleted?._id) {
+      // _id(UUID)가 있으면 정확히 삭제
+      db.items.remove(deleted._id).catch(err =>
+        console.warn('[Store] 품목 삭제 동기화 실패(_id):', err.message)
+      );
+    } else if (deleted?.itemName) {
+      // ★ 같은 세션 내 _id 미설정 시 item_name으로 폴백 삭제
+      // (bulkUpsert UUID가 아직 반영되기 전에 삭제하는 경우)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const uid = session?.user?.id;
+        if (!uid) return;
+        supabase.from('items')
+          .delete()
+          .eq('user_id', uid)
+          .eq('item_name', deleted.itemName)
+          .then(({ error }) => {
+            if (error) console.warn('[Store] 품목 삭제 동기화 실패(item_name):', error.message);
+          });
+      });
+    }
     scheduleSyncToSupabase(['mappedData']);
   }
   return { deleted, index };
