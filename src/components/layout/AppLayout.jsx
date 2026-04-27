@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import Sidebar from './Sidebar.jsx';
@@ -9,9 +9,22 @@ import { initGlobalSearch } from '../../global-search.js';
 import { checkAndShowOnboarding } from '../../onboarding.js';
 import { showToast } from '../../toast.js';
 
-// 모든 페이지를 LegacyPage 래퍼로 생성
+// 네이티브 React 컴포넌트로 변환된 페이지
+const REACT_PAGES = {
+  guide:    lazy(() => import('../../pages/GuidePage.jsx')),
+  referral: lazy(() => import('../../pages/ReferralPage.jsx')),
+  settings: lazy(() => import('../../pages/SettingsPage.jsx')),
+  backup:   lazy(() => import('../../pages/BackupPage.jsx')),
+  mypage:   lazy(() => import('../../pages/MyPage.jsx')),
+  support:  lazy(() => import('../../pages/SupportPage.jsx')),
+};
+
+// React 페이지는 네이티브 컴포넌트로, 나머지는 LegacyPage 래퍼로 생성
 const PAGE_COMPONENTS = Object.fromEntries(
-  Object.entries(PAGE_LOADERS).map(([id, loader]) => [id, createLegacyPage(id, loader)])
+  Object.entries(PAGE_LOADERS).map(([id, loader]) => [
+    id,
+    REACT_PAGES[id] || createLegacyPage(id, loader),
+  ])
 );
 
 function PageNotFound() {
@@ -99,17 +112,19 @@ export default function AppLayout() {
       <TopHeader user={user} profile={profile} />
 
       <main id="main-content">
-        <Routes>
-          <Route index element={<Navigate to="/home" replace />} />
-          {Object.entries(PAGE_COMPONENTS).map(([id, Component]) => (
-            <Route
-              key={id}
-              path={'/' + id}
-              element={<Component />}
-            />
-          ))}
-          <Route path="*" element={<PageNotFound />} />
-        </Routes>
+        <Suspense fallback={<div style={{padding:'40px',textAlign:'center',color:'var(--text-muted)'}}>로딩 중...</div>}>
+          <Routes>
+            <Route index element={<Navigate to="/home" replace />} />
+            {Object.entries(PAGE_COMPONENTS).map(([id, Component]) => (
+              <Route
+                key={id}
+                path={'/' + id}
+                element={<Component />}
+              />
+            ))}
+            <Route path="*" element={<PageNotFound />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );
