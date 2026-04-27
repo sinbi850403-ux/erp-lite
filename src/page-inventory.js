@@ -439,6 +439,7 @@ export function renderInventoryPage(container, navigateTo) {
   let persistTimer = null;
   let selectedIndexes = new Set();
   let focusedItemKey = data[0] ? getItemKey(data[0]) : '';
+  let lastTimelineKey = null; // ★ 타임라인 마지막 렌더 품목 키 (차트 불필요한 재생성 방지)
   const expandedInvGroups = new Set(); // 재고 테이블 펼쳐진 그룹 키
   const COLLAPSE_STORAGE_KEY = 'invex:inventory:collapsed-sections:v1';
   const collapsedSections = loadCollapsedSections();
@@ -1258,6 +1259,11 @@ export function renderInventoryPage(container, navigateTo) {
     const focusedRow = rows.find(row => getItemKey(row) === focusedItemKey) || rows[0];
     focusedItemKey = getItemKey(focusedRow);
 
+    // ★ 같은 품목이 포커스된 상태면 Chart.js 파괴→재생성을 건너뜀
+    // 정렬 클릭 시 포커스 품목은 바뀌지 않으므로, 차트를 매번 재생성하면 캔버스가 깜빡임
+    if (focusedItemKey === lastTimelineKey) return;
+    lastTimelineKey = focusedItemKey;
+
     const allTransactions = (getState().transactions || [])
       .filter((tx) => {
         const sameCode = focusedRow.itemCode && tx.itemCode && String(focusedRow.itemCode) === String(tx.itemCode);
@@ -1340,6 +1346,7 @@ export function renderInventoryPage(container, navigateTo) {
         // 편집 중인 input, 버튼 등은 무시 (더블클릭 편집과 충돌 방지)
         if (event.target.closest('button, input, select, a, label')) return;
         focusedItemKey = rowEl.dataset.rowKey || focusedItemKey;
+        lastTimelineKey = null; // ★ 행 클릭 시 강제 재렌더 (캐시 무효화)
         renderItemTimelinePanel(sortRows(getFilteredData()));
         // 포커스 행 하이라이트 갱신
         container.querySelectorAll('#inventory-body tr[data-row-key]').forEach(r => {
