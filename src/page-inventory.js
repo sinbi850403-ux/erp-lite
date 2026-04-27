@@ -159,11 +159,16 @@ export function renderInventoryPage(container, navigateTo) {
     const outAmt       = agg.outAmt  || 0;
     const unitPrice    = parseFloat(item.unitPrice) || 0;
     const qty          = parseFloat(item.quantity)  || 0;
+    // 출고단가: 품목 마스터 salePrice 우선, 없으면 거래 평균(출고금액 ÷ 출고수량)
+    const masterSalePrice = parseFloat(item.salePrice) || 0;
+    const calcSalePrice   = outQty > 0 ? Math.round(outAmt / outQty) : 0;
+    const salePrice       = masterSalePrice > 0 ? masterSalePrice : calcSalePrice;
     // 매입원가는 품목 마스터 단가 기준 (거래 tx.unitPrice는 출고단가일 수 있음)
     const costAmt      = unitPrice > 0 ? Math.round(unitPrice * outQty) : (agg.costAmt || 0);
     const profit       = outAmt - costAmt;
     return {
       ...item,
+      salePrice:            salePrice || '',
       inQty:                agg.inQty || 0,
       outQty:               outQty || '',
       outTotalPrice:        outAmt  || '',
