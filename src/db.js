@@ -758,15 +758,15 @@ export const stocktakes = {
 export const settings = {
   async get(key) {
     const userId = await getUserId();
+    // ★ .single() → .maybeSingle() : 행이 없으면 HTTP 406 대신 null 반환
+    //   .single()은 0행이면 PGRST116(406)을 발생시켜 브라우저 콘솔에 에러가 찍힘
     const { data, error } = await supabase
       .from('user_settings')
       .select('value')
       .eq('user_id', userId)
       .eq('key', key)
-      .single();
+      .maybeSingle();
 
-    // 설정이 없으면 null 반환 (에러가 아님)
-    if (error?.code === 'PGRST116') return null;
     handleError(error, `설정 조회 (${key})`);
     return data?.value ?? null;
   },
