@@ -689,6 +689,8 @@ export function InoutPage({ mode = 'all' }) {
   const sorted = useMemo(() => {
     const dir = sort.dir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
+      const aItem = itemMap.get(a.itemName) || {};
+      const bItem = itemMap.get(b.itemName) || {};
       let av, bv;
       if (sort.key === 'date') {
         av = new Date(a.date || a.createdAt || 0).getTime();
@@ -696,12 +698,45 @@ export function InoutPage({ mode = 'all' }) {
       } else if (sort.key === 'quantity') {
         av = parseFloat(a.quantity) || 0;
         bv = parseFloat(b.quantity) || 0;
+      } else if (sort.key === 'unitPrice') {
+        av = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
+        bv = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+      } else if (sort.key === 'sellingPrice') {
+        av = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
+        bv = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
+      } else if (sort.key === 'supply') {
+        av = (parseFloat(a.unitPrice || aItem.unitPrice) || 0) * (parseFloat(a.quantity) || 0);
+        bv = (parseFloat(b.unitPrice || bItem.unitPrice) || 0) * (parseFloat(b.quantity) || 0);
+      } else if (sort.key === 'outAmt') {
+        av = (parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0);
+        bv = (parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0);
+      } else if (sort.key === 'profit') {
+        const aQty = parseFloat(a.quantity) || 0;
+        const bQty = parseFloat(b.quantity) || 0;
+        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
+        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
+        const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
+        av = (aSp - aUp) * aQty;
+        bv = (bSp - bUp) * bQty;
       } else if (sort.key === 'itemName') {
         av = (a.itemName || '').toLowerCase();
         bv = (b.itemName || '').toLowerCase();
       } else if (sort.key === 'vendor') {
         av = (a.vendor || '').toLowerCase();
         bv = (b.vendor || '').toLowerCase();
+      } else if (sort.key === 'category') {
+        av = (a.category || aItem.category || '').toLowerCase();
+        bv = (b.category || bItem.category || '').toLowerCase();
+      } else if (sort.key === 'itemCode') {
+        av = (a.itemCode || aItem.itemCode || '').toLowerCase();
+        bv = (b.itemCode || bItem.itemCode || '').toLowerCase();
+      } else if (sort.key === 'spec') {
+        av = (a.spec || aItem.spec || '').toLowerCase();
+        bv = (b.spec || bItem.spec || '').toLowerCase();
+      } else if (sort.key === 'unit') {
+        av = (a.unit || aItem.unit || '').toLowerCase();
+        bv = (b.unit || bItem.unit || '').toLowerCase();
       } else {
         av = a[sort.key] || '';
         bv = b[sort.key] || '';
@@ -709,7 +744,7 @@ export function InoutPage({ mode = 'all' }) {
       if (typeof av === 'number') return (av - bv) * dir;
       return String(av).localeCompare(String(bv), 'ko-KR', { numeric: true }) * dir;
     });
-  }, [filtered, sort]);
+  }, [filtered, sort, itemMap]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -1053,38 +1088,38 @@ export function InoutPage({ mode = 'all' }) {
                   {!isInMode && !isOutMode && <SortTh sortKey="type">구분</SortTh>}
                   {isOutMode ? (
                     <>
-                      <th>자산</th>
+                      <SortTh sortKey="category">자산</SortTh>
                       <SortTh sortKey="date">출고일자</SortTh>
                       <SortTh sortKey="vendor">거래처</SortTh>
-                      <th>상품코드</th>
+                      <SortTh sortKey="itemCode">상품코드</SortTh>
                       <SortTh sortKey="itemName" className="col-fill">품명</SortTh>
-                      <th>규격</th>
-                      <th>단위</th>
-                      <th className="text-right">입고수량</th>
-                      <th className="text-right">단가</th>
-                      <th className="text-right">공급가액</th>
+                      <SortTh sortKey="spec">규격</SortTh>
+                      <SortTh sortKey="unit">단위</SortTh>
+                      <SortTh sortKey="quantity" className="text-right">입고수량</SortTh>
+                      <SortTh sortKey="unitPrice" className="text-right">단가</SortTh>
+                      <SortTh sortKey="supply" className="text-right">공급가액</SortTh>
                       <th className="text-right">부가세</th>
                       <th className="text-right">합계금액</th>
-                      <th className="text-right">출고단가</th>
-                      <th className="text-right">출고수량</th>
-                      <th className="text-right">출고금액</th>
-                      <th className="text-right">매입원가</th>
-                      <th className="text-right">이익액</th>
+                      <SortTh sortKey="sellingPrice" className="text-right">출고단가</SortTh>
+                      <SortTh sortKey="quantity" className="text-right">출고수량</SortTh>
+                      <SortTh sortKey="outAmt" className="text-right">출고금액</SortTh>
+                      <SortTh sortKey="supply" className="text-right">매입원가</SortTh>
+                      <SortTh sortKey="profit" className="text-right">이익액</SortTh>
                       <th className="text-right">이익율</th>
                       <th className="text-right">매출원가율</th>
                     </>
                   ) : isInMode ? (
                     <>
-                      <th>자산</th>
+                      <SortTh sortKey="category">자산</SortTh>
                       <SortTh sortKey="date">입고일자</SortTh>
                       <SortTh sortKey="vendor">거래처</SortTh>
-                      <th>상품코드</th>
+                      <SortTh sortKey="itemCode">상품코드</SortTh>
                       <SortTh sortKey="itemName" className="col-fill">품명</SortTh>
-                      <th>규격</th>
-                      <th>단위</th>
+                      <SortTh sortKey="spec">규격</SortTh>
+                      <SortTh sortKey="unit">단위</SortTh>
                       <SortTh sortKey="quantity" className="text-right">입고수량</SortTh>
                       <SortTh sortKey="unitPrice" className="text-right">단가</SortTh>
-                      <th className="text-right">공급가액</th>
+                      <SortTh sortKey="supply" className="text-right">공급가액</SortTh>
                       <th className="text-right">부가세</th>
                       <th className="text-right">합계금액</th>
                     </>
