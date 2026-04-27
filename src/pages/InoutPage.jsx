@@ -1323,19 +1323,19 @@ export function InoutPage({ mode = 'all' }) {
                             {qty ? qty.toLocaleString('ko-KR') : '-'}
                           </td>
                           {/* 판매 그룹 */}
-                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.1)' }}>{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.1)' }}>{outAmt ? W(outAmt) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.1)' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.28)' }}>{salePrice ? W(salePrice) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.28)', fontWeight: 600 }}>{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(29,61,107,0.18)' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
-                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.12)' }}>{wacSupply ? W(wacSupply) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.12)' }}>{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.12)' }}>{wacSupply ? W(wacTotal) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.28)' }}>{wacSupply ? W(wacSupply) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.18)', color: 'var(--text-muted)' }}>{wacSupply ? W(wacVat) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(74,46,20,0.28)', fontWeight: 600 }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
-                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.12)', color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : '' }}>
+                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.28)', color: profit > 0 ? '#4ade80' : profit < 0 ? '#f87171' : 'var(--text-muted)', fontWeight: profit !== 0 ? 700 : 400 }}>
                             {outAmt ? W(profit) : '-'}
                           </td>
-                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.12)' }}>{profitMargin || '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.12)' }}>{cogsMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.28)', color: profit > 0 ? '#4ade80' : profit < 0 ? '#f87171' : 'var(--text-muted)' }}>{profitMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(22,53,38,0.18)', color: 'var(--text-muted)' }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
