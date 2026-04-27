@@ -1163,15 +1163,15 @@ export function InoutPage({ mode = 'all' }) {
                       <th rowSpan={2} style={{ verticalAlign: 'middle' }}>관리</th>
                     </tr>
                     <tr>
-                      <SortTh sortKey="sellingPrice" className="text-right">출고단가</SortTh>
-                      <SortTh sortKey="outAmt" className="text-right">판매가</SortTh>
-                      <SortTh sortKey="outTotal" className="text-right">출고합</SortTh>
-                      <SortTh sortKey="supply" className="text-right">매입원가</SortTh>
-                      <SortTh sortKey="vat" className="text-right">부가세</SortTh>
-                      <SortTh sortKey="totalPrice" className="text-right">공가합</SortTh>
-                      <SortTh sortKey="profit" className="text-right">이익액</SortTh>
-                      <SortTh sortKey="profitMargin" className="text-right">이익율</SortTh>
-                      <SortTh sortKey="cogsMargin" className="text-right">매출원가율</SortTh>
+                      <SortTh sortKey="sellingPrice" className="text-right" style={{ background: 'rgba(37,99,235,0.18)', color: 'inherit' }}>출고단가</SortTh>
+                      <SortTh sortKey="outAmt" className="text-right" style={{ background: 'rgba(37,99,235,0.18)', color: 'inherit' }}>판매가</SortTh>
+                      <SortTh sortKey="outTotal" className="text-right" style={{ background: 'rgba(37,99,235,0.18)', color: 'inherit' }}>출고합</SortTh>
+                      <SortTh sortKey="supply" className="text-right" style={{ background: 'rgba(124,94,46,0.25)', color: 'inherit' }}>매입원가</SortTh>
+                      <SortTh sortKey="vat" className="text-right" style={{ background: 'rgba(124,94,46,0.25)', color: 'inherit' }}>부가세</SortTh>
+                      <SortTh sortKey="totalPrice" className="text-right" style={{ background: 'rgba(124,94,46,0.25)', color: 'inherit' }}>공가합</SortTh>
+                      <SortTh sortKey="profit" className="text-right" style={{ background: 'rgba(42,107,74,0.22)', color: 'inherit' }}>이익액</SortTh>
+                      <SortTh sortKey="profitMargin" className="text-right" style={{ background: 'rgba(42,107,74,0.22)', color: 'inherit' }}>이익율</SortTh>
+                      <SortTh sortKey="cogsMargin" className="text-right" style={{ background: 'rgba(42,107,74,0.22)', color: 'inherit' }}>매출원가율</SortTh>
                     </tr>
                   </>
                 ) : (
@@ -1259,19 +1259,19 @@ export function InoutPage({ mode = 'all' }) {
                             {qty ? qty.toLocaleString('ko-KR') : '-'}
                           </td>
                           {/* 판매 그룹 */}
-                          <td className="text-right">{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right">{outAmt ? W(outAmt) : '-'}</td>
-                          <td className="text-right">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(37,99,235,0.07)' }}>{salePrice ? W(salePrice) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(37,99,235,0.07)' }}>{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(37,99,235,0.07)' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
-                          <td className="text-right">{wacSupply ? W(wacSupply) : '-'}</td>
-                          <td className="text-right">{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right">{wacSupply ? W(wacTotal) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(124,94,46,0.1)' }}>{wacSupply ? W(wacSupply) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(124,94,46,0.1)' }}>{wacSupply ? W(wacVat) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(124,94,46,0.1)' }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
-                          <td className="text-right" style={{ color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : '' }}>
+                          <td className="text-right" style={{ background: 'rgba(42,107,74,0.09)', color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : '' }}>
                             {outAmt ? W(profit) : '-'}
                           </td>
-                          <td className="text-right">{profitMargin || '-'}</td>
-                          <td className="text-right">{cogsMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(42,107,74,0.09)' }}>{profitMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(42,107,74,0.09)' }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
