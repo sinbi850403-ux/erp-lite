@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword } from '../../auth.js';
 import { showToast } from '../../toast.js';
+import '../../auth.css';
 
 export default function AuthGate({ onBack }) {
   const [activeTab, setActiveTab] = useState('login');
