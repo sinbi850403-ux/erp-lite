@@ -70,6 +70,11 @@ const REACT_PAGES = {
   leaves:          lazy(() => import('../../pages/LeavesPage.jsx')),
   severance:       lazy(() => import('../../pages/SeverancePage.jsx')),
   'yearend-settlement': lazy(() => import('../../pages/YearendSettlementPage.jsx')),
+  // 11차 변환 (재고현황·입출고·수주관리 — 마지막 3개 핵심 페이지)
+  inventory:       lazy(() => import('../../pages/InventoryPage.jsx')),
+  in:              lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.InPage }))),
+  out:             lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.OutPage }))),
+  sales:           lazy(() => import('../../pages/SalesPage.jsx')),
 };
 
 // React 페이지는 네이티브 컴포넌트로, 나머지는 LegacyPage 래퍼로 생성
