@@ -575,7 +575,17 @@ export async function restoreState(userId = null) {
           (cloudData.mappedData?.length ?? 0) > 0 ||
           (cloudData.transactions?.length ?? 0) > 0;
 
-        state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData };
+        // Supabase가 빈 배열을 반환했지만 로컬에 실제 데이터가 있으면 보호
+        // — 토큰 갱신 타이밍, RLS 일시 차단, 네트워크 오류로 인한 데이터 소실 방지
+        const safeCloudData = { ...cloudData };
+        if ((safeCloudData.mappedData?.length ?? 0) === 0 && (localData?.mappedData?.length ?? 0) > 0) {
+          delete safeCloudData.mappedData;
+        }
+        if ((safeCloudData.transactions?.length ?? 0) === 0 && (localData?.transactions?.length ?? 0) > 0) {
+          delete safeCloudData.transactions;
+        }
+
+        state = { ...DEFAULT_STATE, ...(localData || {}), ...safeCloudData };
         window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
         saveToDB();
         return;
