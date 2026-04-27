@@ -39,6 +39,7 @@ export const PAGE_LOADERS = {
   orders:          () => import('./page-orders.js').then(m => m.renderOrdersPage),
   forecast:        () => import('./page-forecast.js').then(m => m.renderForecastPage),
   referral:        () => import('./page-referral.js').then(m => m.renderReferralPage),
+  sales:           () => import('./page-sales.js').then(m => m.renderSalesPage),
   'weekly-report': () => import('./page-weekly-report.js').then(m => m.renderWeeklyReportPage),
   pos:             () => import('./page-pos.js').then(m => m.renderPosPage),
   'hr-dashboard':  () => import('./page-hr-dashboard.js').then(m => m.renderHrDashboardPage),
@@ -105,4 +106,5 @@ export const PAGE_LABELS = {
   leaves: '휴가·연차',
   severance: '퇴직금 계산',
   'yearend-settlement': '연말정산',
+  sales: '수주 관리',
 };
