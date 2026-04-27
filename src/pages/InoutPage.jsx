@@ -602,6 +602,25 @@ export function InoutPage({ mode = 'all' }) {
   const month = monthStr();
   const itemMap = useMemo(() => new Map(mappedData.map(it => [it.itemName, it])), [mappedData]);
 
+  // 품목별 가중평균 매입원가 (입고 거래 기반)
+  const wacMap = useMemo(() => {
+    const acc = {};
+    transactions.forEach(tx => {
+      if (tx.type !== 'in') return;
+      const k = tx.itemName; if (!k) return;
+      if (!acc[k]) acc[k] = { amt: 0, qty: 0 };
+      const qty = parseFloat(tx.quantity) || 0;
+      const price = parseFloat(tx.unitPrice) || 0;
+      acc[k].amt += price * qty;
+      acc[k].qty += qty;
+    });
+    const result = {};
+    Object.entries(acc).forEach(([k, v]) => {
+      result[k] = v.qty > 0 && v.amt > 0 ? v.amt / v.qty : 0;
+    });
+    return result;
+  }, [transactions]);
+
   // ── 파생 통계 ──────────────────────────────────────────────────────────────
   const inList = useMemo(() => transactions.filter(tx => tx.type === 'in'), [transactions]);
   const outList = useMemo(() => transactions.filter(tx => tx.type === 'out'), [transactions]);
@@ -705,8 +724,10 @@ export function InoutPage({ mode = 'all' }) {
         av = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         bv = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
       } else if (sort.key === 'supply') {
-        av = (parseFloat(a.unitPrice || aItem.unitPrice) || 0) * (parseFloat(a.quantity) || 0);
-        bv = (parseFloat(b.unitPrice || bItem.unitPrice) || 0) * (parseFloat(b.quantity) || 0);
+        const aWac = wacMap[a.itemName] || (parseFloat(a.unitPrice || aItem.unitPrice) || 0);
+        const bWac = wacMap[b.itemName] || (parseFloat(b.unitPrice || bItem.unitPrice) || 0);
+        av = aWac * (parseFloat(a.quantity) || 0);
+        bv = bWac * (parseFloat(b.quantity) || 0);
       } else if (sort.key === 'outAmt') {
         av = (parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0);
         bv = (parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0);
@@ -783,7 +804,7 @@ export function InoutPage({ mode = 'all' }) {
       if (typeof av === 'number') return (av - bv) * dir;
       return String(av).localeCompare(String(bv), 'ko-KR', { numeric: true }) * dir;
     });
-  }, [filtered, sort, itemMap]);
+  }, [filtered, sort, itemMap, wacMap]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -1197,12 +1218,17 @@ export function InoutPage({ mode = 'all' }) {
                   const qty = parseFloat(tx.quantity) || 0;
                   const itemData = itemMap.get(tx.itemName) || {};
                   const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
-                  const supply = Math.round(unitPrice * qty);
+                  const supply = Math.round(unitPrice * qty);        // 입고모드: 매입 공급가
                   const vat = Math.floor(supply * 0.1);
                   const totalPrice = supply + vat;
                   const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
                   const outAmt = Math.round(salePrice * qty);
-                  const purchaseCost = supply;
+                  // 출고모드 매입 그룹: 가중평균 원가 우선, 없으면 단가 사용
+                  const wac = wacMap[tx.itemName] || unitPrice;
+                  const wacSupply = Math.round(wac * qty);
+                  const wacVat = Math.floor(wacSupply * 0.1);
+                  const wacTotal = wacSupply + wacVat;
+                  const purchaseCost = wacSupply;
                   const profit = outAmt - purchaseCost;
                   const profitMargin = outAmt > 0 ? (profit / outAmt * 100).toFixed(1) + '%' : '';
                   const cogsMargin = outAmt > 0 ? (purchaseCost / outAmt * 100).toFixed(1) + '%' : '';
@@ -1237,9 +1263,9 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="text-right">{outAmt ? W(outAmt) : '-'}</td>
                           <td className="text-right">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
-                          <td className="text-right">{supply ? W(supply) : '-'}</td>
-                          <td className="text-right">{supply ? W(vat) : '-'}</td>
-                          <td className="text-right">{supply ? W(totalPrice) : '-'}</td>
+                          <td className="text-right">{wacSupply ? W(wacSupply) : '-'}</td>
+                          <td className="text-right">{wacSupply ? W(wacVat) : '-'}</td>
+                          <td className="text-right">{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
                           <td className="text-right" style={{ color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : '' }}>
                             {outAmt ? W(profit) : '-'}
