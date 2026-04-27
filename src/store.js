@@ -401,7 +401,14 @@ function scheduleSyncToSupabase(changedKeys) {
   if (_supabaseSyncTimer) clearTimeout(_supabaseSyncTimer);
   _supabaseSyncTimer = setTimeout(() => {
     syncToSupabase();
-  }, 2000);
+  }, 500);
+}
+
+// 페이지 언로드 직전 미동기화 데이터 플러시
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (_dirtyKeys.size > 0) syncToSupabase();
+  });
 }
 
 // === Realtime 실시간 동기화 ===
