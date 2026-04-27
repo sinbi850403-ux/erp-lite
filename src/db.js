@@ -206,6 +206,8 @@ export const items = {
         expiry_date: toNullableString(item?.expiry_date),
         lot_number: toNullableString(item?.lot_number),
         memo: toNullableString(item?.memo),
+        asset_type: toNullableString(item?.asset_type),
+        spec: toNullableString(item?.spec),
         extra: item?.extra && typeof item.extra === 'object' ? item.extra : {},
       };
 
