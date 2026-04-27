@@ -817,32 +817,21 @@ export async function logout() {
     googleLoginTimeoutId = null;
   }
 
-  let signOutError = null;
-  try {
-    const { error } = await withTimeout(
-      supabase.auth.signOut({ scope: 'local' }),
-      8000,
-      'logout',
-    );
-    signOutError = error || null;
-  } catch (error) {
-    signOutError = error;
-  } finally {
-    purgeAuthStorage({ includeSupabaseSession: true });
-    // 구 버전 localStorage 플래그 제거
-    try { localStorage.removeItem(_BS_BLOCKED_KEY); } catch (_) {}
-    currentUser = null;
-    userProfile = null;
-    isLoggingIn = false;
-    emitAuthChanged();
-  }
-
-  if (signOutError) {
-    showToast(`로그아웃 처리 경고: ${signOutError.message}`, 'warning');
-    return false;
-  }
+  // ★ 로컬 상태를 즉시 초기화 → UI가 바로 로그인 화면으로 전환 (대기 없음)
+  purgeAuthStorage({ includeSupabaseSession: true });
+  try { localStorage.removeItem(_BS_BLOCKED_KEY); } catch (_) {}
+  currentUser = null;
+  userProfile = null;
+  isLoggingIn = false;
+  emitAuthChanged(); // ← 여기서 즉시 로그인 화면으로 전환
 
   showToast('로그아웃되었습니다.', 'info');
+
+  // 서버 세션 취소는 백그라운드에서 처리 (UI 차단 없음)
+  supabase.auth.signOut({ scope: 'local' }).catch((err) => {
+    console.warn('[Auth] background signOut error (ignored):', err?.message);
+  });
+
   return true;
 }
 
