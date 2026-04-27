@@ -832,10 +832,10 @@ async function initAppAfterAuth() {
     setupRealtimeSync();
 
     // 팀 워크스페이스 소속 시 DB 쿼리를 오너 UID로 실행
-    const uid = getCurrentUser()?.uid;
-    if (uid) {
-      const wsId = await getWorkspaceId(uid);
-      if (wsId && wsId !== uid) {
+    const wsUid = getCurrentUser()?.uid;
+    if (wsUid) {
+      const wsId = await getWorkspaceId(wsUid);
+      if (wsId && wsId !== wsUid) {
         setWorkspaceUserId(wsId); // 오너 UID로 쿼리 전환
         await restoreState(wsId); // 오너 데이터로 재로드
         await navigateTo(startPage); // 현재 페이지 갱신
