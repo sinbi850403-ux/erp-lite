@@ -147,6 +147,8 @@ export function getCurrentPlan() {
 export function setPlan(planId) {
   if (!PLANS[planId]) return;
   setState({ currentPlan: planId });
+  // React 컴포넌트(Sidebar 등)에 plan 변경 알림
+  window.dispatchEvent(new CustomEvent('invex:plan-changed', { detail: { planId } }));
 }
 
 /**
