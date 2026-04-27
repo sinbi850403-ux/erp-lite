@@ -20,6 +20,7 @@ import { getWorkspaceId } from './workspace.js';
 import { checkAndShowOnboarding } from './onboarding.js';
 import { initSidebarCustomize } from './sidebar-customize.js';
 import { isSupabaseConfigured, supabase } from './supabase-client.js';
+import { escapeHtml } from './ux-toolkit.js';
 
 // 에러 모니터링 초기화
 initErrorMonitor();
@@ -878,9 +879,9 @@ function updateUserUI(user, profile) {
   if (!userArea) return;
 
   if (user) {
-    const name = profile?.name || user.displayName || '사용자';
-    const photo = user.photoURL;
-    const plan = (profile?.plan || 'free').toUpperCase();
+    const name = escapeHtml(profile?.name || user.displayName || '사용자');
+    const photo = user.photoURL ? escapeHtml(user.photoURL) : null;
+    const plan = escapeHtml((profile?.plan || 'free').toUpperCase());
     userArea.innerHTML = `
       <div class="sidebar-user">
         ${photo ? `<img src="${photo}" class="sidebar-user-avatar" />` : ''}

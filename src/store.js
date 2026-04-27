@@ -198,6 +198,8 @@ let _supabaseSyncTimer = null;
 let _dirtyKeys = new Set();
 let _waitingAuthResume = false;
 let _authResumeSubscription = null;
+let _syncRetryCount = 0;
+const MAX_SYNC_RETRIES = 5;
 
 function getErrorMessage(error) {
   if (!error) return '';
@@ -266,7 +268,7 @@ async function syncToSupabase() {
       const items = (state.mappedData || []).map(item => storeItemToDb(item));
       promises.push(
         managedQuery(() => db.items.bulkUpsert(items))
-          .then(result => console.log(`[Sync] 품목 ${result.length}건 동기화`))
+          .then(() => {})
           .catch(err => {
             console.warn('[Sync] 품목 동기화 실패:', getErrorMessage(err));
             if (isAuthLikeSyncError(err)) authBlocked = true;
@@ -302,8 +304,7 @@ async function syncToSupabase() {
       if (newTxs.length > 0) {
         promises.push(
           managedQuery(() => db.transactions.bulkCreate(newTxs))
-            .then(result => {
-              console.log(`[Sync] 입출고 ${result.length}건 동기화`);
+            .then(() => {
               state.transactions.forEach(tx => { tx._synced = true; });
             })
             .catch(err => {
@@ -356,13 +357,20 @@ async function syncToSupabase() {
     if (failedKeys.size > 0) {
       failedKeys.forEach(k => _dirtyKeys.add(k));
       if (authBlocked) {
+        _syncRetryCount = 0;
         waitForAuthThenSync();
         return;
       }
+      if (_syncRetryCount >= MAX_SYNC_RETRIES) {
+        _syncRetryCount = 0;
+        window.dispatchEvent(new CustomEvent('invex:sync-failed', { detail: { keys: [...failedKeys] } }));
+        return;
+      }
+      _syncRetryCount++;
       window.dispatchEvent(new CustomEvent('invex:sync-failed', { detail: { keys: [...failedKeys] } }));
-      console.warn('[Sync] 실패 항목 재시도 예약:', [...failedKeys]);
-      // 10초 후 재시도 (즉시 재시도는 루프 위험)
       setTimeout(() => syncToSupabase(), 10_000);
+    } else {
+      _syncRetryCount = 0;
     }
     // 쓰기 완료 후 타임스탬프 기록 — Realtime 이벤트 억제 창을 정확하게 유지
     _lastLocalSyncTime = Date.now();
@@ -370,10 +378,15 @@ async function syncToSupabase() {
     // 전체 실패 시 모든 키 복원
     keysToSync.forEach(k => _dirtyKeys.add(k));
     if (isAuthLikeSyncError(err)) {
+      _syncRetryCount = 0;
       waitForAuthThenSync();
       return;
     }
-    console.warn('[Sync] Supabase 동기화 전체 오류, 재시도 예약:', getErrorMessage(err));
+    if (_syncRetryCount >= MAX_SYNC_RETRIES) {
+      _syncRetryCount = 0;
+      return;
+    }
+    _syncRetryCount++;
     setTimeout(() => syncToSupabase(), 10_000);
   }
 }
@@ -408,7 +421,6 @@ function scheduleRealtimeReload() {
 
   if (_realtimeReloadTimer) clearTimeout(_realtimeReloadTimer);
   _realtimeReloadTimer = setTimeout(async () => {
-    console.log('[Realtime] 외부 변경 감지 → 데이터 새로고침');
     await restoreState();
     window.dispatchEvent(new CustomEvent('invex:realtime-reload'));
   }, 1500);
@@ -422,9 +434,7 @@ export function setupRealtimeSync() {
   REALTIME_TABLES.forEach(table => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRealtimeReload);
   });
-  channel.subscribe((status) => {
-    if (status === 'SUBSCRIBED') console.log('[Realtime] 실시간 동기화 활성화');
-  });
+  channel.subscribe();
   _realtimeChannel = channel;
 }
 
@@ -436,6 +446,13 @@ export function cleanupRealtimeSync() {
   if (_realtimeReloadTimer) {
     clearTimeout(_realtimeReloadTimer);
     _realtimeReloadTimer = null;
+  }
+  // 로그아웃 시 auth 재시도 구독도 해제 — 이전 세션 dirty 데이터가 새 세션에 동기화되는 것 방지
+  if (_authResumeSubscription) {
+    _authResumeSubscription.unsubscribe?.();
+    _authResumeSubscription = null;
+    _waitingAuthResume = false;
+    _dirtyKeys.clear();
   }
 }
 
@@ -510,7 +527,6 @@ export async function restoreState(userId = null) {
               const expiresAt = parsed?.expires_at; // Supabase v2: 초 단위 epoch
               if (expiresAt && expiresAt * 1000 < Date.now() + 30_000) {
                 // 30초 이내 만료 또는 이미 만료 → TOKEN_REFRESHED 대기 (최대 6초)
-                console.log('[Store] JWT 만료 감지 → TOKEN_REFRESHED 대기 (최대 6초)');
                 await new Promise(resolve => {
                   const timer = setTimeout(resolve, 6000);
                   window.addEventListener('invex:token-refreshed', () => {
@@ -555,7 +571,6 @@ export async function restoreState(userId = null) {
         state = { ...DEFAULT_STATE, ...(localData || {}), ...cloudData };
         window.dispatchEvent(new CustomEvent('invex:store-updated', { detail: { changedKeys: ['*'] } }));
         saveToDB();
-        console.log(`[Store] Supabase 로딩 완료: 품목 ${(cloudData.mappedData || []).length}건, 입출고 ${(cloudData.transactions || []).length}건`);
         return;
       }
     } catch (err) {

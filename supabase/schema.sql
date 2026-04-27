@@ -656,3 +656,72 @@ CREATE POLICY "tw_delete" ON team_workspaces FOR DELETE USING (auth.uid()::text 
 -- Realtime 활성화
 ALTER TABLE team_workspaces REPLICA IDENTITY FULL;
 ALTER PUBLICATION supabase_realtime ADD TABLE team_workspaces;
+
+-- ============================================================
+-- 팀 워크스페이스 atomic RPC — Read-Modify-Write 경쟁 방지
+-- SECURITY DEFINER: RLS를 우회해 JSONB 배열 원자적 수정
+-- ============================================================
+
+-- 팀장만 멤버 추가 가능
+CREATE OR REPLACE FUNCTION workspace_add_member(ws_id TEXT, new_member JSONB)
+RETURNS VOID AS $$
+DECLARE
+  ws_owner TEXT;
+BEGIN
+  SELECT owner_id INTO ws_owner FROM team_workspaces WHERE id = ws_id;
+  IF ws_owner IS NULL THEN RAISE EXCEPTION '워크스페이스를 찾을 수 없습니다.'; END IF;
+  IF ws_owner != auth.uid()::text THEN RAISE EXCEPTION '팀장만 멤버를 초대할 수 있습니다.'; END IF;
+  UPDATE team_workspaces
+    SET members    = members || jsonb_build_array(new_member),
+        updated_at = now()
+    WHERE id = ws_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION workspace_add_member(TEXT, JSONB) TO authenticated;
+
+-- 팀장(멤버 제거·초대 취소) 또는 본인(초대 거절·탈퇴) 호출 가능
+CREATE OR REPLACE FUNCTION workspace_remove_member(ws_id TEXT, member_uid TEXT)
+RETURNS VOID AS $$
+DECLARE
+  ws_owner TEXT;
+  caller   TEXT := auth.uid()::text;
+BEGIN
+  SELECT owner_id INTO ws_owner FROM team_workspaces WHERE id = ws_id;
+  IF ws_owner IS NULL THEN RAISE EXCEPTION '워크스페이스를 찾을 수 없습니다.'; END IF;
+  IF caller != ws_owner AND caller != member_uid THEN RAISE EXCEPTION '권한이 없습니다.'; END IF;
+  IF member_uid = ws_owner THEN RAISE EXCEPTION '팀장은 제거할 수 없습니다.'; END IF;
+  UPDATE team_workspaces
+    SET members    = COALESCE((
+          SELECT jsonb_agg(m)
+          FROM jsonb_array_elements(members) m
+          WHERE m->>'uid' != member_uid
+        ), '[]'::jsonb),
+        updated_at = now()
+    WHERE id = ws_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION workspace_remove_member(TEXT, TEXT) TO authenticated;
+
+-- 본인의 초대 상태(active·rejected)만 변경 가능
+CREATE OR REPLACE FUNCTION workspace_set_member_status(ws_id TEXT, member_uid TEXT, new_status TEXT)
+RETURNS VOID AS $$
+DECLARE
+  caller TEXT := auth.uid()::text;
+BEGIN
+  IF caller != member_uid THEN RAISE EXCEPTION '본인의 초대 상태만 변경할 수 있습니다.'; END IF;
+  IF new_status NOT IN ('active', 'rejected') THEN RAISE EXCEPTION '유효하지 않은 상태값입니다.'; END IF;
+  UPDATE team_workspaces
+    SET members    = (
+          SELECT jsonb_agg(
+            CASE WHEN m->>'uid' = member_uid
+              THEN m || jsonb_build_object('status', new_status)
+              ELSE m
+            END
+          )
+          FROM jsonb_array_elements(members) m
+        ),
+        updated_at = now()
+    WHERE id = ws_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION workspace_set_member_status(TEXT, TEXT, TEXT) TO authenticated;

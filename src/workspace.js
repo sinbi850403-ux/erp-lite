@@ -108,9 +108,17 @@ export async function getWorkspaceMeta(wsId) {
 /**
  * 팀 멤버 초대 (이메일로) — Supabase profiles에서 사용자 조회 후 pending 상태로 추가
  */
+const ALLOWED_INVITE_ROLES = new Set(['viewer', 'staff', 'manager', 'admin']);
+
 export async function inviteMember(email, role = 'staff') {
   const user = getCurrentUser();
   if (!user || !isConfigured) return false;
+
+  // role 유효성 검증 — 'owner' 등 허용 외 역할 차단
+  if (!ALLOWED_INVITE_ROLES.has(role)) {
+    showToast('유효하지 않은 역할입니다.', 'error');
+    return false;
+  }
 
   try {
     // Supabase profiles에서 이메일로 사용자 조회
@@ -134,6 +142,12 @@ export async function inviteMember(email, role = 'staff') {
 
     const wsId = await getWorkspaceId(user.uid);
     const meta = await getWorkspaceMeta(wsId);
+
+    // 오너만 초대 가능 (클라이언트 이중 보호 — DB 레벨은 RPC에서 검증)
+    if (!meta || meta.owner_id !== user.uid) {
+      showToast('팀장만 멤버를 초대할 수 있습니다.', 'error');
+      return false;
+    }
     const existingMembers = meta?.members || [];
 
     if (existingMembers.some(m => m.email === email || m.uid === targetProfile.id)) {
@@ -329,6 +343,11 @@ export async function removeMember(targetUid) {
     // 오너만 멤버 제거 가능
     if (!meta || meta.owner_id !== user.uid) {
       showToast('팀장만 멤버를 제거할 수 있습니다.', 'error');
+      return false;
+    }
+    // 오너 본인 제거 방지 (DB RPC에서도 차단하지만 클라이언트 이중 보호)
+    if (targetUid === user.uid) {
+      showToast('본인은 제거할 수 없습니다.', 'error');
       return false;
     }
     const { error: rpcErr } = await supabase.rpc('workspace_remove_member', {
