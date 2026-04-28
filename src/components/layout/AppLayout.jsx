@@ -178,17 +178,7 @@ export default function AppLayout() {
         onToggleCollapse={toggleSidebarCollapse}
       />
 
-      {/* 사이드바 접기/펼치기 탭 */}
-      <button
-        className={`sidebar-toggle-tab${sidebarCollapsed ? ' collapsed' : ''}`}
-        onClick={toggleSidebarCollapse}
-        title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-        aria-label={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
-      >
-        {sidebarCollapsed ? '›' : '‹'}
-      </button>
-
-      <TopHeader user={user} profile={profile} />
+<TopHeader user={user} profile={profile} />
 
       <main id="main-content" className={sidebarCollapsed ? 'sidebar-collapsed' : ''}>
         <Suspense fallback={<div style={{padding:'40px',textAlign:'center',color:'var(--text-muted)'}}>로딩 중...</div>}>
