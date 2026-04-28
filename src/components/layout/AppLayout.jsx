@@ -98,11 +98,9 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // 앱 초기 진입 시 startPage로 이동
+  // 앱 초기 진입 시 항상 홈으로 시작
   useEffect(() => {
-    if (startPage && startPage !== 'home') {
-      navigate('/' + startPage, { replace: true });
-    }
+    navigate('/home', { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 온보딩 체크
