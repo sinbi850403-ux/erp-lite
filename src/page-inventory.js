@@ -53,7 +53,7 @@ const ALL_FIELDS = [
   { key: 'outTotalPrice', label: '출고금액', numeric: true },
   { key: 'purchaseCost', label: '매입원가', numeric: true },
   { key: 'profit', label: '이익액', numeric: true },
-  { key: 'profitMargin', label: '이익율', numeric: true },
+  { key: 'profitMargin', label: '이익률', numeric: true },
   { key: 'cogsMargin', label: '매출원가율', numeric: true },
   { key: 'quantity', label: '기말재고수량', numeric: true },
   { key: 'endingInventoryValue', label: '기말재고', numeric: true },

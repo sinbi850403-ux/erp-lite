@@ -340,7 +340,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
 
     let cols = '';
     if (isInMode) {
-      // 입고관리: 자산|입고일자|상품코드|거래처|품명|규격|단위|입고수량|단가|공급가액|부가세|합계금액
+      // 입고관리: 자산|입고일자|상품코드|거래처|품명|규격|단위|입고수량|원가|공급가액|부가세|합계금액
       cols = `
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
         <th class="col-num">#</th>
@@ -352,22 +352,22 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th>규격</th>
         <th>단위</th>
         ${sortableTh('quantity', '입고수량', 'text-right')}
-        ${sortableTh('unitPrice', '단가', 'text-right')}
+        ${sortableTh('unitPrice', '원가', 'text-right')}
         <th class="text-right">공급가액</th>
         <th class="text-right">부가세</th>
         <th class="text-right">합계금액</th>
         <th style="width:50px;">삭제</th>`;
     } else if (isOutMode) {
-      // 출고관리: 자산|출고일자|매장명|상품코드|입고수량|단가|공급가액|부가세|합계금액|출고단가|출고수량|출고금액|매입원가|이익액|이익율|매출원가율
+      // 출고관리: 자산|출고일자|거래처|상품코드|매입수량|원가|공급가액|부가세|합계금액|출고단가|출고수량|출고금액|매입원가|이익액|이익률|매출원가율
       cols = `
         <th style="width:40px; text-align:center;"><input type="checkbox" id="tx-select-all" /></th>
         <th class="col-num">#</th>
         <th>자산</th>
         ${sortableTh('date', '출고일자')}
-        ${sortableTh('vendor', '매장명')}
+        ${sortableTh('vendor', '거래처')}
         <th>상품코드</th>
-        ${sortableTh('quantity', '입고수량', 'text-right')}
-        ${sortableTh('unitPrice', '단가', 'text-right')}
+        ${sortableTh('quantity', '매입수량', 'text-right')}
+        ${sortableTh('unitPrice', '원가', 'text-right')}
         <th class="text-right">공급가액</th>
         <th class="text-right">부가세</th>
         <th class="text-right">합계금액</th>
@@ -376,7 +376,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th class="text-right">출고금액</th>
         <th class="text-right">매입원가</th>
         <th class="text-right">이익액</th>
-        <th class="text-right">이익율</th>
+        <th class="text-right">이익률</th>
         <th class="text-right">매출원가율</th>
         <th style="width:50px;">삭제</th>`;
     } else {
@@ -386,8 +386,8 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         <th class="col-num">#</th>
         ${sortableTh('type', '구분')}
         ${sortableTh('vendor', '거래처')}
-        ${sortableTh('itemName', '품목명')}
-        <th>품목코드</th>
+        ${sortableTh('itemName', '품명')}
+        <th>상품코드</th>
         ${sortableTh('quantity', '수량', 'text-right')}
         ${sortableTh('unitPrice', '원가', 'text-right')}
         <th class="text-right">판매가</th>
@@ -639,10 +639,10 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
             <td class="col-num"></td>
             <td data-label="구분"><span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">${tx.type === 'in' ? '입고' : '출고'}</span></td>
             <td data-label="거래처" style="font-size:12px; ${indent}">${tx.vendor ? escapeHtml(tx.vendor) : '<span style="color:var(--text-muted)">-</span>'}</td>
-            <td data-label="품목명" style="${indent}">
+            <td data-label="품명" style="${indent}">
               ${isChild ? `<span style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemName || '-')}</span>` : `<strong>${escapeHtml(tx.itemName || '-')}</strong>`}
             </td>
-            <td data-label="품목코드" style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemCode || '-')}</td>
+            <td data-label="상품코드" style="color:var(--text-muted); font-size:12px;">${escapeHtml(tx.itemCode || '-')}</td>
             <td data-label="수량" class="text-right">
               <span class="${tx.type === 'in' ? 'type-in' : 'type-out'}">${tx.type === 'in' ? '+' : '-'}${parseFloat(tx.quantity || 0).toLocaleString('ko-KR')}</span>
             </td>
@@ -1049,7 +1049,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
           '규격':     it.spec || '',
           '단위':     it.unit || '',
           '입고수량': qty,
-          '단가':     unitCost,
+          '원가':     unitCost,
           '공급가액': supply,
           '부가세':   vat,
           '합계금액': supply + vat,
@@ -1077,10 +1077,10 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
         return {
           '자산':     it.category || '',
           '출고일자': tx.date || '',
-          '매장명':   tx.vendor || '',
+          '거래처':   tx.vendor || '',
           '상품코드': tx.itemCode || it.itemCode || '',
-          '입고수량': qty,
-          '단가':     unitCost,
+          '매입수량': qty,
+          '원가':     unitCost,
           '공급가액': supply,
           '부가세':   vat,
           '합계금액': supply + vat,
@@ -1089,7 +1089,7 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
           '출고금액': outAmt,
           '매입원가': purchase,
           '이익액':   profit,
-          '이익율':   profitRate,
+          '이익률':   profitRate,
           '매출원가율': costRate,
         };
       });
@@ -1108,12 +1108,12 @@ export function renderInoutPage(container, navigateTo, mode = 'all') {
           '구분':     tx.type === 'in' ? '입고' : '출고',
           '날짜':     tx.date || '',
           '거래처':   tx.vendor || '',
-          '품목명':   tx.itemName || '',
-          '품목코드': tx.itemCode || it.itemCode || '',
+          '품명':     tx.itemName || '',
+          '상품코드': tx.itemCode || it.itemCode || '',
           '규격':     it.spec || '',
           '단위':     it.unit || '',
           '수량':     qty,
-          '단가':     unitCost,
+          '원가':     unitCost,
           '공급가액': supply,
           '부가세':   vat,
           '합계금액': supply + vat,
@@ -1207,8 +1207,8 @@ function openBulkUploadModal(container, navigateTo, items, modeDefault = null) {
 
     if (modeDefault === 'out') {
       // 출고 양식: 출고관리 이력 export와 동일한 16열 구조
-      // 자산|출고일자|매장명|상품코드|입고수량|단가|공급가액|부가세|합계금액|출고단가|출고수량|출고금액|매입원가|이익액|이익율|매출원가율
-      const outHeaders = ['자산', '출고일자', '매장명', '상품코드', '입고수량', '단가', '공급가액', '부가세', '합계금액', '출고단가', '출고수량', '출고금액', '매입원가', '이익액', '이익율', '매출원가율'];
+      // 자산|출고일자|거래처|상품코드|매입수량|원가|공급가액|부가세|합계금액|출고단가|출고수량|출고금액|매입원가|이익액|이익률|매출원가율
+      const outHeaders = ['자산', '출고일자', '거래처', '상품코드', '매입수량', '원가', '공급가액', '부가세', '합계금액', '출고단가', '출고수량', '출고금액', '매입원가', '이익액', '이익률', '매출원가율'];
       const buildOutSampleRow = (asset, vendor, code, qty, unitCost, salePrice) => {
         const supply = Math.round(unitCost * qty);
         const vat = Math.floor(supply * 0.1);
@@ -1400,7 +1400,7 @@ async function processUploadedFile(file, overlay, container, navigateTo, items, 
             <tr>
               <th>구분</th>
               <th>거래처</th>
-              <th>품목명</th>
+              <th>품명</th>
               <th>수량</th>
               <th>원가</th>
               <th>판매가</th>
