@@ -125,6 +125,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [state] = useStore();
   const [chartPeriod, setChartPeriod] = useState(7);
+  const [txFilter, setTxFilter] = useState('all');
 
   const {
     items, transactions, safetyStock,
@@ -166,7 +167,7 @@ export default function HomePage() {
 
     const recentTransactions = [...transactions]
       .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
-      .slice(0, 8);
+      .slice(0, 30);
 
     const categoryMap = new Map();
     items.forEach(item => {
@@ -348,7 +349,18 @@ export default function HomePage() {
           <div className="db-main-grid">
             {/* 최근 입출고 이력 */}
             <div className="card">
-              <div className="card-title">최근 입출고 이력</div>
+              <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>최근 입출고 이력</span>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {[{v:'all',l:'전체'},{v:'in',l:'입고'},{v:'out',l:'출고'}].map(opt => (
+                    <button
+                      key={opt.v}
+                      className={`btn btn-sm ${txFilter === opt.v ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setTxFilter(opt.v)}
+                    >{opt.l}</button>
+                  ))}
+                </div>
+              </div>
               {recentTransactions.length > 0 ? (
                 <div className="table-wrapper" style={{ border: 'none', margin: '0' }}>
                   <table className="data-table" style={{ fontSize: '12px' }}>
@@ -362,7 +374,7 @@ export default function HomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentTransactions.map((tx, i) => (
+                      {recentTransactions.filter(tx => txFilter === 'all' || tx.type === txFilter).slice(0, 8).map((tx, i) => (
                         <tr key={tx.id || i}>
                           <td><span className={`badge ${tx.type === 'in' ? 'badge-success' : 'badge-danger'}`}>{tx.type === 'in' ? '입고' : '출고'}</span></td>
                           <td>{tx.itemName || '-'}</td>
