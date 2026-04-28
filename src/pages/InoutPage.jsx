@@ -1208,9 +1208,9 @@ export function InoutPage({ mode = 'all' }) {
                       <SortTh sortKey="spec" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>규격</SortTh>
                       <SortTh sortKey="unit" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>단위</SortTh>
                       <SortTh sortKey="quantity" className="text-right" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>출고수량</SortTh>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#2563eb', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>판매</th>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#8b6214', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>매입</th>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#1e7a48', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>이익 분석</th>
+                      <th colSpan={3} style={{ textAlign: 'center', background: '#2563eb', color: '#000', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>판매</th>
+                      <th colSpan={3} style={{ textAlign: 'center', background: '#8b6214', color: '#000', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>매입</th>
+                      <th colSpan={3} style={{ textAlign: 'center', background: '#1e7a48', color: '#000', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>이익 분석</th>
                       <th rowSpan={2} style={{ verticalAlign: 'middle', position: 'sticky', top: 0, zIndex: 4, textTransform: 'none', fontSize: '13px' }}>관리</th>
                     </tr>
                     <tr className="out-col-subheader">
@@ -1229,7 +1229,7 @@ export function InoutPage({ mode = 'all' }) {
                         return (
                           <SortTh key={key} sortKey={key} className="text-right" style={{
                             position: 'sticky', top: outRow1H, zIndex: 3,
-                            background: bg, color: '#fff',
+                            background: bg, color: '#000',
                             fontSize: '12px', fontWeight: 600,
                             textTransform: 'none', padding: '6px 10px',
                             whiteSpace: 'nowrap',
@@ -1331,11 +1331,11 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.07)' }}>{wacSupply ? W(wacVat) : '-'}</td>
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)', fontWeight: 600 }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
-                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.12)', fontWeight: profit !== 0 ? 700 : 400 }}>
+                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.12)', fontWeight: 700 }}>
                             {outAmt ? W(profit) : '-'}
                           </td>
-                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.10)' }}>{profitMargin || '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.07)' }}>{cogsMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.10)', fontWeight: 700 }}>{profitMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.07)', fontWeight: 700 }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
