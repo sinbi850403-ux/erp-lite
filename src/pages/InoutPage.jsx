@@ -930,20 +930,14 @@ export function InoutPage({ mode = 'all' }) {
       data = list.map(tx => {
         const it = itemMap.get(tx.itemName) || {};
         const qty = parseFloat(tx.quantity) || 0;
-        const cost = parseFloat(tx.unitPrice || it.unitPrice) || 0;
-        const supply = Math.round(cost * qty);
-        const vat = Math.ceil(supply * 0.1);
         const salePrice = parseFloat(tx.sellingPrice || it.sellingPrice) || 0;
         const outAmt = Math.round(salePrice * qty);
-        const profit = outAmt - supply;
-        const profitRate = outAmt > 0 ? (profit / outAmt * 100).toFixed(1) + '%' : '';
         return {
           '자산': it.category || tx.category || '', '출고일자': tx.date || '',
           '거래처': tx.vendor || '', '상품코드': tx.itemCode || it.itemCode || '',
           '품명': tx.itemName || '', '규격': tx.spec || it.spec || '', '단위': tx.unit || it.unit || '',
           '출고수량': qty, '출고단가': salePrice, '판매가': outAmt,
-          '출고합': Math.round(outAmt * 1.1), '매입원가': supply, '부가세': vat,
-          '공가합': supply + vat, '이익액': profit, '이익률': profitRate,
+          '출고합계': Math.round(outAmt * 1.1),
         };
       });
       fileName = '출고관리';
@@ -1227,12 +1221,6 @@ export function InoutPage({ mode = 'all' }) {
                       { key: 'sellingPrice', label: '출고단가', cls: 'th-section-out' },
                       { key: 'outAmt',       label: '판매가',   cls: 'th-section-out' },
                       { key: 'outTotal',     label: '출고합계', cls: 'th-section-out' },
-                      { key: 'supply',       label: '매입원가', cls: 'th-section-purchase' },
-                      { key: 'vat',          label: '부가세',   cls: 'th-section-purchase' },
-                      { key: 'totalPrice',   label: '공급합계', cls: 'th-section-purchase' },
-                      { key: 'profit',       label: '이익액',   cls: 'th-section-profit' },
-                      { key: 'profitMargin', label: '이익률',   cls: 'th-section-profit' },
-                      { key: 'cogsMargin',   label: '원가율',   cls: 'th-section-profit' },
                     ].map(({ key, label, cls }) => (
                       <SortTh key={key} sortKey={key} className={`text-right ${cls}`} style={{
                         fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
@@ -1328,16 +1316,6 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="text-right td-section-out">{salePrice ? W(salePrice) : '-'}</td>
                           <td className="text-right td-section-out">{outAmt ? W(outAmt) : '-'}</td>
                           <td className="text-right td-section-out">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
-                          {/* 매입 그룹 */}
-                          <td className="text-right td-section-purchase">{wacSupply ? W(wacSupply) : '-'}</td>
-                          <td className="text-right td-section-purchase">{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right td-section-purchase">{wacSupply ? W(wacTotal) : '-'}</td>
-                          {/* 이익 분석 그룹 */}
-                          <td className="text-right td-section-profit" style={{ fontWeight: profit !== 0 ? 700 : 400 }}>
-                            {outAmt ? W(profit) : '-'}
-                          </td>
-                          <td className="text-right td-section-profit" style={{ fontWeight: 700 }}>{profitMargin || '-'}</td>
-                          <td className="text-right td-section-profit" style={{ fontWeight: 700 }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
@@ -1421,14 +1399,6 @@ export function InoutPage({ mode = 'all' }) {
                       <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>-</td>
                       <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutAmt)}</td>
                       <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutTotal)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacSupply)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacVat)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacTotal)}</td>
-                      <td className="text-right" style={{ ...S, background: '#f0fdf4', color: '#111' }}>
-                        {W(outTotals.totProfit)}
-                      </td>
-                      <td className="text-right" style={{ ...S, background: '#f0fdf4', color: '#111' }}>{outTotals.totProfitMargin}</td>
-                      <td className="text-right" style={{ ...S, background: '#f0fdf4', color: '#111' }}>{outTotals.totCogsMargin}</td>
                       <td style={S}></td>
                     </tr>
                   </tfoot>
