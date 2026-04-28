@@ -346,14 +346,12 @@ async function syncToSupabase() {
         if (v._id) payload.id = v._id; // UUID 있으면 포함 → id conflict로 정확한 row 업데이트
         return payload;
       });
-      for (const vendor of vendors) {
-        promises.push(
-          managedQuery(() => db.vendors.upsert(vendor)).catch(err => {
-            console.warn('[Sync] 거래처 동기화 실패:', getErrorMessage(err));
-            failedKeys.add('vendorMaster');
-          })
-        );
-      }
+      promises.push(
+        managedQuery(() => db.vendors.upsertBulk(vendors)).catch(err => {
+          console.warn('[Sync] 거래처 동기화 실패:', getErrorMessage(err));
+          failedKeys.add('vendorMaster');
+        })
+      );
 
       //  삭제된 거래처 Supabase에서도 제거
       // _deletedVendors: setState로 전달된 삭제 목록 (store에서 추적)

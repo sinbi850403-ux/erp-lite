@@ -6,8 +6,7 @@ import { useStore } from '../hooks/useStore.js';
 import { showToast } from '../toast.js';
 import { downloadExcel } from '../excel.js';
 import { addAuditLog } from '../audit-log.js';
-
-const fmt = v => (parseFloat(v) || 0).toLocaleString('ko-KR');
+import { fmtNum as fmt } from '../utils/formatters.js';
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const ageDays = dueDate => dueDate ? Math.ceil((new Date(todayStr()) - new Date(dueDate)) / 86400000) : null;
 

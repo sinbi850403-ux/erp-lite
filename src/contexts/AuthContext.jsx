@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
       if (profilePlan && PLANS[profilePlan]) setPlan(profilePlan);
 
       const lastPage = localStorage.getItem(LAST_PAGE_KEY);
-      const page = (lastPage && PAGE_LOADERS[lastPage]) ? lastPage : 'home';
+      const page = (lastPage && lastPage in PAGE_LOADERS) ? lastPage : 'home';
       setStartPage(page);
       setupRealtimeSync();
 

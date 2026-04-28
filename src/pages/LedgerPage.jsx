@@ -8,6 +8,7 @@ import { downloadExcel } from '../excel.js';
 import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { applyKoreanFont, getKoreanFontStyle } from '../pdf-font.js';
+import { fmtWon as fmt } from '../utils/formatters.js';
 
 applyPlugin(jsPDF);
 
@@ -25,9 +26,14 @@ const SORT_FIELDS = [
   { key: 'closingValue', label: '재고금액',  numeric: true, align: 'text-right' },
 ];
 
-const fmt = v => v ? `₩${Math.round(v).toLocaleString('ko-KR')}` : '-';
 
 function buildLedger(items, transactions, from, to, itemFilter, openingOverrides = {}) {
+  const txByItem = new Map();
+  transactions.forEach(tx => {
+    if (!txByItem.has(tx.itemName)) txByItem.set(tx.itemName, []);
+    txByItem.get(tx.itemName).push(tx);
+  });
+
   const targetItems = itemFilter ? items.filter(i => i.itemName === itemFilter) : items;
   return targetItems.map(item => {
     const currentQty = parseFloat(item.quantity) || 0;
@@ -35,8 +41,8 @@ function buildLedger(items, transactions, from, to, itemFilter, openingOverrides
     let periodInQty = 0, periodInAmt = 0;
     let periodOutQty = 0, periodOutAmt = 0, periodCostAmt = 0;
     let openingQty = currentQty, primaryVendor = '';
-    transactions.forEach(tx => {
-      if (tx.itemName !== item.itemName) return;
+    const itemTxs = txByItem.get(item.itemName) || [];
+    itemTxs.forEach(tx => {
       const qty = parseFloat(tx.quantity) || 0;
       if (tx.date >= from) { if (tx.type === 'in') openingQty -= qty; else openingQty += qty; }
       if (tx.date >= from && tx.date <= to) {

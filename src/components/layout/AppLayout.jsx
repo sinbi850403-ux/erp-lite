@@ -121,11 +121,11 @@ export default function AppLayout() {
 
   // 온보딩 체크
   useEffect(() => {
-    if (user) {
-      setTimeout(() => {
-        checkAndShowOnboarding((pageId) => navigate('/' + pageId));
-      }, 1000);
-    }
+    if (!user) return;
+    const t = setTimeout(() => {
+      checkAndShowOnboarding((pageId) => navigate('/' + pageId));
+    }, 1000);
+    return () => clearTimeout(t);
   }, [user, navigate]);
 
   // 키보드 단축키 (Alt+숫자)

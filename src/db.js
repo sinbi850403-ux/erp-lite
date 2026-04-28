@@ -505,6 +505,15 @@ export const vendors = {
     handleError(error, '거래처 저장');
   },
 
+  async upsertBulk(vendors) {
+    if (!vendors.length) return;
+    const userId = await getUserId();
+    const { error } = await supabase
+      .from('vendors')
+      .upsert(vendors.map(v => ({ ...v, user_id: userId })), { onConflict: 'user_id,name' });
+    handleError(error, '거래처 일괄 저장');
+  },
+
   async remove(vendorId) {
     const userId = await getUserId();
     const { error } = await supabase

@@ -7,7 +7,7 @@
 import { getState, setState } from './store.js';
 import { isSuperAdminEmail } from './admin-emails.js';
 
-// 요금제 정의
+// 요금제 정의 — 접근 가능 페이지는 PAGE_MIN_PLAN 단일 소스에서 관리
 export const PLANS = {
   free: {
     id: 'free',
@@ -19,14 +19,6 @@ export const PLANS = {
     description: '1인 사업자·스타트업',
     itemLimit: 100,
     userLimit: 1,
-    // Free에서 접근 가능한 페이지
-    pages: [
-      'home', 'upload', 'mapping', 'inventory', 'in', 'out', 'ledger', 'settings', 'billing', 'admin',
-      'mypage', 'guide', 'support', 'team', 'backup', 'referral',
-      // 허브 페이지 — 요금제와 무관하게 항상 접근 가능 (네비게이션 역할)
-      'hub-inventory', 'hub-warehouse', 'hub-order',
-      'hub-report', 'hub-documents', 'hub-settings', 'hub-support', 'hub-hr',
-    ],
   },
   pro: {
     id: 'pro',
@@ -38,18 +30,6 @@ export const PLANS = {
     description: '중소기업·소매점',
     itemLimit: Infinity,
     userLimit: 5,
-    // Pro에서 추가로 접근 가능한 페이지
-    pages: [
-      'home', 'upload', 'mapping', 'inventory', 'in', 'out', 'settings',
-      'bulk', 'scanner', 'labels', 'transfer', 'stocktake', 'vendors',
-      'summary', 'dashboard', 'costing', 'accounts', 'ledger', 'documents', 'auditlog',
-      'billing', 'admin', 'mypage', 'guide', 'support', 'team', 'backup', 'referral',
-      'tax-reports', 'orders', 'profit', 'forecast', 'weekly-report',
-      'pos', 'scanner', 'labels',
-      // 허브 페이지 — 요금제와 무관하게 항상 접근 가능
-      'hub-inventory', 'hub-warehouse', 'hub-order',
-      'hub-report', 'hub-documents', 'hub-settings', 'hub-support', 'hub-hr',
-    ],
   },
   enterprise: {
     id: 'enterprise',
@@ -61,8 +41,6 @@ export const PLANS = {
     description: '다점포·유통업',
     itemLimit: Infinity,
     userLimit: Infinity,
-    // Enterprise는 모든 페이지 접근 가능
-    pages: ['*'],
   },
 };
 
@@ -101,7 +79,7 @@ export function injectGetUserProfile(fn) { _getUserProfile = fn; }
 
 function isInFreePeriod() {
   const profile = _getUserProfile?.();
-  if (!profile || !profile.createdAt) return true; // 프로필 없으면 일단 허용
+  if (!profile || !profile.createdAt) return false;
 
   const created = new Date(profile.createdAt);
   const now = new Date();
@@ -170,10 +148,11 @@ export function canAccessPage(pageId) {
   if (isInFreePeriod()) return true;
 
   const currentPlan = getCurrentPlan();
-  const plan = PLANS[currentPlan];
-  if (!plan) return false;
-  if (plan.pages.includes('*')) return true;
-  return plan.pages.includes(pageId);
+  if (!PLANS[currentPlan]) return false;
+  if (currentPlan === 'enterprise') return true;
+  const minPlan = PAGE_MIN_PLAN[pageId];
+  if (!minPlan) return false;
+  return PLAN_RANK[currentPlan] >= PLAN_RANK[minPlan];
 }
 
 // 순환참조 방지용: auth 모듈에서 함수를 lazy 주입

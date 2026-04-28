@@ -9,6 +9,7 @@ import { downloadExcel, downloadExcelSheets, readExcelFile } from '../excel.js';
 import { canAction } from '../auth.js';
 import { addTransaction, addTransactionsBulk, deleteTransaction, restoreTransaction } from '../store.js';
 import { enableColumnResize } from '../ux-toolkit.js';
+import { fmtNum as fmt, fmtWon as W } from '../utils/formatters.js';
 
 const PAGE_SIZE = 15;
 
@@ -18,8 +19,7 @@ const monthStr = () => {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
 };
-const fmt = v => (parseFloat(v) || 0).toLocaleString('ko-KR');
-const W = v => (v ? `₩${Math.round(parseFloat(v)).toLocaleString('ko-KR')}` : '-');
+const EXCEL_EPOCH_OFFSET = 25569;
 
 function formatDate(dateStr) {
   if (!dateStr || dateStr === '-') return '-';
@@ -171,7 +171,7 @@ function TxModal({ txType, items, vendors, onClose, onSave }) {
                     <select className="form-select" onChange={handleItemSelect}>
                       <option value="">-- 품목 선택 --</option>
                       {filteredItems.map((item, i) => (
-                        <option key={i} value={i}>
+                        <option key={item.itemName ?? i} value={i}>
                           {item.itemName}{item.itemCode ? ` (${item.itemCode})` : ''}{txType === 'out' ? ` [현재 ${parseFloat(item.quantity || 0)}]` : ''}
                         </option>
                       ))}
@@ -403,7 +403,7 @@ function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
         if (colMap.date >= 0) {
           const raw = row[colMap.date];
           if (typeof raw === 'number') {
-            dateStr = new Date((raw - 25569) * 86400 * 1000).toISOString().slice(0, 10);
+            dateStr = new Date((raw - EXCEL_EPOCH_OFFSET) * 86400 * 1000).toISOString().slice(0, 10);
           } else {
             dateStr = formatDate(String(raw ?? '').trim());
           }
@@ -914,9 +914,10 @@ export function InoutPage({ mode = 'all' }) {
     if (!canBulk) { showToast('일괄 삭제 권한이 없습니다. 매니저 이상만 가능합니다.', 'warning'); return; }
     if (!selectedIds.size) return;
     if (!confirm(`선택한 ${selectedIds.size}건의 기록을 삭제하시겠습니까?`)) return;
+    const count = selectedIds.size;
     selectedIds.forEach(id => deleteTransaction(id));
     setSelectedIds(new Set());
-    showToast(`${selectedIds.size}건 삭제 완료`, 'success');
+    showToast(`${count}건 삭제 완료`, 'success');
   };
 
   // ── 엑셀 내보내기 ──────────────────────────────────────────────────────────
