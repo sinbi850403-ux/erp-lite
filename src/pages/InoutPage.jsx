@@ -599,8 +599,6 @@ export function InoutPage({ mode = 'all' }) {
   const [modal, setModal] = useState(null); // null | { type: 'add', txType: 'in'|'out' } | { type: 'bulk' }
   const [selectedIds, setSelectedIds] = useState(new Set());
   const tableRef = useRef(null);
-  const outRow1Ref = useRef(null);
-  const [outRow1H, setOutRow1H] = useState(36);
 
   const today = todayStr();
   const month = monthStr();
@@ -992,18 +990,9 @@ export function InoutPage({ mode = 'all' }) {
     );
   };
 
-  // 출고 헤더 1행 높이 측정 (2행 sticky top 계산용)
-  useEffect(() => {
-    if (outRow1Ref.current && isOutMode) {
-      const h = outRow1Ref.current.offsetHeight;
-      if (h > 0) setOutRow1H(h);
-    }
-  }, [isOutMode, pageData]);
-
-  // 컬럼 넓이 수동 조절 (outRow1H 변경 시에도 재적용)
   useEffect(() => {
     if (tableRef.current) enableColumnResize(tableRef.current);
-  }, [pageData, outRow1H]);
+  }, [pageData]);
 
   // ── 리셋 ───────────────────────────────────────────────────────────────────
   const handleReset = () => {
@@ -1196,50 +1185,38 @@ export function InoutPage({ mode = 'all' }) {
             <table className="data-table" ref={tableRef}>
               <thead>
                 {isOutMode ? (
-                  <>
-                    <tr ref={outRow1Ref}>
-                      <th rowSpan={2} style={{ width: '40px', textAlign: 'center', verticalAlign: 'middle', position: 'sticky', top: 0, zIndex: 4, textTransform: 'none' }}>
-                        <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} />
-                      </th>
-                      <th rowSpan={2} className="col-num" style={{ verticalAlign: 'middle', position: 'sticky', top: 0, zIndex: 4, textTransform: 'none', fontSize: '13px' }}>#</th>
-                      <SortTh sortKey="category" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>자산</SortTh>
-                      <SortTh sortKey="date" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>출고일자</SortTh>
-                      <SortTh sortKey="vendor" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>거래처</SortTh>
-                      <SortTh sortKey="itemCode" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>상품코드</SortTh>
-                      <SortTh sortKey="itemName" className="col-fill" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>품명</SortTh>
-                      <SortTh sortKey="spec" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>규격</SortTh>
-                      <SortTh sortKey="unit" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>단위</SortTh>
-                      <SortTh sortKey="quantity" className="text-right" rowSpan={2} style={{ position: 'sticky', top: 0, zIndex: 4 }}>출고수량</SortTh>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#2563eb', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>판매</th>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#8b6214', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>매입</th>
-                      <th colSpan={3} style={{ textAlign: 'center', background: '#1e7a48', color: '#fff', fontWeight: 700, padding: '6px', position: 'sticky', top: 0, zIndex: 4 }}>이익 분석</th>
-                      <th rowSpan={2} style={{ verticalAlign: 'middle', position: 'sticky', top: 0, zIndex: 4, textTransform: 'none', fontSize: '13px' }}>관리</th>
-                    </tr>
-                    <tr>
-                      {[
-                        { key: 'sellingPrice', label: '출고단가',   grp: 'sale' },
-                        { key: 'outAmt',       label: '판매가',     grp: 'sale' },
-                        { key: 'outTotal',     label: '출고합계',   grp: 'sale' },
-                        { key: 'supply',       label: '매입원가',   grp: 'buy'  },
-                        { key: 'vat',          label: '부가세',     grp: 'buy'  },
-                        { key: 'totalPrice',   label: '공급합계',   grp: 'buy'  },
-                        { key: 'profit',       label: '이익액',     grp: 'prof' },
-                        { key: 'profitMargin', label: '이익율',     grp: 'prof' },
-                        { key: 'cogsMargin',   label: '원가율',     grp: 'prof' },
-                      ].map(({ key, label, grp }) => {
-                        const bg = grp === 'sale' ? '#1e50c8' : grp === 'buy' ? '#7a5510' : '#196840';
-                        return (
-                          <SortTh key={key} sortKey={key} className="text-right" style={{
-                            position: 'sticky', top: outRow1H, zIndex: 3,
-                            background: bg, color: '#fff',
-                            fontSize: '12px', fontWeight: 600,
-                            textTransform: 'none', padding: '6px 10px',
-                            whiteSpace: 'nowrap',
-                          }}>{label}</SortTh>
-                        );
-                      })}
-                    </tr>
-                  </>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center', textTransform: 'none' }}>
+                      <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} />
+                    </th>
+                    <th className="col-num" style={{ textTransform: 'none', fontSize: '13px' }}>#</th>
+                    <SortTh sortKey="category">자산</SortTh>
+                    <SortTh sortKey="date">출고일자</SortTh>
+                    <SortTh sortKey="vendor">거래처</SortTh>
+                    <SortTh sortKey="itemCode">상품코드</SortTh>
+                    <SortTh sortKey="itemName" className="col-fill">품명</SortTh>
+                    <SortTh sortKey="spec">규격</SortTh>
+                    <SortTh sortKey="unit">단위</SortTh>
+                    <SortTh sortKey="quantity" className="text-right">출고수량</SortTh>
+                    {[
+                      { key: 'sellingPrice', label: '출고단가 [판매]',   bg: 'rgba(37,99,235,0.12)',  color: '#2563eb' },
+                      { key: 'outAmt',       label: '판매가 [판매]',     bg: 'rgba(37,99,235,0.18)',  color: '#2563eb' },
+                      { key: 'outTotal',     label: '출고합계 [판매]',   bg: 'rgba(37,99,235,0.12)',  color: '#2563eb' },
+                      { key: 'supply',       label: '매입원가 [매입]',   bg: 'rgba(139,98,20,0.12)', color: '#8b6214' },
+                      { key: 'vat',          label: '부가세 [매입]',     bg: 'rgba(139,98,20,0.08)', color: '#8b6214' },
+                      { key: 'totalPrice',   label: '공급합계 [매입]',   bg: 'rgba(139,98,20,0.12)', color: '#8b6214' },
+                      { key: 'profit',       label: '이익액 [이익]',     bg: 'rgba(30,122,72,0.12)', color: '#1e7a48' },
+                      { key: 'profitMargin', label: '이익율 [이익]',     bg: 'rgba(30,122,72,0.08)', color: '#1e7a48' },
+                      { key: 'cogsMargin',   label: '원가율 [이익]',     bg: 'rgba(30,122,72,0.08)', color: '#1e7a48' },
+                    ].map(({ key, label, bg, color }) => (
+                      <SortTh key={key} sortKey={key} className="text-right" style={{
+                        background: bg, color, fontWeight: 700,
+                        fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap',
+                        minWidth: 72,
+                      }}>{label}</SortTh>
+                    ))}
+                    <th style={{ textTransform: 'none', fontSize: '13px' }}>관리</th>
+                  </tr>
                 ) : (
                   <tr>
                     <th style={{ width: '40px', textAlign: 'center', textTransform: 'none' }}>
