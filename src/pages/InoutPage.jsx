@@ -325,7 +325,7 @@ function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
       sheetName = '출고_양식'; fileName = '출고_일괄등록_양식';
     } else {
       rows = [
-        ['자산', '입고일자', '거래처', '상품코드', '품명', '규격', '단위', '입고수량', '단가'],
+        ['자산', '입고일자', '거래처', '상품코드', '품명', '규격', '단위', '입고수량', '원가'],
         ['전자기기', today, '(주)삼성전자', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 100, 1200000],
       ];
       sheetName = '입고_양식'; fileName = '입고_일괄등록_양식';
@@ -920,7 +920,7 @@ export function InoutPage({ mode = 'all' }) {
           '자산': it.category || '', '입고일자': tx.date || '',
           '거래처': tx.vendor || '', '상품코드': tx.itemCode || it.itemCode || '',
           '품명': tx.itemName || '', '규격': it.spec || '', '단위': it.unit || '',
-          '입고수량': qty, '단가': cost, '공급가액': supply, '부가세': vat, '합계금액': supply + vat,
+          '입고수량': qty, '원가': cost, '공급가액': supply, '부가세': vat, '합계금액': supply + vat,
         };
       });
       fileName = '입고관리';
@@ -958,7 +958,7 @@ export function InoutPage({ mode = 'all' }) {
           '구분': tx.type === 'in' ? '입고' : '출고',
           '날짜': tx.date || '', '거래처': tx.vendor || '',
           '품목명': tx.itemName || '', '품목코드': tx.itemCode || it.itemCode || '',
-          '수량': qty, '단가': cost, '공급가액': supply, '부가세': vat, '합계금액': supply + vat,
+          '수량': qty, '원가': cost, '공급가액': supply, '부가세': vat, '합계금액': supply + vat,
         };
       });
       fileName = '입출고이력';
@@ -1231,7 +1231,7 @@ export function InoutPage({ mode = 'all' }) {
                       { key: 'vat',          label: '부가세',   cls: 'th-section-purchase' },
                       { key: 'totalPrice',   label: '공급합계', cls: 'th-section-purchase' },
                       { key: 'profit',       label: '이익액',   cls: 'th-section-profit' },
-                      { key: 'profitMargin', label: '이익율',   cls: 'th-section-profit' },
+                      { key: 'profitMargin', label: '이익률',   cls: 'th-section-profit' },
                       { key: 'cogsMargin',   label: '원가율',   cls: 'th-section-profit' },
                     ].map(({ key, label, cls }) => (
                       <SortTh key={key} sortKey={key} className={`text-right ${cls}`} style={{
@@ -1257,7 +1257,7 @@ export function InoutPage({ mode = 'all' }) {
                         <SortTh sortKey="spec" style={{ color: 'var(--text-muted)' }}>규격</SortTh>
                         <SortTh sortKey="unit" style={{ color: 'var(--text-muted)' }}>단위</SortTh>
                         <SortTh sortKey="quantity" className="text-right">입고수량</SortTh>
-                        <SortTh sortKey="unitPrice" className="text-right">단가</SortTh>
+                        <SortTh sortKey="unitPrice" className="text-right">원가</SortTh>
                         <SortTh sortKey="supply" className="text-right">공급가액</SortTh>
                         <SortTh sortKey="vat" className="text-right">부가세</SortTh>
                         <SortTh sortKey="totalPrice" className="text-right">합계금액</SortTh>

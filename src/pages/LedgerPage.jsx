@@ -21,7 +21,7 @@ const SORT_FIELDS = [
   { key: 'inQty',        label: '입고',      numeric: true, align: 'text-right' },
   { key: 'outQty',       label: '출고',      numeric: true, align: 'text-right' },
   { key: 'closingQty',   label: '기말재고',  numeric: true, align: 'text-right' },
-  { key: 'weightedAvgCost', label: '단가',   numeric: true, align: 'text-right' },
+  { key: 'weightedAvgCost', label: '원가',   numeric: true, align: 'text-right' },
   { key: 'closingValue', label: '재고금액',  numeric: true, align: 'text-right' },
 ];
 
@@ -198,11 +198,11 @@ export default function LedgerPage() {
       const profit = outAmt - purchase;
       return {
         '품목명': row.itemName, '상품코드': row.itemCode, '단위': row.unit,
-        '입고수량': row.inQty, '단가': Math.round(row.weightedAvgCost || row.unitPrice),
+        '입고수량': row.inQty, '원가': Math.round(row.weightedAvgCost || row.unitPrice),
         '공급가액': supply, '부가세': vat, '합계금액': supply + vat,
         '출고수량': row.outQty, '출고금액': outAmt, '매입원가': purchase,
         '이익액': profit,
-        '이익율': purchase > 0 ? (profit / purchase * 100).toFixed(1) + '%' : '',
+        '이익률': purchase > 0 ? (profit / purchase * 100).toFixed(1) + '%' : '',
         '기말재고수량': row.closingQty, '기말재고': row.closingValue,
       };
     });
@@ -223,7 +223,7 @@ export default function LedgerPage() {
       doc.text(`기간: ${fromDate} ~ ${toDate}`, 14, 25);
       doc.autoTable({
         startY: 32,
-        head: [['No', '품목명', '코드', '단위', '기초재고', '입고', '출고', '기말재고', '단가', '재고금액']],
+        head: [['No', '품목명', '코드', '단위', '기초재고', '입고', '출고', '기말재고', '원가', '재고금액']],
         body: rows.map((row, i) => [
           i + 1, row.itemName, row.itemCode || '-', row.unit || '-',
           row.openingQty, row.inQty > 0 ? `+${row.inQty}` : '-',
