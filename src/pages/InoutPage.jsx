@@ -1218,11 +1218,11 @@ export function InoutPage({ mode = 'all' }) {
                     <SortTh sortKey="unit">단위</SortTh>
                     <SortTh sortKey="quantity" className="text-right">출고수량</SortTh>
                     {[
-                      { key: 'sellingPrice', label: '출고단가', cls: 'th-section-out' },
-                      { key: 'outAmt',       label: '판매가',   cls: 'th-section-out' },
-                      { key: 'outTotal',     label: '출고합계', cls: 'th-section-out' },
-                    ].map(({ key, label, cls }) => (
-                      <SortTh key={key} sortKey={key} className={`text-right ${cls}`} style={{
+                      { key: 'sellingPrice', label: '출고단가' },
+                      { key: 'outAmt',       label: '판매가'   },
+                      { key: 'outTotal',     label: '출고합계' },
+                    ].map(({ key, label }) => (
+                      <SortTh key={key} sortKey={key} className="text-right" style={{
                         fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
                       }}>{label}</SortTh>
                     ))}
@@ -1309,13 +1309,13 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="col-fill"><strong>{tx.itemName || '-'}</strong></td>
                           <td style={{ fontSize: '12px' }}>{spec || '-'}</td>
                           <td style={{ fontSize: '12px' }}>{unit || '-'}</td>
-                          <td className="text-right" style={{ color: '#ef4444', fontWeight: 600 }}>
+                          <td className="text-right" style={{ fontWeight: 600 }}>
                             {qty ? qty.toLocaleString('ko-KR') : '-'}
                           </td>
                           {/* 판매 그룹 */}
-                          <td className="text-right td-section-out">{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right td-section-out">{outAmt ? W(outAmt) : '-'}</td>
-                          <td className="text-right td-section-out">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right">{salePrice ? W(salePrice) : '-'}</td>
+                          <td className="text-right">{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
