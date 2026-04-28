@@ -1,10 +1,12 @@
 /**
  * DashboardPage.jsx - 고급 분석 (ABC 분석, 회전율, 월별 추이, 유통기한 임박)
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../hooks/useStore.js';
 import { showToast } from '../toast.js';
 import { downloadExcel } from '../excel.js';
+import { renderMonthlyChart, destroyAllCharts } from '../charts.js';
 
 function calcABCAnalysis(items) {
   const sorted = items
@@ -48,18 +50,22 @@ function calcTurnoverRate(items, transactions) {
   }).sort((a, b) => b.turnover - a.turnover);
 }
 
-function calcMonthlyTrend(transactions) {
+function calcMonthlyTrend(transactions, weeks = 0) {
   if (!transactions.length) return [];
+  const cutoff = weeks > 0
+    ? (() => { const d = new Date(); d.setDate(d.getDate() - weeks * 7); return d.toISOString().split('T')[0]; })()
+    : null;
   const monthMap = {};
   transactions.forEach(tx => {
+    if (cutoff && (tx.date || '') < cutoff) return;
     const month = (tx.date || '').substring(0, 7);
     if (!month) return;
-    if (!monthMap[month]) monthMap[month] = { month, inQty: 0, outQty: 0 };
+    if (!monthMap[month]) monthMap[month] = { month, inQty: 0, outQty: 0, label: month };
     const qty = parseFloat(tx.quantity) || 0;
     if (tx.type === 'in') monthMap[month].inQty += qty;
     else monthMap[month].outQty += qty;
   });
-  return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+  return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
 }
 
 function getExpiryAlerts(items) {
@@ -79,11 +85,21 @@ export default function DashboardPage() {
   const [state] = useStore();
   const items = state.mappedData || [];
   const transactions = state.transactions || [];
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState(0); // 0=전체, 1=1주, 4=1달(4주), 12=3달(12주)
+  const monthChartRef = useRef(null);
+  const CHART_ID = 'dashboard-monthly-chart';
 
   const abcData      = useMemo(() => calcABCAnalysis(items), [items]);
   const turnoverData = useMemo(() => calcTurnoverRate(items, transactions), [items, transactions]);
-  const monthlyTrend = useMemo(() => calcMonthlyTrend(transactions), [transactions]);
+  const monthlyTrend = useMemo(() => calcMonthlyTrend(transactions, period), [transactions, period]);
   const expiryAlerts = useMemo(() => getExpiryAlerts(items), [items]);
+
+  useEffect(() => {
+    if (monthlyTrend.length === 0) return;
+    renderMonthlyChart(CHART_ID, monthlyTrend);
+    return () => { destroyAllCharts(); };
+  }, [monthlyTrend]);
 
   const totalValue   = useMemo(() => items.reduce((s, r) => s + (parseFloat(r.totalPrice) || 0), 0), [items]);
   const avgTurnover  = useMemo(() =>
@@ -122,9 +138,6 @@ export default function DashboardPage() {
   const bCount = abcData.filter(d => d.grade === 'B').length;
   const cCount = abcData.filter(d => d.grade === 'C').length;
   const total  = abcData.length || 1;
-  const maxTrend = monthlyTrend.length > 0
-    ? Math.max(...monthlyTrend.map(t => Math.max(t.inQty, t.outQty))) || 1
-    : 1;
 
   return (
     <div>
@@ -189,7 +202,15 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {abcData.slice(0, 20).map((d, i) => (
-                <tr key={i}>
+                <tr
+                  key={i}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    sessionStorage.setItem('invex:inventory-search', d.itemName);
+                    navigate('/inventory');
+                  }}
+                  title={`${d.itemName} 재고현황 보기`}
+                >
                   <td style={{ textAlign: 'center', fontWeight: 600, color: 'var(--text-muted)' }}>
                     {i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}
                   </td>
@@ -254,24 +275,22 @@ export default function DashboardPage() {
       {/* 월별 추이 */}
       {monthlyTrend.length > 0 && (
         <div className="card">
-          <div className="card-title">월별 입출고 추이</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {monthlyTrend.map(m => (
-              <div key={m.month}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                  <strong>{m.month}</strong>
-                  <span>입고 <span className="type-in">{m.inQty.toLocaleString('ko-KR')}</span> | 출고 <span className="type-out">{m.outQty.toLocaleString('ko-KR')}</span></span>
-                </div>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <div style={{ height: '12px', flex: 1, background: 'var(--border-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${(m.inQty/maxTrend)*100}%`, background: 'var(--success)', borderRadius: '3px' }} />
-                  </div>
-                  <div style={{ height: '12px', flex: 1, background: 'var(--border-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${(m.outQty/maxTrend)*100}%`, background: 'var(--danger)', borderRadius: '3px' }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>월별 입출고 추이</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{v:0,l:'전체'},{v:1,l:'1주'},{v:4,l:'1달'},{v:12,l:'3달'}].map(opt => (
+                <button
+                  key={opt.v}
+                  className={`btn btn-sm ${period === opt.v ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setPeriod(opt.v)}
+                >
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ height: 260, position: 'relative' }}>
+            <canvas id={CHART_ID} />
           </div>
         </div>
       )}

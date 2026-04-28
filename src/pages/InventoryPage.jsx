@@ -549,6 +549,15 @@ export default function InventoryPage() {
     setPage(1);
   }, []);
 
+  // 외부 드릴다운(DashboardPage 등)에서 검색 필터 주입
+  useEffect(() => {
+    const kw = sessionStorage.getItem('invex:inventory-search');
+    if (kw) {
+      sessionStorage.removeItem('invex:inventory-search');
+      setFilter({ keyword: kw });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 뷰 설정 자동저장 (debounce)
   const prefsTimerRef = useRef(null);
   useEffect(() => {
