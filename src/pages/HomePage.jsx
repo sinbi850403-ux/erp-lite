@@ -44,6 +44,21 @@ function getLast7Days(transactions) {
   });
 }
 
+function Sparkline({ data, color = 'currentColor', height = 24, width = 72 }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data) || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (v / max) * (height - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display: 'block', marginTop: 4, opacity: 0.75 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [state] = useStore();
@@ -54,8 +69,8 @@ export default function HomePage() {
     lowStockItems, deadStockItems,
     todayInCount, todayOutCount,
     recentTransactions, categories, weekData,
-    hasData, dateStr, notifications,
-    todayKey,
+    hasData, dateStr, notifications, todayKey,
+    inTrendPct, outTrendPct,
   } = useMemo(() => {
     const items = state.mappedData || [];
     const transactions = state.transactions || [];
@@ -100,6 +115,18 @@ export default function HomePage() {
     const hasData = totalItems > 0;
     const dateStr = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
+    const thisMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+    const thisMonthTx = transactions.filter(tx => (tx.date || '').startsWith(thisMonthKey));
+    const prevMonthTx = transactions.filter(tx => (tx.date || '').startsWith(prevMonthKey));
+    const thisMonthIn  = sumBy(thisMonthTx.filter(t => t.type === 'in'),  t => toNumber(t.quantity));
+    const prevMonthIn  = sumBy(prevMonthTx.filter(t => t.type === 'in'),  t => toNumber(t.quantity));
+    const thisMonthOut = sumBy(thisMonthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity));
+    const prevMonthOut = sumBy(prevMonthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity));
+    const inTrendPct  = prevMonthIn  > 0 ? Math.round((thisMonthIn  - prevMonthIn)  / prevMonthIn  * 100) : null;
+    const outTrendPct = prevMonthOut > 0 ? Math.round((thisMonthOut - prevMonthOut) / prevMonthOut * 100) : null;
+
     return {
       items, transactions, safetyStock,
       totalItems, totalSupplyValue,
@@ -107,6 +134,7 @@ export default function HomePage() {
       todayInCount, todayOutCount,
       recentTransactions, categories, weekData,
       hasData, dateStr, notifications, todayKey,
+      thisMonthIn, prevMonthIn, thisMonthOut, prevMonthOut, inTrendPct, outTrendPct,
     };
   }, [state.mappedData, state.transactions, state.safetyStock]);
 
@@ -177,6 +205,10 @@ export default function HomePage() {
               <div className="db-kpi-icon">💰</div>
               <div className="db-kpi-label">재고 금액</div>
               <div className="db-kpi-value text-success">{formatCurrency(totalSupplyValue)}</div>
+              <Sparkline
+                data={weekData.map(d => Math.max(0, d.inQty - d.outQty))}
+                color="var(--success)"
+              />
             </div>
             <div className={`db-kpi-card${lowStockItems.length > 0 ? ' db-kpi-danger' : ''}`} onClick={() => navigate('/inventory')} style={{ cursor: 'pointer' }}>
               <div className="db-kpi-icon">⚠️</div>
@@ -189,11 +221,23 @@ export default function HomePage() {
               <div className="db-kpi-icon">📥</div>
               <div className="db-kpi-label">오늘 입고</div>
               <div className="db-kpi-value text-success">{todayInCount}건</div>
+              {inTrendPct !== null && (
+                <div style={{ fontSize: 11, color: inTrendPct >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                  {inTrendPct >= 0 ? '↑' : '↓'} 전월대비 {Math.abs(inTrendPct)}%
+                </div>
+              )}
+              <Sparkline data={weekData.map(d => d.inQty)} color="var(--success)" />
             </div>
             <div className="db-kpi-card" onClick={() => navigate('/out')} style={{ cursor: 'pointer' }}>
               <div className="db-kpi-icon">📤</div>
               <div className="db-kpi-label">오늘 출고</div>
               <div className="db-kpi-value text-danger">{todayOutCount}건</div>
+              {outTrendPct !== null && (
+                <div style={{ fontSize: 11, color: outTrendPct >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                  {outTrendPct >= 0 ? '↑' : '↓'} 전월대비 {Math.abs(outTrendPct)}%
+                </div>
+              )}
+              <Sparkline data={weekData.map(d => d.outQty)} color="var(--danger)" />
             </div>
             <div className={`db-kpi-card${deadStockItems.length > 0 ? ' db-kpi-warn' : ''}`} onClick={() => navigate('/inventory')} style={{ cursor: 'pointer' }}>
               <div className="db-kpi-icon">🕰️</div>
