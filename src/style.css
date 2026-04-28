@@ -5112,6 +5112,37 @@ html.dark-mode .top-header {
   gap: 12px;
 }
 
+/* 헤더 테마 토글 버튼 */
+.btn-theme-toggle-header {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.btn-theme-toggle-header:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* 출고관리 컬럼 섹션 색상 — 라이트 */
+.th-section-out      { background: #f0f6ff; color: #1e4a8a; }
+.th-section-purchase { background: #fffbf0; color: #7a5a00; }
+.th-section-profit   { background: #f0fff4; color: #166534; }
+
+/* 출고관리 컬럼 섹션 색상 — 다크 */
+html.dark-mode .th-section-out      { background: rgba(31, 111, 235, 0.12); color: #93c5fd; }
+html.dark-mode .th-section-purchase { background: rgba(234, 179, 8, 0.10);  color: #fcd34d; }
+html.dark-mode .th-section-profit   { background: rgba(34, 197, 94, 0.10);  color: #86efac; }
+
 /* --- 브레드크럼 --- */
 .breadcrumb {
   display: flex;

@@ -1224,20 +1224,18 @@ export function InoutPage({ mode = 'all' }) {
                     <SortTh sortKey="unit">단위</SortTh>
                     <SortTh sortKey="quantity" className="text-right">출고수량</SortTh>
                     {[
-                      { key: 'sellingPrice', label: '출고단가', bg: '#eff6ff' },
-                      { key: 'outAmt',       label: '판매가',   bg: '#eff6ff' },
-                      { key: 'outTotal',     label: '출고합계', bg: '#eff6ff' },
-                      { key: 'supply',       label: '매입원가', bg: '#fffbeb' },
-                      { key: 'vat',          label: '부가세',   bg: '#fffbeb' },
-                      { key: 'totalPrice',   label: '공급합계', bg: '#fffbeb' },
-                      { key: 'profit',       label: '이익액',   bg: '#f0fdf4' },
-                      { key: 'profitMargin', label: '이익율',   bg: '#f0fdf4' },
-                      { key: 'cogsMargin',   label: '원가율',   bg: '#f0fdf4' },
-                    ].map(({ key, label, bg }) => (
-                      <SortTh key={key} sortKey={key} className="text-right" style={{
-                        background: bg, color: '#111', fontWeight: 700,
-                        fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap',
-                        minWidth: 72,
+                      { key: 'sellingPrice', label: '출고단가', cls: 'th-section-out' },
+                      { key: 'outAmt',       label: '판매가',   cls: 'th-section-out' },
+                      { key: 'outTotal',     label: '출고합계', cls: 'th-section-out' },
+                      { key: 'supply',       label: '매입원가', cls: 'th-section-purchase' },
+                      { key: 'vat',          label: '부가세',   cls: 'th-section-purchase' },
+                      { key: 'totalPrice',   label: '공급합계', cls: 'th-section-purchase' },
+                      { key: 'profit',       label: '이익액',   cls: 'th-section-profit' },
+                      { key: 'profitMargin', label: '이익율',   cls: 'th-section-profit' },
+                      { key: 'cogsMargin',   label: '원가율',   cls: 'th-section-profit' },
+                    ].map(({ key, label, cls }) => (
+                      <SortTh key={key} sortKey={key} className={`text-right ${cls}`} style={{
+                        fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
                       }}>{label}</SortTh>
                     ))}
                     <th style={{ textTransform: 'none', fontSize: '13px' }}>관리</th>
