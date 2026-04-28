@@ -620,16 +620,37 @@ export default function HomePage() {
                 )}
               </div>
             )}
-            {/* 직원 전용: 빠른 액션 카드 */}
-            {dashRole === 'staff' && (
-              <div className="db-kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div className="db-kpi-label">빠른 메뉴</div>
-                <button className="btn btn-sm btn-success" onClick={() => navigate('/in')}>입고 등록</button>
-                <button className="btn btn-sm btn-danger"  onClick={() => navigate('/out')}>출고 등록</button>
-                <button className="btn btn-sm btn-ghost"   onClick={() => navigate('/inventory')}>재고 조회</button>
-              </div>
-            )}
           </div>
+
+          {/* 직원 전용: 빠른 작업 패널 */}
+          {dashRole === 'staff' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+              {[
+                { icon: '📥', label: '입고 등록', desc: '상품 입고 처리', color: 'var(--success)', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.3)', route: '/in' },
+                { icon: '📤', label: '출고 등록', desc: '상품 출고 처리', color: 'var(--danger)',  bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.3)',  route: '/out' },
+                { icon: '📦', label: '재고 조회', desc: '현재 재고 확인',  color: 'var(--accent)',  bg: 'rgba(88,166,255,0.08)', border: 'rgba(88,166,255,0.3)', route: '/inventory' },
+              ].map(item => (
+                <button key={item.route}
+                  onClick={() => navigate(item.route)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    padding: '16px 20px', borderRadius: 10,
+                    background: item.bg, border: `1.5px solid ${item.border}`,
+                    cursor: 'pointer', textAlign: 'left', width: '100%',
+                    transition: 'transform 0.1s, box-shadow 0.1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+                >
+                  <span style={{ fontSize: 28, lineHeight: 1 }}>{item.icon}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: item.color }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{item.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 재고 부족 경고 바 */}
           {lowStockItems.length > 0 && (
