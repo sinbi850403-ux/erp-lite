@@ -175,6 +175,7 @@ export default function AppLayout() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
       />
 
       {/* 사이드바 접기/펼치기 탭 */}
