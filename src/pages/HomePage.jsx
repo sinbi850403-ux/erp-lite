@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../hooks/useStore.js';
+import { restoreState } from '../store.js';
 import { getNotifications, renderNotificationPanel } from '../notifications.js';
 import { renderWeeklyTrendChart, renderCategoryChart, destroyAllCharts } from '../charts.js';
 
@@ -188,6 +189,11 @@ export default function HomePage() {
   const [mainOrder, setMainOrder]         = useState(() => loadLS('invex:home-order', DEFAULT_MAIN_ORDER));
   const [savedFilters, setSavedFilters]   = useState(() => loadLS('invex:home-saved-filters', []));
   const [editMode, setEditMode]           = useState(false);
+  const [targets, setTargets]             = useState(() => loadLS('invex:home-targets', { in: 0, out: 0, revenue: 0 }));
+  const [editingTarget, setEditingTarget] = useState(null); // 'in' | 'out' | 'revenue' | null
+  const [targetInput, setTargetInput]     = useState('');
+  const [lastRefresh, setLastRefresh]     = useState(() => new Date());
+  const [refreshing, setRefreshing]       = useState(false);
 
   // 드래그 상태
   const dragId = useRef(null);
@@ -217,6 +223,33 @@ export default function HomePage() {
     setSavedFilters(next);
     saveLS('invex:home-saved-filters', next);
   }
+
+  // ── 목표치 설정 ──────────────────────────────────────────────
+  function openTargetEdit(key, currentVal) {
+    setEditingTarget(key);
+    setTargetInput(String(currentVal || ''));
+  }
+  function saveTarget() {
+    const val = parseInt(targetInput, 10);
+    if (isNaN(val) || val < 0) { setEditingTarget(null); return; }
+    const next = { ...targets, [editingTarget]: val };
+    setTargets(next);
+    saveLS('invex:home-targets', next);
+    setEditingTarget(null);
+  }
+
+  // ── 실시간 갱신 ──────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await restoreState(); } catch {}
+    setLastRefresh(new Date());
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => { handleRefresh(); }, 60_000);
+    return () => clearInterval(id);
+  }, [handleRefresh]);
 
   // ── 드래그 & 드롭 ────────────────────────────────────────────
   function handleDragStart(e, id) {
@@ -252,6 +285,7 @@ export default function HomePage() {
     totalItems, totalSupplyValue,
     lowStockItems, deadStockItems,
     todayInCount, todayOutCount,
+    monthInQty, monthOutQty, monthRevenue,
     recentTransactions, categories,
     categoryOptions,
     winners, losers, gmroi,
@@ -294,6 +328,13 @@ export default function HomePage() {
     const todayTx      = filteredTx.filter(tx => String(tx.date || '') === todayKey);
     const todayInCount  = todayTx.filter(tx => tx.type === 'in').length;
     const todayOutCount = todayTx.filter(tx => tx.type === 'out').length;
+
+    // 이달 집계
+    const thisMonthKey2 = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const monthTx       = filteredTx.filter(tx => (tx.date || '').startsWith(thisMonthKey2));
+    const monthInQty    = sumBy(monthTx.filter(t => t.type === 'in'),  t => toNumber(t.quantity));
+    const monthOutQty   = sumBy(monthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity));
+    const monthRevenue  = sumBy(monthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity) * toNumber(t.unitPrice || 0));
 
     const recentTransactions = [...filteredTx]
       .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
@@ -353,6 +394,7 @@ export default function HomePage() {
       totalItems, totalSupplyValue,
       lowStockItems, deadStockItems,
       todayInCount, todayOutCount,
+      monthInQty, monthOutQty, monthRevenue,
       recentTransactions, categories,
       categoryOptions, winners, losers, gmroi,
       hasData, dateStr, notifications,
@@ -478,7 +520,16 @@ export default function HomePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">대시보드</h1>
-          <div className="page-desc">{dateStr}</div>
+          <div className="page-desc" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>{dateStr}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: refreshing ? 'var(--warning)' : 'var(--success)', display: 'inline-block', animation: refreshing ? 'pulse 0.8s ease-in-out infinite' : 'none' }} />
+              {refreshing ? '갱신 중...' : `${Math.floor((Date.now() - lastRefresh) / 1000 / 60) === 0 ? '방금' : `${Math.floor((Date.now() - lastRefresh) / 1000 / 60)}분 전`} 갱신`}
+            </span>
+            <button className="btn btn-sm btn-ghost" style={{ fontSize: 11, padding: '1px 6px' }} onClick={handleRefresh} disabled={refreshing}>
+              새로고침
+            </button>
+          </div>
         </div>
         <div className="page-actions" style={{ flexWrap: 'wrap', gap: 6 }}>
           {/* 역할 전환 */}
@@ -590,14 +641,74 @@ export default function HomePage() {
               </div>
             </div>
             <div className="db-kpi-card" onClick={() => navigate('/in')} style={{ cursor: 'pointer' }}>
-              <div className="db-kpi-label">오늘 입고</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="db-kpi-label">오늘 입고</div>
+                {dashRole === 'manager' && (
+                  <button className="btn btn-sm btn-ghost"
+                    style={{ fontSize: 10, padding: '1px 6px', color: 'var(--text-muted)' }}
+                    onClick={e => { e.stopPropagation(); openTargetEdit('in', targets.in); }}>
+                    목표 설정
+                  </button>
+                )}
+              </div>
               <div className="db-kpi-value text-success">{todayInCount}건</div>
+              {editingTarget === 'in' ? (
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                  <input type="number" value={targetInput} onChange={e => setTargetInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveTarget(); if (e.key === 'Escape') setEditingTarget(null); }}
+                    style={{ width: 80, fontSize: 12, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)' }}
+                    placeholder="목표 수량" autoFocus />
+                  <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={saveTarget}>확인</button>
+                </div>
+              ) : targets.in > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                    <span>이달 {monthInQty.toLocaleString('ko-KR')} / {targets.in.toLocaleString('ko-KR')}</span>
+                    <span style={{ color: monthInQty >= targets.in ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {Math.min(Math.round(monthInQty / targets.in * 100), 999)}%
+                    </span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 2, background: 'var(--success)', width: `${Math.min(monthInQty / targets.in * 100, 100)}%`, transition: 'width 0.4s' }} />
+                  </div>
+                </div>
+              )}
               <TrendBadge pct={inTrendPct} />
               <Sparkline data={weekData.map(d => d.inQty)} color="var(--success)" />
             </div>
             <div className="db-kpi-card" onClick={() => navigate('/out')} style={{ cursor: 'pointer' }}>
-              <div className="db-kpi-label">오늘 출고</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="db-kpi-label">오늘 출고</div>
+                {dashRole === 'manager' && (
+                  <button className="btn btn-sm btn-ghost"
+                    style={{ fontSize: 10, padding: '1px 6px', color: 'var(--text-muted)' }}
+                    onClick={e => { e.stopPropagation(); openTargetEdit('out', targets.out); }}>
+                    목표 설정
+                  </button>
+                )}
+              </div>
               <div className="db-kpi-value text-danger">{todayOutCount}건</div>
+              {editingTarget === 'out' ? (
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                  <input type="number" value={targetInput} onChange={e => setTargetInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveTarget(); if (e.key === 'Escape') setEditingTarget(null); }}
+                    style={{ width: 80, fontSize: 12, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)' }}
+                    placeholder="목표 수량" autoFocus />
+                  <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '2px 8px' }} onClick={saveTarget}>확인</button>
+                </div>
+              ) : targets.out > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                    <span>이달 {monthOutQty.toLocaleString('ko-KR')} / {targets.out.toLocaleString('ko-KR')}</span>
+                    <span style={{ color: monthOutQty >= targets.out ? 'var(--danger)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {Math.min(Math.round(monthOutQty / targets.out * 100), 999)}%
+                    </span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 2, background: 'var(--danger)', width: `${Math.min(monthOutQty / targets.out * 100, 100)}%`, transition: 'width 0.4s' }} />
+                  </div>
+                </div>
+              )}
               <TrendBadge pct={outTrendPct} />
               <Sparkline data={weekData.map(d => d.outQty)} color="var(--danger)" />
             </div>
