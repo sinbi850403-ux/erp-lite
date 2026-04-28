@@ -18,18 +18,18 @@ import { applyKoreanFont, getKoreanFontStyle } from './pdf-font.js';
  * 발주서 PDF 생성
  * 왜 PDF? → 거래처에 카톡/이메일로 바로 보낼 수 있는 공식 서류
  */
-export function generatePurchaseOrderPDF(order) {
-  const doc = createPDFDoc();
+export async function generatePurchaseOrderPDF(order) {
+  const doc = await createPDFDoc();
+  const kf = getKoreanFontStyle();
   const items = order.items || [];
   const totalAmount = items.reduce((s, it) => s + (it.qty * it.price), 0);
   const vat = Math.round(totalAmount * 0.1);
 
-  // 헤더
   addHeader(doc, '발 주 서', order.orderNo || '');
 
-  // 거래 정보
   let y = 55;
   doc.setFontSize(9);
+  doc.setFont('NanumGothic', 'normal');
   doc.setTextColor(80);
 
   const infoData = [
@@ -39,18 +39,17 @@ export function generatePurchaseOrderPDF(order) {
   ];
 
   infoData.forEach(([label, value]) => {
-    doc.setFont(undefined, 'bold');
+    doc.setFont('NanumGothic', 'bold');
     doc.text(label, 14, y);
-    doc.setFont(undefined, 'normal');
+    doc.setFont('NanumGothic', 'normal');
     doc.text(': ' + value, 35, y);
     y += 6;
   });
 
-  // 품목 테이블
   y += 4;
   doc.autoTable({
     startY: y,
-    head: [['No.', 'Item Name', 'Qty', 'Unit Price', 'Amount']],
+    head: [['No.', '품명', '수량', '단가', '금액']],
     body: items.map((it, i) => [
       i + 1,
       it.name || '-',
@@ -59,13 +58,13 @@ export function generatePurchaseOrderPDF(order) {
       formatCurrency((it.qty || 0) * (it.price || 0)),
     ]),
     foot: [
-      ['', '', '', 'Supply', formatCurrency(totalAmount)],
-      ['', '', '', 'VAT (10%)', formatCurrency(vat)],
-      ['', '', '', 'Total', formatCurrency(totalAmount + vat)],
+      ['', '', '', '공급가액', formatCurrency(totalAmount)],
+      ['', '', '', '부가세 (10%)', formatCurrency(vat)],
+      ['', '', '', '합계', formatCurrency(totalAmount + vat)],
     ],
-    styles: { fontSize: 8, cellPadding: 3 },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold' },
+    styles: { fontSize: 8, cellPadding: 3, ...kf },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', ...kf },
+    footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', ...kf },
     columnStyles: {
       0: { halign: 'center', cellWidth: 15 },
       2: { halign: 'right', cellWidth: 20 },
@@ -86,34 +85,36 @@ export function generatePurchaseOrderPDF(order) {
 /**
  * 거래명세서 PDF 생성
  */
-export function generateTransactionPDF(txList, title = '거래명세서', period = '') {
-  const doc = createPDFDoc();
+export async function generateTransactionPDF(txList, title = '거래명세서', period = '') {
+  const doc = await createPDFDoc();
+  const kf = getKoreanFontStyle();
 
   addHeader(doc, title, period);
 
   let y = 55;
   doc.setFontSize(9);
-  doc.text(`Period: ${period}`, 14, y);
-  doc.text(`Issue Date: ${new Date().toLocaleDateString('ko-KR')}`, 140, y);
+  doc.setFont('NanumGothic', 'normal');
+  doc.text(`기간: ${period}`, 14, y);
+  doc.text(`발행일: ${new Date().toLocaleDateString('ko-KR')}`, 140, y);
 
   const totalAmount = txList.reduce((s, tx) => s + calcAmount(tx), 0);
 
   doc.autoTable({
     startY: y + 6,
-    head: [['Date', 'Type', 'Vendor', 'Item', 'Qty', 'Price', 'Amount']],
+    head: [['날짜', '구분', '거래처', '품명', '수량', '단가', '금액']],
     body: txList.map(tx => [
       tx.date || '-',
-      tx.type === 'in' ? 'Purchase' : 'Sales',
+      tx.type === 'in' ? '매입' : '매출',
       tx.vendor || '-',
       tx.itemName || '-',
       (parseFloat(tx.quantity) || 0).toLocaleString(),
       formatCurrency(parseFloat(tx.unitPrice) || 0),
       formatCurrency(calcAmount(tx)),
     ]),
-    foot: [['', '', '', '', '', 'Total', formatCurrency(totalAmount)]],
-    styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: [63, 185, 80], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold' },
+    foot: [['', '', '', '', '', '합계', formatCurrency(totalAmount)]],
+    styles: { fontSize: 7, cellPadding: 2, ...kf },
+    headStyles: { fillColor: [63, 185, 80], textColor: 255, fontStyle: 'bold', ...kf },
+    footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold', ...kf },
     columnStyles: {
       0: { cellWidth: 22 },
       1: { cellWidth: 18 },
@@ -132,10 +133,11 @@ export function generateTransactionPDF(txList, title = '거래명세서', period
 /**
  * 재고 현황 PDF 생성
  */
-export function generateInventoryPDF(items) {
-  const doc = createPDFDoc();
+export async function generateInventoryPDF(items) {
+  const doc = await createPDFDoc();
+  const kf = getKoreanFontStyle();
 
-  addHeader(doc, 'Inventory Report', new Date().toLocaleDateString('ko-KR'));
+  addHeader(doc, '재고 현황', new Date().toLocaleDateString('ko-KR'));
 
   let y = 55;
   const totalValue = items.reduce((s, it) => {
@@ -143,12 +145,13 @@ export function generateInventoryPDF(items) {
   }, 0);
 
   doc.setFontSize(9);
-  doc.text(`Total Items: ${items.length}`, 14, y);
-  doc.text(`Total Value: ${formatCurrency(totalValue)}`, 140, y);
+  doc.setFont('NanumGothic', 'normal');
+  doc.text(`총 품목: ${items.length}건`, 14, y);
+  doc.text(`총 재고액: ${formatCurrency(totalValue)}`, 120, y);
 
   doc.autoTable({
     startY: y + 6,
-    head: [['No.', 'Item Name', 'Code', 'Category', 'Qty', 'Unit', 'Price', 'Value']],
+    head: [['No.', '품명', '상품코드', '자산', '수량', '단위', '원가', '재고액']],
     body: items.map((it, i) => [
       i + 1,
       it.itemName || '-',
@@ -159,8 +162,8 @@ export function generateInventoryPDF(items) {
       formatCurrency(parseFloat(it.unitPrice) || 0),
       formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)),
     ]),
-    styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 7, cellPadding: 2, ...kf },
+    headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold', ...kf },
     columnStyles: {
       0: { halign: 'center', cellWidth: 12 },
       4: { halign: 'right', cellWidth: 16 },
@@ -178,18 +181,19 @@ export function generateInventoryPDF(items) {
 /**
  * 세무 서류 PDF 통합 생성
  */
-export function generateTaxReportPDF(reportType, rows, title, period) {
-  const doc = createPDFDoc();
+export async function generateTaxReportPDF(reportType, rows, title, period) {
+  const doc = await createPDFDoc();
+  const kf = getKoreanFontStyle();
 
   addHeader(doc, title, period);
 
   let y = 55;
   doc.setFontSize(9);
-  doc.text(`Issue Date: ${new Date().toLocaleDateString('ko-KR')}`, 14, y);
+  doc.setFont('NanumGothic', 'normal');
+  doc.text(`발행일: ${new Date().toLocaleDateString('ko-KR')}`, 14, y);
 
-  // rows는 2D 배열 — 헤더 행 찾기
   const headerIdx = rows.findIndex(row => Array.isArray(row) && row.length > 2 && typeof row[0] === 'string' && !row[0].startsWith('=') && !row[0].startsWith('-') && !row[0].startsWith('['));
-  
+
   if (headerIdx >= 0) {
     const head = [rows[headerIdx]];
     const body = rows.slice(headerIdx + 1).filter(r => Array.isArray(r) && r.length > 1);
@@ -198,8 +202,8 @@ export function generateTaxReportPDF(reportType, rows, title, period) {
       startY: y + 6,
       head,
       body,
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [210, 153, 34], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 7, cellPadding: 2, ...kf },
+      headStyles: { fillColor: [210, 153, 34], textColor: 255, fontStyle: 'bold', ...kf },
       margin: { left: 14, right: 14 },
     });
   }
@@ -214,41 +218,34 @@ export function generateTaxReportPDF(reportType, rows, title, period) {
 // 내부 유틸리티
 // ============================================================
 
-/** PDF 문서 생성 (A4 사이즈) */
-function createPDFDoc() {
-  return new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  });
+/** PDF 문서 생성 + 한글 폰트 적용 (A4) */
+async function createPDFDoc() {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  await applyKoreanFont(doc);
+  return doc;
 }
 
 /** 문서 상단 헤더 */
 function addHeader(doc, title, subtitle) {
-  // 배경 바
   doc.setFillColor(37, 99, 235);
   doc.rect(0, 0, 210, 38, 'F');
 
-  // 타이틀
   doc.setTextColor(255);
   doc.setFontSize(18);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('NanumGothic', 'bold');
   doc.text(title, 14, 18);
 
-  // 부제 (문서번호/기간)
   doc.setFontSize(10);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('NanumGothic', 'normal');
   doc.text(subtitle || '', 14, 28);
 
-  // 회사명
   doc.setFontSize(10);
   doc.text('INVEX', 180, 18);
   doc.setFontSize(7);
   doc.text('invex.io.kr', 180, 24);
 
-  // 리셋
   doc.setTextColor(0);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('NanumGothic', 'normal');
 }
 
 /** 문서 하단 푸터 */
@@ -257,9 +254,10 @@ function addFooter(doc) {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
+    doc.setFont('NanumGothic', 'normal');
     doc.setTextColor(150);
-    doc.text(`Generated by INVEX (invex.io.kr) | ${new Date().toLocaleString('ko-KR')}`, 14, 287);
-    doc.text(`Page ${i} / ${pageCount}`, 185, 287);
+    doc.text(`INVEX (invex.io.kr) | ${new Date().toLocaleString('ko-KR')}`, 14, 287);
+    doc.text(`${i} / ${pageCount}`, 195, 287);
   }
 }
 
