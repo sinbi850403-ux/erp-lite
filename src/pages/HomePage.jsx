@@ -121,11 +121,33 @@ function TrendBadge({ pct }) {
   );
 }
 
+function exportCSV(transactions) {
+  const header = ['유형', '품목명', '수량', '날짜', '거래처', '단가', '금액'];
+  const rows = transactions.map(tx => [
+    tx.type === 'in' ? '입고' : '출고',
+    tx.itemName || '',
+    toNumber(tx.quantity),
+    tx.date || '',
+    tx.vendor || '',
+    toNumber(tx.unitPrice || tx.unitCost || 0),
+    Math.round(toNumber(tx.quantity) * toNumber(tx.unitPrice || tx.unitCost || 0)),
+  ]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `invex-거래내역-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [state] = useStore();
   const [chartPeriod, setChartPeriod] = useState(7);
   const [txFilter, setTxFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   const {
     items, transactions, safetyStock,
@@ -133,6 +155,9 @@ export default function HomePage() {
     lowStockItems, deadStockItems,
     todayInCount, todayOutCount,
     recentTransactions, categories,
+    categoryOptions,
+    winners, losers,
+    gmroi,
     hasData, dateStr, notifications, todayKey,
     inTrendPct, outTrendPct,
     weekData,
@@ -146,45 +171,60 @@ export default function HomePage() {
     const todayKey = toDateKey(today);
     const thirtyDayCutoff = toDateKey(addDays(today, -30));
 
-    const totalItems = items.length;
-    const totalSupplyValue = sumBy(items, getItemSupplyValue);
+    // 카테고리 목록
+    const categoryOptions = [...new Set(items.map(item => item.category).filter(Boolean))].sort();
 
-    const lowStockItems = items.filter(item => {
+    // 카테고리 필터 적용
+    const filteredItems = categoryFilter
+      ? items.filter(item => item.category === categoryFilter)
+      : items;
+    const itemNameSet = categoryFilter
+      ? new Set(filteredItems.map(i => i.itemName))
+      : null;
+    const filteredTx = itemNameSet
+      ? transactions.filter(tx => itemNameSet.has(tx.itemName))
+      : transactions;
+
+    const totalItems = filteredItems.length;
+    const totalSupplyValue = sumBy(filteredItems, getItemSupplyValue);
+
+    const lowStockItems = filteredItems.filter(item => {
       const minimum = toNumber(safetyStock[item.itemName]);
       return minimum > 0 && toNumber(item.quantity) <= minimum;
     });
 
-    const deadStockItems = items.filter(item => {
+    const deadStockItems = filteredItems.filter(item => {
       if (toNumber(item.quantity) <= 0) return false;
-      return !transactions.some(tx =>
+      return !filteredTx.some(tx =>
         tx.type === 'out' && tx.itemName === item.itemName && String(tx.date || '') >= thirtyDayCutoff
       );
     });
 
-    const todayTransactions = transactions.filter(tx => String(tx.date || '') === todayKey);
+    const todayTransactions = filteredTx.filter(tx => String(tx.date || '') === todayKey);
     const todayInCount  = todayTransactions.filter(tx => tx.type === 'in').length;
     const todayOutCount = todayTransactions.filter(tx => tx.type === 'out').length;
 
-    const recentTransactions = [...transactions]
+    const recentTransactions = [...filteredTx]
       .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
       .slice(0, 30);
 
     const categoryMap = new Map();
-    items.forEach(item => {
+    filteredItems.forEach(item => {
       const cat = item.category || '미분류';
       categoryMap.set(cat, (categoryMap.get(cat) || 0) + toNumber(item.quantity));
     });
     const categories = [...categoryMap.entries()].sort((a, b) => b[1] - a[1]);
 
-    const weekData = getPeriodData(transactions, 7);
-    const hasData = totalItems > 0;
+    const weekData = getPeriodData(filteredTx, 7);
+    const hasData = items.length > 0;
     const dateStr = today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
+    // 전월 대비 트렌드
     const thisMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
-    const thisMonthTx = transactions.filter(tx => (tx.date || '').startsWith(thisMonthKey));
-    const prevMonthTx = transactions.filter(tx => (tx.date || '').startsWith(prevMonthKey));
+    const thisMonthTx = filteredTx.filter(tx => (tx.date || '').startsWith(thisMonthKey));
+    const prevMonthTx = filteredTx.filter(tx => (tx.date || '').startsWith(prevMonthKey));
     const thisMonthIn  = sumBy(thisMonthTx.filter(t => t.type === 'in'),  t => toNumber(t.quantity));
     const prevMonthIn  = sumBy(prevMonthTx.filter(t => t.type === 'in'),  t => toNumber(t.quantity));
     const thisMonthOut = sumBy(thisMonthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity));
@@ -192,16 +232,48 @@ export default function HomePage() {
     const inTrendPct  = prevMonthIn  > 0 ? Math.round((thisMonthIn  - prevMonthIn)  / prevMonthIn  * 100) : null;
     const outTrendPct = prevMonthOut > 0 ? Math.round((thisMonthOut - prevMonthOut) / prevMonthOut * 100) : null;
 
+    // Winners: 최근 30일 출고 수량 TOP 5
+    const outQtyMap = {};
+    filteredTx.filter(t => t.type === 'out' && String(t.date || '') >= thirtyDayCutoff).forEach(t => {
+      outQtyMap[t.itemName] = (outQtyMap[t.itemName] || 0) + toNumber(t.quantity);
+    });
+    const winners = Object.entries(outQtyMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, qty]) => ({ name, qty }));
+
+    // Losers: 30일 이상 출고 없는 재고 품목 (금액 높은 순)
+    const losers = filteredItems
+      .filter(item => {
+        if (toNumber(item.quantity) <= 0) return false;
+        return !filteredTx.some(tx =>
+          tx.type === 'out' && tx.itemName === item.itemName && String(tx.date || '') >= thirtyDayCutoff
+        );
+      })
+      .sort((a, b) => getItemSupplyValue(b) - getItemSupplyValue(a))
+      .slice(0, 5);
+
+    // GMROI: 매출 총이익 / 평균 재고 원가 × 100
+    const outTx30 = filteredTx.filter(t => t.type === 'out' && String(t.date || '') >= thirtyDayCutoff);
+    const revenue = sumBy(outTx30, t => toNumber(t.quantity) * toNumber(t.unitPrice || t.price || 0));
+    const cogs    = sumBy(outTx30, t => toNumber(t.quantity) * toNumber(t.unitCost || t.cost || 0));
+    const grossProfit = revenue - cogs;
+    const gmroi = totalSupplyValue > 0 && revenue > 0
+      ? Math.round(grossProfit / totalSupplyValue * 100) / 100
+      : null;
+
     return {
-      items, transactions, safetyStock,
+      items, transactions: filteredTx, safetyStock,
       totalItems, totalSupplyValue,
       lowStockItems, deadStockItems,
       todayInCount, todayOutCount,
       recentTransactions, categories,
+      categoryOptions,
+      winners, losers, gmroi,
       hasData, dateStr, notifications, todayKey,
       inTrendPct, outTrendPct, weekData,
     };
-  }, [state.mappedData, state.transactions, state.safetyStock]);
+  }, [state.mappedData, state.transactions, state.safetyStock, categoryFilter]);
 
   const chartData = useMemo(
     () => getPeriodData(transactions, chartPeriod),
@@ -237,6 +309,8 @@ export default function HomePage() {
 
   const chartTitle = chartPeriod === 7 ? '최근 7일' : chartPeriod === 30 ? '최근 1달' : chartPeriod === 90 ? '최근 3달' : '전체';
 
+  const allTransactions = state.transactions || [];
+
   return (
     <div>
       <div className="page-header">
@@ -244,7 +318,31 @@ export default function HomePage() {
           <h1 className="page-title">대시보드</h1>
           <div className="page-desc">{dateStr}</div>
         </div>
-        <div className="page-actions">
+        <div className="page-actions" style={{ flexWrap: 'wrap', gap: 6 }}>
+          {/* 카테고리 필터 */}
+          {categoryOptions.length > 0 && (
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              style={{
+                padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'var(--bg-card)', color: 'var(--text)', fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              <option value="">전체 카테고리</option>
+              {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          {/* 내보내기 */}
+          {allTransactions.length > 0 && (
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: 12 }}
+              onClick={() => exportCSV(allTransactions)}
+            >
+              내보내기 CSV
+            </button>
+          )}
           {notifications.length > 0 && (
             <button
               type="button"
@@ -284,6 +382,11 @@ export default function HomePage() {
               <div className="db-kpi-icon">💰</div>
               <div className="db-kpi-label">재고 금액</div>
               <div className="db-kpi-value text-success">{formatCurrency(totalSupplyValue)}</div>
+              {gmroi !== null && (
+                <div style={{ fontSize: 11, color: gmroi >= 0 ? 'var(--success)' : 'var(--danger)', marginTop: 2 }}>
+                  GMROI {gmroi >= 0 ? '+' : ''}{gmroi}
+                </div>
+              )}
               <Sparkline data={weekData.map(d => Math.max(0, d.inQty - d.outQty))} color="var(--success)" />
             </div>
             <div className={`db-kpi-card${lowStockItems.length > 0 ? ' db-kpi-danger' : ''}`} onClick={() => navigate('/inventory')} style={{ cursor: 'pointer' }}>
@@ -342,6 +445,81 @@ export default function HomePage() {
               >
                 발주 바로가기 →
               </button>
+            </div>
+          )}
+
+          {/* Winners / Losers */}
+          {(winners.length > 0 || losers.length > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              {/* Winners */}
+              <div className="card" style={{ padding: '14px 16px' }}>
+                <div className="card-title" style={{ marginBottom: 10, fontSize: 13 }}>
+                  🏆 판매 TOP (최근 30일)
+                </div>
+                {winners.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>데이터 없음</div>
+                ) : (
+                  <div>
+                    {winners.map((w, i) => {
+                      const maxQty = winners[0].qty || 1;
+                      const pct = Math.round((w.qty / maxQty) * 100);
+                      return (
+                        <div key={i} style={{ marginBottom: 7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+                              <span style={{ color: 'var(--text-muted)', marginRight: 5 }}>{i + 1}</span>
+                              {w.name}
+                            </span>
+                            <span style={{ color: 'var(--success)', fontWeight: 600, flexShrink: 0 }}>{w.qty.toLocaleString('ko-KR')}개</span>
+                          </div>
+                          <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--success)', borderRadius: 2, transition: 'width 0.3s' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Losers */}
+              <div className="card" style={{ padding: '14px 16px' }}>
+                <div className="card-title" style={{ marginBottom: 10, fontSize: 13 }}>
+                  💤 정체 재고 (30일 미출고)
+                </div>
+                {losers.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>정체 재고 없음</div>
+                ) : (
+                  <div>
+                    {losers.map((item, i) => {
+                      const val = getItemSupplyValue(item);
+                      const maxVal = getItemSupplyValue(losers[0]) || 1;
+                      const pct = Math.round((val / maxVal) * 100);
+                      return (
+                        <div key={i} style={{ marginBottom: 7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
+                              <span style={{ color: 'var(--text-muted)', marginRight: 5 }}>{i + 1}</span>
+                              {item.itemName}
+                            </span>
+                            <span style={{ color: 'var(--warning)', fontWeight: 600, flexShrink: 0 }}>{toNumber(item.quantity).toLocaleString('ko-KR')}개</span>
+                          </div>
+                          <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--warning)', borderRadius: 2, transition: 'width 0.3s' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      style={{ marginTop: 6, fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => navigate('/auto-order')}
+                    >
+                      발주 검토 →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
