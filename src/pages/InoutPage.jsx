@@ -1245,7 +1245,7 @@ export function InoutPage({ mode = 'all' }) {
                         <SortTh sortKey="spec" style={{ color: 'var(--text-muted)' }}>규격</SortTh>
                         <SortTh sortKey="unit" style={{ color: 'var(--text-muted)' }}>단위</SortTh>
                         <SortTh sortKey="quantity" className="text-right">입고수량</SortTh>
-                        <SortTh sortKey="unitPrice" className="text-right">원가</SortTh>
+                        <SortTh sortKey="unitPrice" className="text-right">매입원가</SortTh>
                         <SortTh sortKey="supply" className="text-right">공급가액</SortTh>
                         <SortTh sortKey="vat" className="text-right">부가세</SortTh>
                         <SortTh sortKey="totalPrice" className="text-right">합계금액</SortTh>
