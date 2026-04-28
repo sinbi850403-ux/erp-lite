@@ -15,7 +15,6 @@ import {
 import { enableColumnResize } from '../ux-toolkit.js';
 
 // ── 상수 ────────────────────────────────────────────────────────────────────
-const PAGE_SIZE = 20;
 
 const ALL_FIELDS = [
   { key: 'category',             label: '자산',         numeric: false },
@@ -535,17 +534,14 @@ export default function InventoryPage() {
     ...((savedPrefs.filter) || {}),
   });
   const [sort, setSort]         = useState(savedPrefs.sort || { key: '', direction: '' });
-  const [page, setPage]         = useState(1);
   const [modal, setModal]       = useState(null); // null | { type:'add' } | { type:'edit', idx }
   const [selected, setSelected] = useState(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [colPanel, setColPanel]       = useState(false);
   const [deleting, setDeleting]       = useState(null); // idx or 'bulk'
 
-  // 필터 변경 시 1페이지로 리셋
   const setFilter = useCallback(patch => {
     setFilterRaw(prev => ({ ...prev, ...patch }));
-    setPage(1);
   }, []);
 
   // 외부 드릴다운(DashboardPage 등)에서 검색 필터 주입
@@ -592,15 +588,10 @@ export default function InventoryPage() {
   const filtered = useMemo(() => applyFilters(data, safetyStock, filter), [data, safetyStock, filter]);
   const sorted   = useMemo(() => applySort(filtered, sort), [filtered, sort]);
 
-  // 페이지네이션
-  const totalPages   = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const safePage     = Math.min(page, totalPages);
-  const pageItems    = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  // 컬럼 넓이 수동 조절 (pageItems 선언 이후에 위치해야 TDZ 오류 없음)
+  // 컬럼 넓이 수동 조절
   useEffect(() => {
     if (tableRef.current) enableColumnResize(tableRef.current);
-  }, [pageItems]);
+  }, [sorted]);
 
   // 표시 컬럼
   const activeFields = useMemo(() => getVisibleFields(data, visibleCols), [data, visibleCols]);
@@ -646,11 +637,11 @@ export default function InventoryPage() {
   }
 
   function toggleSelectAll() {
-    const pageIdxs = pageItems.map((_, i) => (safePage - 1) * PAGE_SIZE + i);
-    const allSelected = pageIdxs.every(i => selected.has(i));
+    const allIdxs = sorted.map((_, i) => i);
+    const allSelected = allIdxs.every(i => selected.has(i));
     setSelected(prev => {
       const next = new Set(prev);
-      pageIdxs.forEach(i => allSelected ? next.delete(i) : next.add(i));
+      allIdxs.forEach(i => allSelected ? next.delete(i) : next.add(i));
       return next;
     });
   }
@@ -722,8 +713,7 @@ export default function InventoryPage() {
     );
   }
 
-  const pageIdxs = pageItems.map((_, i) => (safePage - 1) * PAGE_SIZE + i);
-  const allPageSelected = pageIdxs.length > 0 && pageIdxs.every(i => selected.has(i));
+  const allPageSelected = sorted.length > 0 && sorted.every((_, i) => selected.has(i));
 
   return (
     <div>
@@ -891,17 +881,16 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.length === 0 ? (
+              {sorted.length === 0 ? (
                 <tr><td colSpan={activeFields.length + 3} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>검색 결과가 없습니다</td></tr>
-              ) : pageItems.map((row, i) => {
-                const globalIdx = (safePage - 1) * PAGE_SIZE + i;
+              ) : sorted.map((row, i) => {
                 const isLow = safetyStock[row.itemName] != null && toNum(row.quantity) <= safetyStock[row.itemName];
                 return (
                   <tr key={row.itemCode || row.itemName || i} className={isLow ? 'row-warning' : ''}>
                     {canDelete && (
-                      <td><input type="checkbox" checked={selected.has(globalIdx)} onChange={() => toggleSelect(globalIdx)} /></td>
+                      <td><input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)} /></td>
                     )}
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{(safePage - 1) * PAGE_SIZE + i + 1}</td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
                     {activeFields.map(key => {
                       const f = ALL_FIELDS.find(x => x.key === key);
                       const val = formatCell(key, row[key]);
@@ -917,10 +906,10 @@ export default function InventoryPage() {
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {canEdit && (
-                            <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'edit', idx: globalIdx })}>수정</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'edit', idx: i })}>수정</button>
                           )}
                           {canDelete && (
-                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleting(globalIdx)}>삭제</button>
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleting(i)}>삭제</button>
                           )}
                         </div>
                       </td>
@@ -931,19 +920,6 @@ export default function InventoryPage() {
             </tbody>
           </table>
         </div>
-
-        {/* 페이지네이션 */}
-        {totalPages > 1 && (
-          <div className="pagination" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px' }}>
-            <button className="btn btn-ghost btn-sm" disabled={safePage === 1} onClick={() => setPage(1)}>«</button>
-            <button className="btn btn-ghost btn-sm" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>‹</button>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, sorted.length)} / {sorted.length}개
-            </span>
-            <button className="btn btn-ghost btn-sm" disabled={safePage === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
-            <button className="btn btn-ghost btn-sm" disabled={safePage === totalPages} onClick={() => setPage(totalPages)}>»</button>
-          </div>
-        )}
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>

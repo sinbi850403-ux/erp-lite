@@ -11,7 +11,6 @@ import { addTransaction, addTransactionsBulk, deleteTransaction, restoreTransact
 import { enableColumnResize } from '../ux-toolkit.js';
 import { fmtNum as fmt, fmtWon as W } from '../utils/formatters.js';
 
-const PAGE_SIZE = 15;
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -610,7 +609,6 @@ export function InoutPage({ mode = 'all' }) {
   const [monthFilter, setMonthFilter] = useState('');
   const [quick, setQuick] = useState(initialQuick);
   const [sort, setSort] = useState({ key: 'date', dir: 'desc' });
-  const [page, setPage] = useState(1);
 
   // 대시보드 차트 드릴다운: sessionStorage에서 월 필터 읽기
   useEffect(() => {
@@ -697,8 +695,7 @@ export function InoutPage({ mode = 'all' }) {
 
   const handleQuickChange = (val) => {
     setQuick(val);
-    setPage(1);
-    if (!isInMode && !isOutMode) {
+        if (!isInMode && !isOutMode) {
       if (val === 'in') setTypeFilter('in');
       else if (val === 'out') setTypeFilter('out');
       else setTypeFilter('');
@@ -835,9 +832,6 @@ export function InoutPage({ mode = 'all' }) {
     });
   }, [filtered, sort, itemMap, wacMap]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageData = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // 입고 합계 (필터링된 전체 기준)
   const inTotals = useMemo(() => {
@@ -883,13 +877,13 @@ export function InoutPage({ mode = 'all' }) {
   }, [sorted, isOutMode, itemMap, wacMap]);
 
   // ── 선택 ───────────────────────────────────────────────────────────────────
-  const allOnPageSelected = pageData.length > 0 && pageData.every(tx => selectedIds.has(tx.id));
+  const allOnPageSelected = sorted.length > 0 && sorted.every(tx => selectedIds.has(tx.id));
 
   const toggleSelectAll = () => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (allOnPageSelected) pageData.forEach(tx => next.delete(tx.id));
-      else pageData.forEach(tx => next.add(tx.id));
+      if (allOnPageSelected) sorted.forEach(tx => next.delete(tx.id));
+      else sorted.forEach(tx => next.add(tx.id));
       return next;
     });
   };
@@ -995,12 +989,11 @@ export function InoutPage({ mode = 'all' }) {
       if (prev.dir === 'asc') return { key, dir: 'desc' };
       return { key: 'date', dir: 'desc' };
     });
-    setPage(1);
-  };
+      };
 
   useEffect(() => {
     if (tableRef.current) enableColumnResize(tableRef.current);
-  }, [pageData]);
+  }, [sorted]);
 
   // ── 리셋 ───────────────────────────────────────────────────────────────────
   const handleReset = () => {
@@ -1010,8 +1003,7 @@ export function InoutPage({ mode = 'all' }) {
     setDateFilter('');
     setQuick(initialQuick);
     setSort({ key: 'date', dir: 'desc' });
-    setPage(1);
-    showToast('필터와 정렬을 초기화했습니다.', 'info');
+        showToast('필터와 정렬을 초기화했습니다.', 'info');
   };
 
   // ── 배지 렌더 ──────────────────────────────────────────────────────────────
@@ -1105,7 +1097,7 @@ export function InoutPage({ mode = 'all' }) {
              {monthFilter}
             <button
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1 }}
-              onClick={() => { setMonthFilter(''); setPage(1); }}
+              onClick={() => { setMonthFilter(''); }}
             ></button>
           </span>
         </div>
@@ -1118,13 +1110,13 @@ export function InoutPage({ mode = 'all' }) {
           className="search-input"
           placeholder="품목명, 코드, 거래처 검색..."
           value={keyword}
-          onChange={e => { setKeyword(e.target.value); setPage(1); }}
+          onChange={e => { setKeyword(e.target.value); }}
         />
         {!isInMode && !isOutMode && (
           <select
             className="filter-select"
             value={typeFilter}
-            onChange={e => { setTypeFilter(e.target.value); setPage(1); }}
+            onChange={e => { setTypeFilter(e.target.value); }}
           >
             <option value="">전체</option>
             <option value="in">입고만</option>
@@ -1134,7 +1126,7 @@ export function InoutPage({ mode = 'all' }) {
         <select
           className="filter-select"
           value={vendorFilter}
-          onChange={e => { setVendorFilter(e.target.value); setPage(1); }}
+          onChange={e => { setVendorFilter(e.target.value); }}
         >
           <option value="">전체 거래처</option>
           {vendorOptions.map(v => <option key={v} value={v}>{v}</option>)}
@@ -1144,15 +1136,14 @@ export function InoutPage({ mode = 'all' }) {
           className="filter-select"
           style={{ padding: '7px 10px' }}
           value={dateFilter}
-          onChange={e => { setDateFilter(e.target.value); setPage(1); }}
+          onChange={e => { setDateFilter(e.target.value); }}
         />
         <select
           className="filter-select"
           value={`${sort.key}:${sort.dir}`}
           onChange={e => {
             const [key, dir] = e.target.value.split(':');
-            setSort({ key, dir }); setPage(1);
-          }}
+            setSort({ key, dir });           }}
         >
           <option value="date:desc">최신 날짜 순</option>
           <option value="date:asc">오래된 날짜 순</option>
@@ -1270,7 +1261,7 @@ export function InoutPage({ mode = 'all' }) {
                 )}
               </thead>
               <tbody>
-                {pageData.map((tx, i) => {
+                {sorted.map((tx, i) => {
                   const rowNum = i + 1;
                   const qty = parseFloat(tx.quantity) || 0;
                   const itemData = itemMap.get(tx.itemName) || {};
@@ -1411,19 +1402,6 @@ export function InoutPage({ mode = 'all' }) {
           </div>
         )}
 
-        {sorted.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              총 {sorted.length.toLocaleString()}건 ({safePage}/{totalPages} 페이지)
-            </span>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage <= 1} onClick={() => setPage(1)}>«</button>
-              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
-              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>›</button>
-              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>»</button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 모달 */}
