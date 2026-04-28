@@ -66,7 +66,17 @@
       "Bash(grep -i \"claude.md$\")",
       "Bash(grep -i \"^.* claude.md$\" -i)",
       "Bash(git hash-object *)",
-      "Bash(git update-index *)"
+      "Bash(git update-index *)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" log --oneline --since=\"2026-04-28 00:00\" --all)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" diff --stat)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" add supabase/schema.sql supabase/fix-security-perf-2026-04.sql)",
+      "Bash(git -C 'C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108' commit -m ' *)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\" checkout master)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\" merge claude/naughty-leavitt-118108 --no-ff -m \"Merge worktree branch: DB 보안·성능 패치 + 신규 테이블 4개\")",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\" push origin master)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" pull)",
+      "Bash(git -C \"C:\\\\Users\\\\admin\\\\Documents\\\\GitHub\\\\invex\\\\.claude\\\\worktrees\\\\naughty-leavitt-118108\" add .claude/settings.local.json _workspace/)"
     ]
   }
 }
