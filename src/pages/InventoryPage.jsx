@@ -79,8 +79,11 @@ const NUM_KEYS = new Set(['quantity','inQty','outQty']);
 const toNum = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
 const fmt   = v => { const n = Math.round(toNum(v)); return n ? '₩' + n.toLocaleString('ko-KR') : '-'; };
 
+const PERCENT_KEYS = new Set(['profitMargin', 'cogsMargin']);
+
 function formatCell(key, value) {
-  if (value === '' || value == null) return '';
+  const isNumericField = MONEY_KEYS.has(key) || NUM_KEYS.has(key) || PERCENT_KEYS.has(key);
+  if (value === '' || value == null) return isNumericField ? '-' : '';
   if (MONEY_KEYS.has(key)) {
     const n = toNum(value);
     if (!isNaN(n)) {
