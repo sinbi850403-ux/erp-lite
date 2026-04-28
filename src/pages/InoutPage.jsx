@@ -915,7 +915,7 @@ export function InoutPage({ mode = 'all' }) {
         const qty = parseFloat(tx.quantity) || 0;
         const cost = parseFloat(tx.unitPrice) || 0;
         const supply = Math.round(cost * qty);
-        const vat = Math.floor(supply * 0.1);
+        const vat = Math.ceil(supply * 0.1);
         return {
           '자산': it.category || '', '입고일자': tx.date || '',
           '거래처': tx.vendor || '', '상품코드': tx.itemCode || it.itemCode || '',
@@ -932,7 +932,7 @@ export function InoutPage({ mode = 'all' }) {
         const qty = parseFloat(tx.quantity) || 0;
         const cost = parseFloat(tx.unitPrice || it.unitPrice) || 0;
         const supply = Math.round(cost * qty);
-        const vat = Math.floor(supply * 0.1);
+        const vat = Math.ceil(supply * 0.1);
         const salePrice = parseFloat(tx.sellingPrice || it.sellingPrice) || 0;
         const outAmt = Math.round(salePrice * qty);
         const profit = outAmt - supply;
@@ -953,7 +953,7 @@ export function InoutPage({ mode = 'all' }) {
         const qty = parseFloat(tx.quantity) || 0;
         const cost = parseFloat(tx.unitPrice) || 0;
         const supply = Math.round(cost * qty);
-        const vat = Math.floor(supply * 0.1);
+        const vat = tx.type === 'in' ? Math.ceil(supply * 0.1) : Math.floor(supply * 0.1);
         return {
           '구분': tx.type === 'in' ? '입고' : '출고',
           '날짜': tx.date || '', '거래처': tx.vendor || '',
@@ -1287,14 +1287,14 @@ export function InoutPage({ mode = 'all' }) {
                   const itemData = itemMap.get(tx.itemName) || {};
                   const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
                   const supply = Math.round(unitPrice * qty);        // 입고모드: 매입 공급가
-                  const vat = Math.floor(supply * 0.1);
+                  const vat = Math.ceil(supply * 0.1);
                   const totalPrice = supply + vat;
                   const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
                   const outAmt = Math.round(salePrice * qty);
                   // 출고모드 매입 그룹: 가중평균 원가 우선, 없으면 단가 사용
                   const wac = wacMap[tx.itemName] || unitPrice;
                   const wacSupply = Math.round(wac * qty);
-                  const wacVat = Math.floor(wacSupply * 0.1);
+                  const wacVat = Math.ceil(wacSupply * 0.1);
                   const wacTotal = wacSupply + wacVat;
                   const purchaseCost = wacSupply;
                   const profit = outAmt - purchaseCost;
