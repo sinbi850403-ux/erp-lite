@@ -119,7 +119,7 @@ export function renderWeeklyTrendChart(canvasId, weekData, onBarClick) {
         },
         y: {
           beginAtZero: true,
-          ticks: { color: textColor, font: { size: 10 }, stepSize: 1 },
+          ticks: { color: textColor, font: { size: 10 } },
           grid: { color: gridColor },
         },
       },
