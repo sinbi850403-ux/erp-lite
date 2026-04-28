@@ -2509,6 +2509,10 @@ html.dark-mode .report-spotlight-card {
   background: var(--accent-light) !important;
   color: var(--accent);
 }
+.out-col-subheader .sortable-header:hover {
+  background: inherit !important;
+  color: #fff !important;
+}
 
 .sortable-header.is-active {
   color: var(--accent) !important;
