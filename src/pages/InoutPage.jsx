@@ -1201,7 +1201,7 @@ export function InoutPage({ mode = 'all' }) {
           />
         ) : (
           <div className="table-wrapper" style={{ border: 'none' }}>
-            <table className="data-table" ref={tableRef}>
+            <table className="data-table inv-table" ref={tableRef}>
               <thead>
                 {isOutMode ? (
                   <tr>
@@ -1223,7 +1223,7 @@ export function InoutPage({ mode = 'all' }) {
                       { key: 'outTotal',     label: '출고합계' },
                     ].map(({ key, label }) => (
                       <SortTh key={key} sortKey={key} className="text-right" style={{
-                        fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
+                        fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap',
                       }}>{label}</SortTh>
                     ))}
                     <th style={{ textTransform: 'none', fontSize: '13px' }}>관리</th>

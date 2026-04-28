@@ -1516,6 +1516,18 @@ html.dark-mode .acc-item-btn.active {
 .table-wrapper .data-table th:first-child { border-top-left-radius: var(--radius-lg); }
 .table-wrapper .data-table th:last-child { border-top-right-radius: var(--radius-lg); }
 
+/* 재고관리 하위메뉴 — 컬럼 균등 너비 */
+.inv-table {
+  table-layout: fixed;
+}
+.inv-table .col-fill {
+  width: 220px;
+}
+.inv-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* --- 파일 업로드 --- */
 .upload-zone {
   border: 2px dashed var(--border);

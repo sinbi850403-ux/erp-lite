@@ -874,7 +874,7 @@ export default function InventoryPage() {
       {/* 테이블 */}
       <div className="card card-flush">
         <div className="table-wrapper">
-          <table className="data-table" ref={tableRef}>
+          <table className="data-table inv-table" ref={tableRef}>
             <thead>
               <tr>
                 {canDelete && <th style={{ width: 32 }}><input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} /></th>}

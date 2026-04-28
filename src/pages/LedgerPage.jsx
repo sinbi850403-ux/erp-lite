@@ -302,7 +302,7 @@ export default function LedgerPage() {
               </span>
             </div>
             <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-              <table className="data-table">
+              <table className="data-table inv-table">
                 <thead>
                   <tr>
                     <th style={{ width: '40px' }}>#</th>
