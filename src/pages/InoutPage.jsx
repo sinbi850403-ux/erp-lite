@@ -1319,7 +1319,7 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="col-fill"><strong>{tx.itemName || '-'}</strong></td>
                           <td style={{ fontSize: '12px' }}>{spec || '-'}</td>
                           <td style={{ fontSize: '12px' }}>{unit || '-'}</td>
-                          <td className="text-right" style={{ color: '#ef4444', fontWeight: 600 }}>
+                          <td className="text-right" style={{ fontWeight: 600 }}>
                             {qty ? qty.toLocaleString('ko-KR') : '-'}
                           </td>
                           {/* 판매 그룹 */}
@@ -1328,14 +1328,14 @@ export function InoutPage({ mode = 'all' }) {
                           <td className="text-right" style={{ background: 'rgba(37,99,235,0.08)' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)' }}>{wacSupply ? W(wacSupply) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(139,98,20,0.07)', color: '#fff' }}>{wacSupply ? W(wacVat) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(139,98,20,0.07)' }}>{wacSupply ? W(wacVat) : '-'}</td>
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)', fontWeight: 600 }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
                           <td className="text-right" style={{ background: 'rgba(30,122,72,0.12)', fontWeight: profit !== 0 ? 700 : 400 }}>
                             {outAmt ? W(profit) : '-'}
                           </td>
                           <td className="text-right" style={{ background: 'rgba(30,122,72,0.10)' }}>{profitMargin || '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.07)', color: '#fff' }}>{cogsMargin || '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(30,122,72,0.07)' }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
