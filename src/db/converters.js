@@ -1,0 +1,295 @@
+/**
+ * db/converters.js — DB ↔ Store 변환 유틸
+ * DB는 snake_case, 기존 store는 camelCase라서 변환 필요
+ */
+
+import { toNullableNumber, toNullableString } from './core.js';
+
+export function dbItemToStoreItem(dbItem) {
+  return {
+    _id: dbItem.id,
+    itemName: dbItem.item_name,
+    itemCode: dbItem.item_code,
+    category: dbItem.category,
+    quantity: dbItem.quantity,
+    unit: dbItem.unit,
+    unitPrice: dbItem.unit_price,
+    supplyValue: dbItem.supply_value,
+    vat: dbItem.vat,
+    totalPrice: dbItem.total_price,
+    salePrice: dbItem.sale_price,
+    sellingPrice: dbItem.sale_price,    // page-inout.js 호환 별칭
+    warehouse: dbItem.warehouse,
+    location: dbItem.location,
+    vendor: dbItem.vendor,
+    minStock: dbItem.min_stock,
+    expiryDate: dbItem.expiry_date,
+    lotNumber: dbItem.lot_number,
+    memo: dbItem.memo,
+    assetType: dbItem.asset_type,   // 자산 구분
+    spec: dbItem.spec,              // 규격
+    ...(dbItem.extra || {}),
+  };
+}
+
+export function storeItemToDb(storeItem) {
+  const { _id, itemName, itemCode, unitPrice, supplyValue, totalPrice,
+    salePrice, minStock, expiryDate, lotNumber, assetType, spec, ...rest } = storeItem;
+
+  // 알려진 필드와 커스텀 필드 분리
+  const knownKeys = new Set([
+    'category', 'quantity', 'unit', 'warehouse', 'location', 'vendor', 'vat', 'memo',
+  ]);
+  const extra = {};
+  const known = {};
+  Object.entries(rest).forEach(([k, v]) => {
+    if (knownKeys.has(k)) known[k] = v;
+    else extra[k] = v;
+  });
+
+  return {
+    ...((_id !== null && _id !== undefined && String(_id).trim() !== '') ? { id: _id } : {}),
+    item_name: toNullableString(itemName),
+    item_code: toNullableString(itemCode),
+    unit_price: toNullableNumber(unitPrice),
+    supply_value: toNullableNumber(supplyValue),
+    total_price: toNullableNumber(totalPrice),
+    sale_price: toNullableNumber(salePrice),
+    min_stock: toNullableNumber(minStock),
+    expiry_date: toNullableString(expiryDate),
+    lot_number: toNullableString(lotNumber),
+    asset_type: toNullableString(assetType),   // 자산 구분
+    spec: toNullableString(spec),              // 규격
+    extra,
+    ...known,
+  };
+}
+
+export function dbTxToStoreTx(dbTx) {
+  return {
+    id: dbTx.id,
+    type: dbTx.type,
+    itemName: dbTx.item_name,
+    itemCode: dbTx.item_code,                       // 상품코드
+    quantity: dbTx.quantity,
+    unitPrice: dbTx.unit_price,
+    supplyValue: dbTx.supply_value,                 // 공급가액
+    vat: dbTx.vat,                                  // 부가세
+    totalAmount: dbTx.total_amount,                 // 합계금액
+    sellingPrice: dbTx.selling_price,               // 출고단가
+    actualSellingPrice: dbTx.actual_selling_price,  // 실판매가
+    spec: dbTx.spec,                                // 규격
+    unit: dbTx.unit,                                // 단위
+    category: dbTx.category,                        // 자산구분
+    date: dbTx.date,
+    vendor: dbTx.vendor,
+    warehouse: dbTx.warehouse,
+    note: dbTx.note,
+  };
+}
+
+export function dbVendorToStore(dbVendor) {
+  return {
+    _id: dbVendor.id,
+    name: dbVendor.name,
+    type: dbVendor.type,
+    bizNumber: dbVendor.biz_number,
+    ceoName: dbVendor.ceo_name,
+    contactName: dbVendor.contact_name,
+    phone: dbVendor.phone,
+    email: dbVendor.email,
+    address: dbVendor.address,
+    bankInfo: dbVendor.bank_info,
+    memo: dbVendor.memo,
+  };
+}
+
+// ============================================================
+// HR 변환기 (snake_case ↔ camelCase)
+// ============================================================
+export function dbEmployeeToStore(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    empNo: r.emp_no,
+    name: r.name,
+    dept: r.dept,
+    position: r.position,
+    hireDate: r.hire_date,
+    resignDate: r.resign_date,
+    rrnMask: r.rrn_mask,
+    phone: r.phone,
+    email: r.email,
+    address: r.address,
+    bank: r.bank,
+    accountNo: r.account_no,
+    baseSalary: r.base_salary,
+    hourlyWage: r.hourly_wage,
+    employmentType: r.employment_type,
+    insuranceFlags: r.insurance_flags || { np: true, hi: true, ei: true, wc: true },
+    dependents: r.dependents,
+    children: r.children,
+    annualLeaveTotal: r.annual_leave_total,
+    annualLeaveUsed: r.annual_leave_used,
+    status: r.status,
+    memo: r.memo,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function storeEmployeeToDb(e) {
+  const out = {};
+  if (e.id) out.id = e.id;
+  if ('empNo' in e) out.emp_no = e.empNo;
+  if ('name' in e) out.name = e.name;
+  if ('dept' in e) out.dept = e.dept;
+  if ('position' in e) out.position = e.position;
+  if ('hireDate' in e) out.hire_date = e.hireDate;
+  if ('resignDate' in e) out.resign_date = e.resignDate;
+  if ('rrnMask' in e) out.rrn_mask = e.rrnMask;
+  if ('phone' in e) out.phone = e.phone;
+  if ('email' in e) out.email = e.email;
+  if ('address' in e) out.address = e.address;
+  if ('bank' in e) out.bank = e.bank;
+  if ('accountNo' in e) out.account_no = e.accountNo;
+  if ('baseSalary' in e) out.base_salary = e.baseSalary;
+  if ('hourlyWage' in e) out.hourly_wage = e.hourlyWage;
+  if ('employmentType' in e) out.employment_type = e.employmentType;
+  if ('insuranceFlags' in e) out.insurance_flags = e.insuranceFlags;
+  if ('dependents' in e) out.dependents = e.dependents;
+  if ('children' in e) out.children = e.children;
+  if ('annualLeaveTotal' in e) out.annual_leave_total = e.annualLeaveTotal;
+  if ('annualLeaveUsed' in e) out.annual_leave_used = e.annualLeaveUsed;
+  if ('status' in e) out.status = e.status;
+  if ('memo' in e) out.memo = e.memo;
+  return out;
+}
+
+export function dbAttendanceToStore(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    employeeId: r.employee_id,
+    workDate: r.work_date,
+    checkIn: r.check_in,
+    checkOut: r.check_out,
+    breakMin: r.break_min,
+    workMin: r.work_min,
+    overtimeMin: r.overtime_min,
+    nightMin: r.night_min,
+    holidayMin: r.holiday_min,
+    status: r.status,
+    note: r.note,
+    createdAt: r.created_at,
+  };
+}
+
+export function storeAttendanceToDb(a) {
+  const out = {};
+  if (a.id) out.id = a.id;
+  if ('employeeId' in a) out.employee_id = a.employeeId;
+  if ('workDate' in a) out.work_date = a.workDate;
+  if ('checkIn' in a) out.check_in = a.checkIn;
+  if ('checkOut' in a) out.check_out = a.checkOut;
+  if ('breakMin' in a) out.break_min = a.breakMin;
+  if ('workMin' in a) out.work_min = a.workMin;
+  if ('overtimeMin' in a) out.overtime_min = a.overtimeMin;
+  if ('nightMin' in a) out.night_min = a.nightMin;
+  if ('holidayMin' in a) out.holiday_min = a.holidayMin;
+  if ('status' in a) out.status = a.status;
+  if ('note' in a) out.note = a.note;
+  return out;
+}
+
+export function dbPayrollToStore(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    employeeId: r.employee_id,
+    payYear: r.pay_year,
+    payMonth: r.pay_month,
+    base: r.base,
+    allowances: r.allowances || {},
+    overtimePay: r.overtime_pay,
+    nightPay: r.night_pay,
+    holidayPay: r.holiday_pay,
+    gross: r.gross,
+    np: r.np,
+    hi: r.hi,
+    ltc: r.ltc,
+    ei: r.ei,
+    incomeTax: r.income_tax,
+    localTax: r.local_tax,
+    otherDeduct: r.other_deduct || {},
+    totalDeduct: r.total_deduct,
+    net: r.net,
+    status: r.status,
+    paidAt: r.paid_at,
+    confirmedBy: r.confirmed_by,
+    confirmedAt: r.confirmed_at,
+    issueNo: r.issue_no,
+    createdAt: r.created_at,
+  };
+}
+
+export function storePayrollToDb(p) {
+  const out = {};
+  if (p.id) out.id = p.id;
+  if ('employeeId' in p) out.employee_id = p.employeeId;
+  if ('payYear' in p) out.pay_year = p.payYear;
+  if ('payMonth' in p) out.pay_month = p.payMonth;
+  if ('base' in p) out.base = p.base;
+  if ('allowances' in p) out.allowances = p.allowances;
+  if ('overtimePay' in p) out.overtime_pay = p.overtimePay;
+  if ('nightPay' in p) out.night_pay = p.nightPay;
+  if ('holidayPay' in p) out.holiday_pay = p.holidayPay;
+  if ('gross' in p) out.gross = p.gross;
+  if ('np' in p) out.np = p.np;
+  if ('hi' in p) out.hi = p.hi;
+  if ('ltc' in p) out.ltc = p.ltc;
+  if ('ei' in p) out.ei = p.ei;
+  if ('incomeTax' in p) out.income_tax = p.incomeTax;
+  if ('localTax' in p) out.local_tax = p.localTax;
+  if ('otherDeduct' in p) out.other_deduct = p.otherDeduct;
+  if ('totalDeduct' in p) out.total_deduct = p.totalDeduct;
+  if ('net' in p) out.net = p.net;
+  if ('status' in p) out.status = p.status;
+  if ('paidAt' in p) out.paid_at = p.paidAt;
+  if ('confirmedBy' in p) out.confirmed_by = p.confirmedBy;
+  if ('confirmedAt' in p) out.confirmed_at = p.confirmedAt;
+  if ('issueNo' in p) out.issue_no = p.issueNo;
+  return out;
+}
+
+export function dbLeaveToStore(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    employeeId: r.employee_id,
+    leaveType: r.leave_type,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    days: r.days,
+    reason: r.reason,
+    status: r.status,
+    approvedBy: r.approved_by,
+    approvedAt: r.approved_at,
+    createdAt: r.created_at,
+  };
+}
+
+export function storeLeaveToDb(l) {
+  const out = {};
+  if (l.id) out.id = l.id;
+  if ('employeeId' in l) out.employee_id = l.employeeId;
+  if ('leaveType' in l) out.leave_type = l.leaveType;
+  if ('startDate' in l) out.start_date = l.startDate;
+  if ('endDate' in l) out.end_date = l.endDate;
+  if ('days' in l) out.days = l.days;
+  if ('reason' in l) out.reason = l.reason;
+  if ('status' in l) out.status = l.status;
+  if ('approvedBy' in l) out.approved_by = l.approvedBy;
+  if ('approvedAt' in l) out.approved_at = l.approvedAt;
+  return out;
+}
