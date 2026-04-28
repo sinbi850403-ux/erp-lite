@@ -1415,21 +1415,23 @@ html.dark-mode .acc-item-btn.active {
   cursor: col-resize;
   z-index: 2;
   background: transparent;
+  user-select: none;
 }
 .col-resize-handle::after {
   content: '';
   position: absolute;
-  right: 2px;
-  top: 20%;
+  right: 3px;
+  top: 15%;
   width: 2px;
-  height: 60%;
+  height: 70%;
   border-radius: 2px;
-  background: transparent;
-  transition: background 0.15s;
+  background: var(--border);
+  transition: background 0.15s, transform 0.15s;
 }
 .col-resize-handle:hover::after,
 .col-resize-handle:active::after {
-  background: rgba(255,255,255,0.35);
+  background: var(--accent);
+  transform: scaleX(1.5);
 }
 
 .data-table td {

@@ -375,8 +375,7 @@ export default function HomePage() {
     const monthRevenue  = sumBy(monthTx.filter(t => t.type === 'out'), t => toNumber(t.quantity) * toNumber(t.unitPrice || 0));
 
     const recentTransactions = [...filteredTx]
-      .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')))
-      .slice(0, 30);
+      .sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')));
 
     const categoryMap = new Map();
     filteredItems.forEach(item => {
