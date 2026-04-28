@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { initAuth, getCurrentUser, getUserProfileData, logout as authLogout } from '../auth.js';
 import { isSupabaseConfigured } from '../supabase-client.js';
 import { restoreState, setupRealtimeSync, cleanupRealtimeSync } from '../store.js';
@@ -16,6 +16,7 @@ export function AuthProvider({ children }) {
   const [isReady, setIsReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [startPage, setStartPage] = useState('home');
+  const initializingRef = useRef(false);
 
   // 의존성 주입 (plan.js가 auth.js에 의존하지 않도록 역전)
   useEffect(() => {
@@ -24,7 +25,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const initApp = useCallback(async (loggedInUser) => {
-    if (isInitializing) return;
+    if (initializingRef.current) return;
+    initializingRef.current = true;
     setIsInitializing(true);
     try {
       const uid = loggedInUser?.uid || null;
@@ -48,9 +50,10 @@ export function AuthProvider({ children }) {
         }
       }
     } finally {
+      initializingRef.current = false;
       setIsInitializing(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Supabase 미설정 시 자동 로그인
@@ -86,7 +89,7 @@ export function AuthProvider({ children }) {
       }
     });
     return () => clearTimeout(readyFallback);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initApp]);
 
   const logout = useCallback(async () => {
     cleanupRealtimeSync();

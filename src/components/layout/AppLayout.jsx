@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import Sidebar from './Sidebar.jsx';
@@ -107,12 +107,17 @@ export default function AppLayout() {
     });
   };
 
-  // 앱 초기 진입 시 startPage로 이동
+  const hasNavigated = useRef(false);
+
+  // 앱 초기 진입 시 startPage로 이동 — 직접 URL 접근(/inventory 등)은 유지
   useEffect(() => {
-    if (startPage && startPage !== 'home') {
+    if (hasNavigated.current) return;
+    const isRoot = ['/', '/home'].includes(window.location.pathname);
+    if (isRoot && startPage && startPage !== 'home') {
+      hasNavigated.current = true;
       navigate('/' + startPage, { replace: true });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startPage, navigate]);
 
   // 온보딩 체크
   useEffect(() => {
@@ -121,7 +126,7 @@ export default function AppLayout() {
         checkAndShowOnboarding((pageId) => navigate('/' + pageId));
       }, 1000);
     }
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, navigate]);
 
   // 키보드 단축키 (Alt+숫자)
   useEffect(() => {
