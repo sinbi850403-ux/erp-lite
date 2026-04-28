@@ -562,6 +562,22 @@ function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
   );
 }
 
+function SortTh({ sortKey, sort, onSort, children, className = '', rowSpan, colSpan, style = {} }) {
+  const isActive = sort.key === sortKey;
+  const indicator = !isActive ? '↕' : sort.dir === 'asc' ? '↑' : '↓';
+  return (
+    <th
+      rowSpan={rowSpan}
+      colSpan={colSpan}
+      className={`sortable-header ${isActive ? 'is-active' : ''} ${className}`}
+      style={{ cursor: 'pointer', userSelect: 'none', verticalAlign: 'middle', textTransform: 'none', fontSize: '13px', ...style }}
+      onClick={() => onSort(sortKey)}
+    >
+      {children} <span className="sort-indicator" style={{ fontSize: '10px', opacity: 0.6 }}>{indicator}</span>
+    </th>
+  );
+}
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 export function InoutPage({ mode = 'all' }) {
   const [{ transactions, mappedData, vendorMaster }] = useStore(s => ({
@@ -819,7 +835,9 @@ export function InoutPage({ mode = 'all' }) {
     });
   }, [filtered, sort, itemMap, wacMap]);
 
-  const pageData = sorted;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageData = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // 입고 합계 (필터링된 전체 기준)
   const inTotals = useMemo(() => {
@@ -977,22 +995,6 @@ export function InoutPage({ mode = 'all' }) {
       return { key: 'date', dir: 'desc' };
     });
     setPage(1);
-  };
-
-  const SortTh = ({ sortKey, children, className = '', rowSpan, colSpan, style = {} }) => {
-    const isActive = sort.key === sortKey;
-    const indicator = !isActive ? '↕' : sort.dir === 'asc' ? '↑' : '↓';
-    return (
-      <th
-        rowSpan={rowSpan}
-        colSpan={colSpan}
-        className={`sortable-header ${isActive ? 'is-active' : ''} ${className}`}
-        style={{ cursor: 'pointer', userSelect: 'none', verticalAlign: 'middle', textTransform: 'none', fontSize: '13px', ...style }}
-        onClick={() => toggleSort(sortKey)}
-      >
-        {children} <span className="sort-indicator" style={{ fontSize: '10px', opacity: 0.6 }}>{indicator}</span>
-      </th>
-    );
   };
 
   useEffect(() => {
@@ -1209,21 +1211,27 @@ export function InoutPage({ mode = 'all' }) {
                       <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} />
                     </th>
                     <th className="col-num" style={{ textTransform: 'none', fontSize: '13px' }}>#</th>
-                    <SortTh sortKey="category">자산</SortTh>
-                    <SortTh sortKey="date">출고일자</SortTh>
-                    <SortTh sortKey="vendor">거래처</SortTh>
-                    <SortTh sortKey="itemCode">상품코드</SortTh>
-                    <SortTh sortKey="itemName" className="col-fill">품명</SortTh>
-                    <SortTh sortKey="spec">규격</SortTh>
-                    <SortTh sortKey="unit">단위</SortTh>
-                    <SortTh sortKey="quantity" className="text-right">출고수량</SortTh>
+                    <SortTh sortKey="category" sort={sort} onSort={toggleSort}>자산</SortTh>
+                    <SortTh sortKey="date" sort={sort} onSort={toggleSort}>출고일자</SortTh>
+                    <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
+                    <SortTh sortKey="itemCode" sort={sort} onSort={toggleSort}>상품코드</SortTh>
+                    <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품명</SortTh>
+                    <SortTh sortKey="spec" sort={sort} onSort={toggleSort}>규격</SortTh>
+                    <SortTh sortKey="unit" sort={sort} onSort={toggleSort}>단위</SortTh>
+                    <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort}>출고수량</SortTh>
                     {[
-                      { key: 'sellingPrice', label: '출고단가' },
-                      { key: 'outAmt',       label: '판매가'   },
-                      { key: 'outTotal',     label: '출고합계' },
-                    ].map(({ key, label }) => (
-                      <SortTh key={key} sortKey={key} className="text-right" style={{
-                        fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap',
+                      { key: 'sellingPrice', label: '출고단가', cls: 'th-section-out' },
+                      { key: 'outAmt',       label: '판매가',   cls: 'th-section-out' },
+                      { key: 'outTotal',     label: '출고합계', cls: 'th-section-out' },
+                      { key: 'supply',       label: '매입원가', cls: 'th-section-purchase' },
+                      { key: 'vat',          label: '부가세',   cls: 'th-section-purchase' },
+                      { key: 'totalPrice',   label: '공급합계', cls: 'th-section-purchase' },
+                      { key: 'profit',       label: '이익액',   cls: 'th-section-profit' },
+                      { key: 'profitMargin', label: '이익율',   cls: 'th-section-profit' },
+                      { key: 'cogsMargin',   label: '원가율',   cls: 'th-section-profit' },
+                    ].map(({ key, label, cls }) => (
+                      <SortTh key={key} sortKey={key} sort={sort} onSort={toggleSort} className={`text-right ${cls}`} style={{
+                        fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
                       }}>{label}</SortTh>
                     ))}
                     <th style={{ textTransform: 'none', fontSize: '13px' }}>관리</th>
@@ -1234,32 +1242,32 @@ export function InoutPage({ mode = 'all' }) {
                       <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} />
                     </th>
                     <th className="col-num" style={{ textTransform: 'none', fontSize: '13px' }}>#</th>
-                    {!isInMode && !isOutMode && <SortTh sortKey="type">구분</SortTh>}
+                    {!isInMode && !isOutMode && <SortTh sortKey="type" sort={sort} onSort={toggleSort}>구분</SortTh>}
                     {isInMode ? (
                       <>
-                        <SortTh sortKey="category" style={{ color: 'var(--text-muted)' }}>자산</SortTh>
-                        <SortTh sortKey="date">입고일자</SortTh>
-                        <SortTh sortKey="vendor">거래처</SortTh>
-                        <SortTh sortKey="itemCode" style={{ color: 'var(--text-muted)' }}>상품코드</SortTh>
-                        <SortTh sortKey="itemName" className="col-fill">품명</SortTh>
-                        <SortTh sortKey="spec" style={{ color: 'var(--text-muted)' }}>규격</SortTh>
-                        <SortTh sortKey="unit" style={{ color: 'var(--text-muted)' }}>단위</SortTh>
-                        <SortTh sortKey="quantity" className="text-right">입고수량</SortTh>
-                        <SortTh sortKey="unitPrice" className="text-right">매입원가</SortTh>
-                        <SortTh sortKey="supply" className="text-right">공급가액</SortTh>
-                        <SortTh sortKey="vat" className="text-right">부가세</SortTh>
-                        <SortTh sortKey="totalPrice" className="text-right">합계금액</SortTh>
+                        <SortTh sortKey="category" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>자산</SortTh>
+                        <SortTh sortKey="date" sort={sort} onSort={toggleSort}>입고일자</SortTh>
+                        <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
+                        <SortTh sortKey="itemCode" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>상품코드</SortTh>
+                        <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품명</SortTh>
+                        <SortTh sortKey="spec" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>규격</SortTh>
+                        <SortTh sortKey="unit" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>단위</SortTh>
+                        <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort}>입고수량</SortTh>
+                        <SortTh sortKey="unitPrice" className="text-right" sort={sort} onSort={toggleSort}>매입원가</SortTh>
+                        <SortTh sortKey="supply" className="text-right" sort={sort} onSort={toggleSort}>공급가액</SortTh>
+                        <SortTh sortKey="vat" className="text-right" sort={sort} onSort={toggleSort}>부가세</SortTh>
+                        <SortTh sortKey="totalPrice" className="text-right" sort={sort} onSort={toggleSort}>합계금액</SortTh>
                       </>
                     ) : (
                       <>
-                        <SortTh sortKey="date">날짜</SortTh>
-                        <SortTh sortKey="vendor">거래처</SortTh>
-                        <SortTh sortKey="itemName" className="col-fill">품목명</SortTh>
-                        <SortTh sortKey="quantity" className="text-right" style={{ color: 'var(--danger)', fontWeight: 700 }}>수량</SortTh>
-                        <SortTh sortKey="unitPrice" className="text-right">원가</SortTh>
-                        <SortTh sortKey="sellingPrice" className="text-right" style={{ color: 'var(--success)', fontWeight: 700 }}>판매가</SortTh>
-                        <SortTh sortKey="supply" className="text-right" style={{ fontWeight: 700 }}>금액</SortTh>
-                        <SortTh sortKey="note" style={{ color: 'var(--text-muted)' }}>비고</SortTh>
+                        <SortTh sortKey="date" sort={sort} onSort={toggleSort}>날짜</SortTh>
+                        <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
+                        <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품목명</SortTh>
+                        <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort} style={{ color: 'var(--danger)', fontWeight: 700 }}>수량</SortTh>
+                        <SortTh sortKey="unitPrice" className="text-right" sort={sort} onSort={toggleSort}>원가</SortTh>
+                        <SortTh sortKey="sellingPrice" className="text-right" sort={sort} onSort={toggleSort} style={{ color: 'var(--success)', fontWeight: 700 }}>판매가</SortTh>
+                        <SortTh sortKey="supply" className="text-right" sort={sort} onSort={toggleSort} style={{ fontWeight: 700 }}>금액</SortTh>
+                        <SortTh sortKey="note" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>비고</SortTh>
                       </>
                     )}
                     <th style={{ textTransform: 'none', fontSize: '13px' }}>관리</th>
@@ -1409,8 +1417,16 @@ export function InoutPage({ mode = 'all' }) {
         )}
 
         {sorted.length > 0 && (
-          <div style={{ padding: '8px 4px', color: 'var(--text-muted)', fontSize: '13px' }}>
-            총 {sorted.length.toLocaleString()}건
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+              총 {sorted.length.toLocaleString()}건 ({safePage}/{totalPages} 페이지)
+            </span>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage <= 1} onClick={() => setPage(1)}>«</button>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>›</button>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '13px' }} disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>»</button>
+            </div>
           </div>
         )}
       </div>
