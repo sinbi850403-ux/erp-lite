@@ -1303,12 +1303,12 @@ export function InoutPage({ mode = 'all' }) {
                           </td>
                           {/* 판매 그룹 */}
                           <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right" style={{ background: '#eff6ff', color: '#111', fontWeight: 600 }}>{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{outAmt ? W(outAmt) : '-'}</td>
                           <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
                           <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacSupply) : '-'}</td>
                           <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right" style={{ background: '#fffbeb', color: '#111', fontWeight: 600 }}>{wacSupply ? W(wacTotal) : '-'}</td>
+                          <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
                           <td className="text-right" style={{ background: '#f0fdf4', color: '#111', fontWeight: profit !== 0 ? 700 : 400 }}>
                             {outAmt ? W(profit) : '-'}
@@ -1395,12 +1395,12 @@ export function InoutPage({ mode = 'all' }) {
                       <td colSpan={10} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
                         합계 ({sorted.length.toLocaleString()}건)
                       </td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111' }}>-</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111' }}>{W(outTotals.totOutAmt)}</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111' }}>{W(outTotals.totOutTotal)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111' }}>{W(outTotals.totWacSupply)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111' }}>{W(outTotals.totWacVat)}</td>
-                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111' }}>{W(outTotals.totWacTotal)}</td>
+                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>-</td>
+                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutAmt)}</td>
+                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutTotal)}</td>
+                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacSupply)}</td>
+                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacVat)}</td>
+                      <td className="text-right" style={{ ...S, background: '#fffbeb', color: '#111', fontWeight: 400 }}>{W(outTotals.totWacTotal)}</td>
                       <td className="text-right" style={{ ...S, background: '#f0fdf4', color: '#111' }}>
                         {W(outTotals.totProfit)}
                       </td>
