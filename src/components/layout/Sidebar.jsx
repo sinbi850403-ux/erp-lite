@@ -66,6 +66,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'hr-dashboard', label: 'HR 대시보드' },
       { id: 'employees', label: '직원 관리' },
+      { id: 'org-chart', label: '조직도' },
       { id: 'attendance', label: '근태 관리' },
       { id: 'payroll', label: '급여 계산' },
       { id: 'leaves', label: '휴가·연차' },

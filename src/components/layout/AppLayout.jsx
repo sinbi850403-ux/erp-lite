@@ -64,6 +64,7 @@ const REACT_PAGES = {
   pos:             lazy(() => import('../../pages/PosPage.jsx')),
   admin:           lazy(() => import('../../pages/AdminPage.jsx')),
   // 10차 변환 (HR: 직원·근태·급여·휴가·퇴직금·연말정산)
+  'org-chart':     lazy(() => import('../../pages/OrgChartPage.jsx')),
   employees:       lazy(() => import('../../pages/EmployeesPage.jsx')),
   attendance:      lazy(() => import('../../pages/AttendancePage.jsx')),
   payroll:         lazy(() => import('../../pages/PayrollPage.jsx')),
