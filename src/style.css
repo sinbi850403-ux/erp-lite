@@ -1369,12 +1369,15 @@ html.dark-mode .acc-item-btn.active {
   width: 2px;
   height: 60%;
   border-radius: 2px;
-  background: transparent;
+  background: rgba(0,0,0,0.18);
   transition: background 0.15s;
+}
+html.dark-mode .col-resize-handle::after {
+  background: rgba(255,255,255,0.25);
 }
 .col-resize-handle:hover::after,
 .col-resize-handle:active::after {
-  background: rgba(255,255,255,0.35);
+  background: var(--accent) !important;
 }
 
 .data-table td {
@@ -1382,6 +1385,9 @@ html.dark-mode .acc-item-btn.active {
   padding: 6px 10px;
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
 }
 
 .data-table tbody tr {

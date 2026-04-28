@@ -228,6 +228,13 @@ export function renderQuickFilterRow({
 
 export function enableColumnResize(table) {
   if (!table) return;
+  // 현재 렌더링된 너비를 고정한 뒤 fixed layout 전환 → 자유로운 축소 가능
+  if (table.style.tableLayout !== 'fixed') {
+    table.querySelectorAll('thead th').forEach(th => {
+      if (!th.style.width) th.style.width = th.offsetWidth + 'px';
+    });
+    table.style.tableLayout = 'fixed';
+  }
   table.querySelectorAll('th').forEach(th => {
     if (th.querySelector('.col-resize-handle')) return;
     const handle = document.createElement('div');
@@ -238,7 +245,7 @@ export function enableColumnResize(table) {
       const startX = e.pageX;
       const startWidth = th.offsetWidth;
       const onMove = mv => {
-        const newWidth = Math.max(40, startWidth + mv.pageX - startX);
+        const newWidth = Math.max(50, startWidth + mv.pageX - startX);
         th.style.width = newWidth + 'px';
         th.style.minWidth = newWidth + 'px';
       };
