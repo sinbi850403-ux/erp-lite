@@ -1325,19 +1325,19 @@ export function InoutPage({ mode = 'all' }) {
                             {qty ? qty.toLocaleString('ko-KR') : '-'}
                           </td>
                           {/* 판매 그룹 */}
-                          <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{outAmt ? W(outAmt) : '-'}</td>
-                          <td className="text-right" style={{ background: '#eff6ff', color: '#111' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right td-section-out">{salePrice ? W(salePrice) : '-'}</td>
+                          <td className="text-right td-section-out">{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right td-section-out">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
-                          <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacSupply) : '-'}</td>
-                          <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right" style={{ background: '#fffbeb', color: '#111' }}>{wacSupply ? W(wacTotal) : '-'}</td>
+                          <td className="text-right td-section-purchase">{wacSupply ? W(wacSupply) : '-'}</td>
+                          <td className="text-right td-section-purchase">{wacSupply ? W(wacVat) : '-'}</td>
+                          <td className="text-right td-section-purchase">{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
-                          <td className="text-right" style={{ background: '#f0fdf4', color: '#111', fontWeight: profit !== 0 ? 700 : 400 }}>
+                          <td className="text-right td-section-profit" style={{ fontWeight: profit !== 0 ? 700 : 400 }}>
                             {outAmt ? W(profit) : '-'}
                           </td>
-                          <td className="text-right" style={{ background: '#f0fdf4', color: '#111', fontWeight: 700 }}>{profitMargin || '-'}</td>
-                          <td className="text-right" style={{ background: '#f0fdf4', color: '#111', fontWeight: 700 }}>{cogsMargin || '-'}</td>
+                          <td className="text-right td-section-profit" style={{ fontWeight: 700 }}>{profitMargin || '-'}</td>
+                          <td className="text-right td-section-profit" style={{ fontWeight: 700 }}>{cogsMargin || '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>

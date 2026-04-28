@@ -235,10 +235,15 @@ export function enableColumnResize(table) {
     handle.addEventListener('mousedown', e => {
       e.preventDefault();
       e.stopPropagation();
+      if (table.style.tableLayout !== 'fixed') {
+        table.querySelectorAll('th').forEach(t => { t.style.width = t.offsetWidth + 'px'; });
+        table.style.tableLayout = 'fixed';
+        table.classList.add('table-layout-fixed');
+      }
       const startX = e.pageX;
       const startWidth = th.offsetWidth;
       const onMove = mv => {
-        const newWidth = Math.max(40, startWidth + mv.pageX - startX);
+        const newWidth = Math.max(36, startWidth + mv.pageX - startX);
         th.style.width = newWidth + 'px';
         th.style.minWidth = newWidth + 'px';
       };
