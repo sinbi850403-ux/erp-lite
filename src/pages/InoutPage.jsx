@@ -812,7 +812,9 @@ export function InoutPage({ mode = 'all' }) {
     });
   }, [filtered, sort, itemMap, wacMap]);
 
-  const pageData = sorted;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageData = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // 입고 합계 (필터링된 전체 기준)
   const inTotals = useMemo(() => {
@@ -994,6 +996,11 @@ export function InoutPage({ mode = 'all' }) {
       </th>
     );
   };
+
+  // 필터 결과가 줄어서 현재 페이지가 범위 초과하면 마지막 페이지로 보정
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
 
   // 출고 헤더 1행 높이 측정 (2행 sticky top 계산용)
   useEffect(() => {
@@ -1442,8 +1449,33 @@ export function InoutPage({ mode = 'all' }) {
         )}
 
         {sorted.length > 0 && (
-          <div style={{ padding: '8px 4px', color: 'var(--text-muted)', fontSize: '13px' }}>
-            총 {sorted.length.toLocaleString()}건
+          <div style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+              총 {sorted.length.toLocaleString()}건 · {safePage}/{totalPages} 페이지
+            </div>
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setPage(1)} disabled={safePage === 1} style={{ padding: '3px 8px', fontSize: '12px' }}>«</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} style={{ padding: '3px 8px', fontSize: '12px' }}>‹</button>
+                {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                  let p;
+                  if (totalPages <= 7) p = i + 1;
+                  else if (safePage <= 4) p = i + 1;
+                  else if (safePage >= totalPages - 3) p = totalPages - 6 + i;
+                  else p = safePage - 3 + i;
+                  return (
+                    <button
+                      key={p}
+                      className={`btn btn-sm ${safePage === p ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setPage(p)}
+                      style={{ padding: '3px 8px', fontSize: '12px', minWidth: '30px' }}
+                    >{p}</button>
+                  );
+                })}
+                <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} style={{ padding: '3px 8px', fontSize: '12px' }}>›</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setPage(totalPages)} disabled={safePage === totalPages} style={{ padding: '3px 8px', fontSize: '12px' }}>»</button>
+              </div>
+            )}
           </div>
         )}
       </div>
