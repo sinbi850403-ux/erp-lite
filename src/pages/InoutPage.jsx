@@ -1227,7 +1227,7 @@ export function InoutPage({ mode = 'all' }) {
                       ].map(({ key, label, grp }) => {
                         const bg = grp === 'sale' ? '#1e50c8' : grp === 'buy' ? '#7a5510' : '#196840';
                         return (
-                          <SortTh key={key} sortKey={key} className="text-right" style={{
+                          <SortTh key={key} sortKey={key} className="text-right" data-grp={grp} style={{
                             position: 'sticky', top: outRow1H, zIndex: 3,
                             background: bg, color: '#000',
                             fontSize: '12px', fontWeight: 600,
@@ -1324,12 +1324,12 @@ export function InoutPage({ mode = 'all' }) {
                           </td>
                           {/* 판매 그룹 */}
                           <td className="text-right" style={{ background: 'rgba(37,99,235,0.08)' }}>{salePrice ? W(salePrice) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(37,99,235,0.12)', fontWeight: 600 }}>{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(37,99,235,0.12)' }}>{outAmt ? W(outAmt) : '-'}</td>
                           <td className="text-right" style={{ background: 'rgba(37,99,235,0.08)' }}>{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
                           {/* 매입 그룹 */}
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)' }}>{wacSupply ? W(wacSupply) : '-'}</td>
                           <td className="text-right" style={{ background: 'rgba(139,98,20,0.07)' }}>{wacSupply ? W(wacVat) : '-'}</td>
-                          <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)', fontWeight: 600 }}>{wacSupply ? W(wacTotal) : '-'}</td>
+                          <td className="text-right" style={{ background: 'rgba(139,98,20,0.12)' }}>{wacSupply ? W(wacTotal) : '-'}</td>
                           {/* 이익 분석 그룹 */}
                           <td className="text-right" style={{ background: 'rgba(30,122,72,0.12)', fontWeight: 700 }}>
                             {outAmt ? W(profit) : '-'}

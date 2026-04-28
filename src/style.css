@@ -2509,10 +2509,9 @@ html.dark-mode .report-spotlight-card {
   background: var(--accent-light) !important;
   color: var(--accent);
 }
-.out-col-subheader .sortable-header:hover {
-  background: inherit !important;
-  color: #fff !important;
-}
+.out-col-subheader .sortable-header[data-grp="sale"]:hover { background: #1e50c8 !important; color: #000 !important; }
+.out-col-subheader .sortable-header[data-grp="buy"]:hover  { background: #7a5510 !important; color: #000 !important; }
+.out-col-subheader .sortable-header[data-grp="prof"]:hover { background: #196840 !important; color: #000 !important; }
 
 .sortable-header.is-active {
   color: var(--accent) !important;
