@@ -469,19 +469,20 @@ html, body {
 #sidebar.sidebar--collapsed {
   width: 52px;
   min-width: 52px;
+  overflow: hidden;
 }
 #sidebar.sidebar--collapsed .sidebar-logo-text,
 #sidebar.sidebar--collapsed .sidebar-tools,
 #sidebar.sidebar--collapsed .sidebar-divider,
-#sidebar.sidebar--collapsed .snav-section,
-#sidebar.sidebar--collapsed .snav-direct,
+#sidebar.sidebar--collapsed .snav,
 #sidebar.sidebar--collapsed .sidebar-footer {
   opacity: 0;
   pointer-events: none;
 }
 #sidebar.sidebar--collapsed .sidebar-logo {
   justify-content: center;
-  padding: 18px 0;
+  padding: 16px 0;
+  border-bottom: none;
 }
 #main-content.sidebar-collapsed {
   margin-left: 52px;

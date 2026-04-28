@@ -99,6 +99,13 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
   const [notifCount, setNotifCount] = useState(0);
   const [planId, setPlanId] = useState(getCurrentPlan());
   const [fontScale, setFontScale] = useState(parseInt(localStorage.getItem('invex_font_scale') || '0', 10));
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark-mode'));
+
+  useEffect(() => {
+    const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark-mode')));
+    obs.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
 
   const currentPageId = location.pathname.slice(1) || 'home';
 
@@ -142,12 +149,6 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
 
   const handleThemeToggle = useCallback(() => {
     toggleTheme();
-    const isDark = document.documentElement.classList.contains('dark-mode');
-    const btn = document.getElementById('btn-theme-toggle');
-    if (btn) {
-      btn.textContent = isDark ? '' : '';
-      btn.setAttribute('title', isDark ? '라이트 모드' : '다크 모드');
-    }
   }, []);
 
   const handleFontToggle = useCallback(() => {
@@ -189,7 +190,7 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
           알림
           {notifCount > 0 && <span className="notif-dot" id="notif-dot" />}
         </button>
-        <button className="btn-tool" id="btn-theme-toggle" title="테마 전환" onClick={handleThemeToggle}>테마</button>
+        <button className="btn-tool" id="btn-theme-toggle" title={isDark ? '라이트 모드' : '다크 모드'} onClick={handleThemeToggle}>{isDark ? '☀' : '☾'}</button>
         <button className="btn-tool" id="btn-font-toggle" title="글자 크기" onClick={handleFontToggle}>
           {fontScale === 0 ? '가' : fontScale === 1 ? '가+' : '가++'}
         </button>
