@@ -26,7 +26,10 @@ export function useStore(selector) {
   const [value, setValue] = useState(() => select(getState()));
 
   useEffect(() => {
-    const handler = () => setValue(select(getState()));
+    const handler = () => {
+      const next = select(getState());
+      setValue(prev => Object.is(prev, next) ? prev : next);
+    };
     window.addEventListener('invex:store-updated', handler);
     return () => window.removeEventListener('invex:store-updated', handler);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
