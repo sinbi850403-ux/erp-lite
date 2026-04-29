@@ -58,13 +58,31 @@ export const items = {
 
   /**
    * 품목 생성
-   * @param {Object} item - { item_name, category, quantity, ... }
+   * @param {Object} item - { itemName, category, unit, ... } (camelCase)
    */
   async create(item) {
     const userId = await getUserId();
+    // camelCase → snake_case 변환
+    const row = {
+      user_id: userId,
+      item_name: toNullableString(item?.itemName),
+      item_code: toNullableString(item?.itemCode),
+      category: toNullableString(item?.category),
+      unit: toNullableString(item?.unit || 'EA'),
+      unit_price: toNullableNumber(item?.unitPrice),
+      sale_price: toNullableNumber(item?.salePrice),
+      spec: toNullableString(item?.spec),
+      color: toNullableString(item?.color),
+      warehouse: toNullableString(item?.warehouse),
+      warehouse_id: item?.warehouseId,
+      location: toNullableString(item?.location),
+      vendor: toNullableString(item?.vendor),
+      min_stock: toNullableNumber(item?.minStock),
+      memo: toNullableString(item?.memo),
+    };
     // warehouse_id FK: fix-security-perf-2026-04.sql V008-ext 적용 후 활성화
     const { data, error } = await withDbTimeout(
-      supabase.from('items').insert({ ...item, user_id: userId }).select().single(),
+      supabase.from('items').insert(row).select().single(),
       '품목 생성'
     );
     handleError(error, '품목 생성');
