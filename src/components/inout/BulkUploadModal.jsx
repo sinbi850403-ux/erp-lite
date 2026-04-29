@@ -22,14 +22,14 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     let rows, sheetName, fileName;
     if (modeDefault === 'out') {
       rows = [
-        ['자산', '출고일자', '거래처', '상품코드', '품명', '규격', '단위', '출고수량', '출고단가', '비고'],
-        ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 10, 1500000, ''],
+        ['자산', '출고일자', '거래처', '상품코드', '품명', '색상', '규격', '단위', '출고수량', '출고단가', '비고'],
+        ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 10, 1500000, ''],
       ];
       sheetName = '출고_양식'; fileName = '출고_일괄등록_양식';
     } else {
       rows = [
-        ['자산', '입고일자', '거래처', '상품코드', '품명', '규격', '단위', '입고수량', '매입원가', '비고'],
-        ['전자기기', today, '(주)삼성전자', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 100, 1200000, ''],
+        ['자산', '입고일자', '거래처', '상품코드', '품명', '색상', '규격', '단위', '입고수량', '매입원가', '비고'],
+        ['전자기기', today, '(주)삼성전자', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 100, 1200000, ''],
       ];
       sheetName = '입고_양식'; fileName = '입고_일괄등록_양식';
     }
@@ -77,7 +77,7 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     addTransactionsBulk(previewRows.map(r => ({
       type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
       quantity: r.quantity, unitPrice: r.unitPrice, sellingPrice: r.sellingPrice,
-      date: r.date, note: r.note, spec: r.spec, unit: r.unit, category: r.category,
+      date: r.date, note: r.note, spec: r.spec, unit: r.unit, color: r.color, category: r.category,
     })));
     const inCount = previewRows.filter(r => r.type === 'in').length;
     const outCount = previewRows.filter(r => r.type === 'out').length;
