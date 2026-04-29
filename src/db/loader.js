@@ -11,21 +11,22 @@ import { getUserId } from './core.js';
 import { items } from './items.js';
 import { transactions } from './transactions.js';
 import { vendors } from './vendors.js';
-import { transfers, stocktakes } from './inventory.js';
+import { transfers, stocktakes, itemStocks, safetyStocks } from './inventory.js';
 import { auditLogs, accountEntries, purchaseOrders, posSales } from './accounts.js';
 import { settings, customFields } from './settings.js';
-import { dbItemToStoreItem, dbTxToStoreTx, dbVendorToStore } from './converters.js';
+import { dbItemToStoreItem, dbTxToStoreTx, dbVendorToStore, dbTransferToStore } from './converters.js';
+import { enrichItemsWithQty } from '../domain/inventoryStockCalc.js';
 
 // ============================================================
 // 전체 데이터 로드 (초기화용) — store.js 호환
 // ============================================================
 export async function loadAllData() {
-  const labels = ['items', 'transactions', 'vendors', 'transfers', 'stocktakes',
-    'auditLogs', 'accountEntries', 'purchaseOrders', 'posSales', 'customFields', 'settings'];
+  const labels = [
+    'items', 'transactions', 'vendors', 'transfers', 'stocktakes',
+    'auditLogs', 'accountEntries', 'purchaseOrders', 'posSales',
+    'customFields', 'settings', 'itemStocks', 'safetyStocks',
+  ];
 
-  // Supabase PostgREST 기본 상한(1000행) 해제
-  // — limit(N) 미지정 시 1000건에서 잘려 데이터 누락이 발생하는 것을 방지
-  // — 품목·트랜잭션이 수만 건이어도 전부 로드 (성능 이슈가 생기면 페이지네이션으로 전환)
   const ALL_ROWS = { limit: 1_000_000 };
 
   const results = await Promise.allSettled([
@@ -40,6 +41,8 @@ export async function loadAllData() {
     posSales.list({ limit: 1000 }),
     customFields.list(),
     settings.getAll(),
+    itemStocks.listAll(),
+    safetyStocks.list(),
   ]);
   const pick = (idx, fallback) => {
     const r = results[idx];
@@ -48,42 +51,50 @@ export async function loadAllData() {
     return fallback;
   };
 
-  const itemsData = pick(0, []);
-  const txData = pick(1, []);
-  const vendorsData = pick(2, []);
-  const transfersData = pick(3, []);
-  const stocktakeData = pick(4, []);
-  const auditData = pick(5, []);
-  const accountData = pick(6, []);
-  const orderData = pick(7, []);
-  const posData = pick(8, []);
-  const fieldData = pick(9, []);
-  const settingsData = pick(10, {});
+  const itemsData      = pick(0,  []);
+  const txData         = pick(1,  []);
+  const vendorsData    = pick(2,  []);
+  const transfersData  = pick(3,  []);
+  const stocktakeData  = pick(4,  []);
+  const auditData      = pick(5,  []);
+  const accountData    = pick(6,  []);
+  const orderData      = pick(7,  []);
+  const posData        = pick(8,  []);
+  const fieldData      = pick(9,  []);
+  const settingsData   = pick(10, {});
+  const itemStocksData = pick(11, []);
+  const safetyStocksData = pick(12, []);
 
-  // 기존 store.js의 state 형태로 변환
-  // 왜 이렇게? → 60개 페이지 파일이 getState()를 쓰고 있어서
-  // 한번에 전부 바꾸기보다 점진적으로 전환하기 위해
+  // 기존 store.js 호환 — 점진적 전환 유지
+  const mappedData = itemsData.map(dbItemToStoreItem);
+
+  // itemStocks 기반으로 quantity 채우기 (단일 진실 공급원)
+  const enrichedMappedData = enrichItemsWithQty(mappedData, itemStocksData);
+
   return {
-    mappedData: itemsData.map(dbItemToStoreItem),
-    transactions: txData.map(dbTxToStoreTx),
-    vendorMaster: vendorsData.map(dbVendorToStore),
-    transfers: transfersData,
+    mappedData:       enrichedMappedData,
+    transactions:     txData.map(dbTxToStoreTx),
+    vendorMaster:     vendorsData.map(dbVendorToStore),
+    transfers:        transfersData.map ? transfersData.map(dbTransferToStore) : transfersData,
     stocktakeHistory: stocktakeData,
-    auditLogs: auditData,
-    accountEntries: accountData,
-    purchaseOrders: orderData,
-    posData: posData,
-    customFields: fieldData,
+    auditLogs:        auditData,
+    accountEntries:   accountData,
+    purchaseOrders:   orderData,
+    posData:          posData,
+    customFields:     fieldData,
+    // 신규: 창고별 현재고 + 안전재고 (정규화 테이블)
+    itemStocks:       itemStocksData,
+    safetyStocks:     safetyStocksData,
     // 설정값
-    safetyStock: settingsData.safetyStock || {},
-    beginnerMode: settingsData.beginnerMode ?? true,
-    dashboardMode: settingsData.dashboardMode || 'executive',
-    visibleColumns: settingsData.visibleColumns || null,
+    safetyStock:      settingsData.safetyStock || {},
+    beginnerMode:     settingsData.beginnerMode ?? true,
+    dashboardMode:    settingsData.dashboardMode || 'executive',
+    visibleColumns:   settingsData.visibleColumns || null,
     inventoryViewPrefs: settingsData.inventoryViewPrefs || {},
-    inoutViewPrefs: settingsData.inoutViewPrefs || {},
-    tableSortPrefs: settingsData.tableSortPrefs || {},
-    costMethod: settingsData.costMethod || 'weighted-avg',
-    currency: settingsData.currency || { code: 'KRW', symbol: '₩', rate: 1 },
+    inoutViewPrefs:   settingsData.inoutViewPrefs || {},
+    tableSortPrefs:   settingsData.tableSortPrefs || {},
+    costMethod:       settingsData.costMethod || 'weighted-avg',
+    currency:         settingsData.currency || { code: 'KRW', symbol: '₩', rate: 1 },
   };
 }
 

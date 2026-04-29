@@ -18,6 +18,7 @@ const CHART_CATEGORY_ID = 'home-chart-category';
 export default function HomePage() {
   const navigate = useNavigate();
   const [state] = useStore();
+  const itemStocks = useStore(s => s.itemStocks || []);
 
   const [chartPeriod,    setChartPeriod]    = useState(() => loadLS('invex:home-period', 7));
   const [txFilter,       setTxFilter]       = useState('all');
@@ -111,8 +112,9 @@ export default function HomePage() {
       transactions: state.transactions || [],
       safetyStock:  state.safetyStock  || {},
       categoryFilter,
+      itemStocks,
     }),
-    [state.mappedData, state.transactions, state.safetyStock, categoryFilter]
+    [state.mappedData, state.transactions, state.safetyStock, categoryFilter, itemStocks]
   );
 
   const notifications = useMemo(() => getNotifications(), []);

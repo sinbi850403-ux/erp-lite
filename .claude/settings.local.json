@@ -82,7 +82,10 @@
       "Bash(awk '{print $5, $9}')",
       "Bash(sort -t'/' -k3)",
       "Bash(grep -r \"from.*router'\" src/ --include=\"*.jsx\" --include=\"*.tsx\" --include=\"*.js\" -l)",
-      "Bash(grep -r \"import.*router\\\\.js\" src/ -l)"
+      "Bash(grep -r \"import.*router\\\\.js\" src/ -l)",
+      "Bash(grep -r \"fmtWon\\\\|formatters\" src/utils/ --include=\"*.js\" -l)",
+      "Bash(ls src/utils/)",
+      "Bash(git merge *)"
     ]
   }
 }

@@ -15,9 +15,12 @@ import { computeData, getVisibleFields, applyFilters, applySort } from '../domai
 import { ItemModal } from '../components/inventory/ItemModal.jsx';
 import { ColumnPanel } from '../components/inventory/ColumnPanel.jsx';
 
+import { enrichItemsWithQty } from '../domain/inventoryStockCalc.js';
+
 export default function InventoryPage() {
   const navigate = useNavigate();
   const [state, setState] = useStore();
+  const itemStocks = useStore(s => s.itemStocks || []);
 
   const canEdit   = canAction('item:edit');
   const canDelete = canAction('item:delete');
@@ -74,7 +77,8 @@ export default function InventoryPage() {
   const safetyStock  = state.safetyStock  || {};
   const visibleCols  = state.visibleColumns;
 
-  const data     = useMemo(() => computeData(rawData, transactions), [rawData, transactions]);
+  const enrichedData = useMemo(() => enrichItemsWithQty(rawData, itemStocks), [rawData, itemStocks]);
+  const data     = useMemo(() => computeData(enrichedData, transactions), [enrichedData, transactions]);
   const filtered = useMemo(() => applyFilters(data, safetyStock, filter), [data, safetyStock, filter]);
   const sorted   = useMemo(() => applySort(filtered, sort), [filtered, sort]);
 

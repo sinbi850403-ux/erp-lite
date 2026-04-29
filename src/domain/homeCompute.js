@@ -43,10 +43,12 @@ export function formatCurrency(value) {
   if (n <= 0) return '-';
   return `₩${Math.round(n).toLocaleString('ko-KR')}`;
 }
-export function getItemSupplyValue(item) {
+export function getItemSupplyValue(item, itemStocks) {
   const supplyValue = toNumber(item.supplyValue);
   if (supplyValue > 0) return supplyValue;
-  return toNumber(item.quantity) * toNumber(item.unitPrice || item.unitCost);
+  if (!itemStocks) return 0;
+  const qty = itemStocks.reduce((sum, s) => s.itemId === (item._id || item.id) ? sum + toNumber(s.quantity) : sum, 0);
+  return qty * toNumber(item.unitPrice || item.unitCost);
 }
 
 export function loadLS(key, fallback) {
@@ -137,10 +139,12 @@ export function exportCSV(transactions) {
   URL.revokeObjectURL(url);
 }
 
-export function computeHomeDashboard({ items, transactions, safetyStock, categoryFilter }) {
+export function computeHomeDashboard({ items, transactions, safetyStock, categoryFilter, itemStocks = [] }) {
   const today  = new Date();
   const todayKey = toDateKey(today);
   const thirtyDayCutoff = toDateKey(addDays(today, -30));
+
+  const getItemQty = (itemId) => itemStocks.reduce((sum, s) => s.itemId === itemId ? sum + toNumber(s.quantity) : sum, 0);
 
   const categoryOptions = [...new Set(items.map(i => i.category).filter(Boolean))].sort();
   const filteredItems = categoryFilter ? items.filter(item => item.category === categoryFilter) : items;
@@ -148,14 +152,14 @@ export function computeHomeDashboard({ items, transactions, safetyStock, categor
   const filteredTx    = itemNameSet ? transactions.filter(tx => itemNameSet.has(tx.itemName)) : transactions;
 
   const totalItems       = filteredItems.length;
-  const totalSupplyValue = sumBy(filteredItems, getItemSupplyValue);
+  const totalSupplyValue = sumBy(filteredItems, item => getItemSupplyValue(item, itemStocks));
 
   const lowStockItems = filteredItems.filter(item => {
     const minimum = toNumber(safetyStock[item.itemName]);
-    return minimum > 0 && toNumber(item.quantity) <= minimum;
+    return minimum > 0 && getItemQty(item._id || item.id) <= minimum;
   });
   const deadStockItems = filteredItems.filter(item => {
-    if (toNumber(item.quantity) <= 0) return false;
+    if (getItemQty(item._id || item.id) <= 0) return false;
     return !filteredTx.some(tx =>
       tx.type === 'out' && tx.itemName === item.itemName && String(tx.date || '') >= thirtyDayCutoff
     );
@@ -181,7 +185,7 @@ export function computeHomeDashboard({ items, transactions, safetyStock, categor
   const categoryMap = new Map();
   filteredItems.forEach(item => {
     const cat = item.category || '미분류';
-    categoryMap.set(cat, (categoryMap.get(cat) || 0) + toNumber(item.quantity));
+    categoryMap.set(cat, (categoryMap.get(cat) || 0) + getItemQty(item._id || item.id));
   });
   const categories = [...categoryMap.entries()].sort((a, b) => b[1] - a[1]);
 
@@ -204,12 +208,12 @@ export function computeHomeDashboard({ items, transactions, safetyStock, categor
 
   const losers = filteredItems
     .filter(item => {
-      if (toNumber(item.quantity) <= 0) return false;
+      if (getItemQty(item._id || item.id) <= 0) return false;
       return !filteredTx.some(tx =>
         tx.type === 'out' && tx.itemName === item.itemName && String(tx.date || '') >= thirtyDayCutoff
       );
     })
-    .sort((a, b) => getItemSupplyValue(b) - getItemSupplyValue(a))
+    .sort((a, b) => getItemSupplyValue(b, itemStocks) - getItemSupplyValue(a, itemStocks))
     .slice(0, 5);
 
   const outTx30     = filteredTx.filter(t => t.type === 'out' && String(t.date || '') >= thirtyDayCutoff);

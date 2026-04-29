@@ -1,628 +1,1052 @@
-# 데이터 모델 설계 문서 — INVEX ERP-Lite
-
-> 분석 기준일: 2026-04-28
-> 분석 대상: `supabase/schema.sql` (762줄), `supabase/fix-profiles-rls-hr.sql`
-
----
+# 데이터 모델 설계 문서 — INVEX 재고관리 모듈 재설계
 
 ## 설계 개요
 
-- **DBMS**: PostgreSQL (Supabase 호스팅)
-- **정규화 수준**: 대체로 2NF~3NF, 일부 의도적 비정규화(TEXT 외래키)
-- **테이블 수**: 18개 (재고/거래 12 + HR 5 + 팀 워크스페이스 1)
-- **멀티테넌트 격리**: 모든 테이블 `user_id UUID FK + RLS`
-- **핵심 액세스 패턴**:
-  - 품목 목록 조회 (창고/카테고리 필터)
-  - 입출고 이력 조회 (날짜 범위 + 타입 필터)
-  - 월별 급여 집계 (직원별)
-  - 안전재고 이하 품목 알림
+- **DBMS**: Supabase PostgreSQL 15.x (Managed)
+- **정규화 수준**: 3NF (+ 전략적 비정규화 2개소)
+- **핵심 테이블 수**: 기존 5개 재설계 대상 -> 신규 3개 (item_stocks, safety_stocks 신설, stocktake_items 컬럼 보강) + 기존 4개 변경
+- **RLS**: 모든 테이블 `auth.uid() = user_id` 정책 적용
+
+### 핵심 액세스 패턴
+
+| # | 패턴 | 빈도 | 비고 |
+|---|------|------|------|
+| P1 | 품목별 현재고 조회 (대시보드) | 매우 높음 | SoT 방안 결정의 핵심 |
+| P2 | 창고별 재고 집계 | 높음 | 다창고 지원 |
+| P3 | 수불대장 조회 (기간/품목 필터) | 높음 | 거래처/단가/금액 포함 |
+| P4 | 실사 차이 분석 (품목별 시스템/실사 비교) | 중간 | JSONB 분리 필요 |
+| P5 | 안전재고 미달 알람 | 중간 | FK 기반 비교 |
+| P6 | 품목명 변경 후 이력 연속성 보장 | 낮음 | item_id FK가 해결 |
 
 ---
 
-## ERD (Mermaid)
+## 1. 재고수량 SoT 방안 평가 및 결정
 
-```mermaid
-erDiagram
-    auth_users ||--|| profiles : "1:1 (trigger auto-create)"
-    profiles ||--o{ items : "1:N user_id"
-    profiles ||--o{ transactions : "1:N user_id"
-    profiles ||--o{ vendors : "1:N user_id"
-    profiles ||--o{ transfers : "1:N user_id"
-    profiles ||--o{ stocktakes : "1:N user_id"
-    profiles ||--o{ audit_logs : "1:N user_id"
-    profiles ||--o{ account_entries : "1:N user_id"
-    profiles ||--o{ purchase_orders : "1:N user_id"
-    profiles ||--o{ pos_sales : "1:N user_id"
-    profiles ||--o{ custom_fields : "1:N user_id"
-    profiles ||--o{ user_settings : "1:N user_id (PK)"
-    profiles ||--o{ employees : "1:N user_id"
-    profiles ||--o{ salary_items : "1:N user_id"
-    profiles ||--|{ team_workspaces : "1:1 owner_id (TEXT)"
+### 방안별 비교
 
-    items ||--o{ transactions : "1:N item_id (nullable)"
+| 기준 | 방안A: 집계 뷰 | 방안B: item_stocks 캐시 | 방안C: items.quantity + 트리거 |
+|------|--------------|------------------------|-------------------------------|
+| 정확성 | 항상 정확 (SUM 계산) | 트리거 정상 시 정확 | 트리거 정상 시 정확 |
+| 조회 성능 | 느림 (full-scan 위험) | 빠름 (캐시 테이블 직접 조회) | 빠름 (기존 컬럼 유지) |
+| Supabase 트리거 지원 | 불필요 | 필요 (지원됨) | 필요 (지원됨) |
+| 창고별 분리 | 가능 (WHERE 추가) | 자연스럽게 분리 | 불가능 (items는 1행=1품목) |
+| sync 오류 내성 | 완전 내성 (계산 기반) | 트리거가 DB 내에서 처리 | 동일 문제 재발 위험 |
+| 스키마 단순성 | 단순 | 복잡 (테이블 추가) | 단순 (기존 유지) |
+| 복구 용이성 | 항상 정확, 복구 불필요 | 재계산 함수로 복구 가능 | 재계산 함수로 복구 가능 |
 
-    employees ||--o{ attendance : "1:N employee_id"
-    employees ||--o{ payrolls : "1:N employee_id"
-    employees ||--o{ leaves : "1:N employee_id"
+### 결정: 방안B — item_stocks 캐시 테이블 + DB 트리거
 
-    items {
-        UUID id PK
-        UUID user_id FK
-        TEXT item_name
-        TEXT item_code
-        TEXT category
-        NUMERIC quantity
-        NUMERIC unit_price
-        TEXT warehouse "(비정규화 — 창고 마스터 없음)"
-        TEXT vendor "(비정규화 — vendors 테이블 미연결)"
-        TEXT expiry_date "(TEXT — DATE 아님)"
-        JSONB extra
-    }
+**근거:**
 
-    transactions {
-        UUID id PK
-        UUID user_id FK
-        UUID item_id FK_nullable
-        TEXT item_name "(비정규화)"
-        TEXT date "(TEXT — DATE 아님)"
-        TEXT vendor "(비정규화 — FK 없음)"
-        TEXT warehouse "(비정규화)"
-        NUMERIC quantity
-        NUMERIC unit_price
-    }
+1. **창고별 분리가 핵심 요구사항**: `item_stocks(item_id, warehouse_id)` 복합 PK로 품목+창고 조합을 자연스럽게 관리. 방안C는 `items` 1행에 창고별 수량을 담을 수 없어 구조적으로 부적합.
 
-    vendors {
-        UUID id PK
-        UUID user_id FK
-        TEXT name
-        TEXT type
-        TEXT biz_number
-    }
+2. **트리거는 DB 내에서 실행**: 기존 문제(Supabase JS SDK sync 실패시 0 저장)는 앱 레이어 sync에 의존했기 때문에 발생. DB 트리거는 SDK와 무관하게 `INSERT/UPDATE/DELETE on transactions` 시 DB 내부에서 실행되므로 동일 문제가 재발하지 않음.
 
-    purchase_orders {
-        UUID id PK
-        UUID user_id FK
-        TEXT vendor "(TEXT — FK 없음)"
-        JSONB items "(품목 라인 JSONB)"
-        TEXT order_date "(TEXT — DATE 아님)"
-        TEXT expected_date "(TEXT — DATE 아님)"
-        TEXT status
-    }
+3. **조회 성능**: 수천 건 품목 * 다창고 환경에서 매 조회마다 `SUM(transactions)` 계산(방안A)은 트랜잭션이 누적될수록 느려짐. 방안B는 O(1) 단순 조회.
 
-    employees {
-        UUID id PK
-        UUID user_id FK
-        TEXT emp_no
-        TEXT name
-        TEXT dept "(부서 마스터 없음)"
-        DATE hire_date
-        BYTEA rrn_enc
-        TEXT rrn_mask
-        NUMERIC base_salary
-        JSONB insurance_flags
-        INTEGER dependents
-    }
+4. **정합성 복구 수단 확보**: `fn_recalculate_item_stocks()` 함수를 별도 제공해 불일치 시 전체 재계산 가능.
 
-    payrolls {
-        UUID id PK
-        UUID user_id FK
-        UUID employee_id FK
-        INT pay_year
-        INT pay_month
-        NUMERIC gross
-        JSONB allowances
-        JSONB other_deduct
-        NUMERIC net
-        TEXT status
-        UUID confirmed_by "(profiles FK 없음)"
-    }
-
-    leaves {
-        UUID id PK
-        UUID user_id FK
-        UUID employee_id FK
-        TEXT leave_type
-        DATE start_date
-        DATE end_date
-        NUMERIC days
-        TEXT status
-        UUID approved_by "(profiles FK 없음)"
-    }
-
-    team_workspaces {
-        TEXT id PK "(UUID 아닌 TEXT)"
-        TEXT owner_id "(TEXT — UUID FK 아님)"
-        JSONB members "(멤버 목록 비정규화)"
-    }
-```
+**허용된 비정규화**: `item_stocks.quantity`는 `transactions` 합산값의 사본임. 이는 성능과 창고별 분리를 위한 의도적 비정규화이며, 트리거로 동기화한다.
 
 ---
 
-## 테이블별 정규화 평가
+## 2. ERD (텍스트 형식)
 
-| 테이블 | 정규화 수준 | 비고 |
-|--------|-----------|------|
-| profiles | 2NF — 부분 함수 종속 없음, 단 `subscription JSONB`·`payment_history JSONB` 반복그룹 | 결제 이력은 별도 테이블 권장 |
-| items | 2NF — `warehouse TEXT`·`vendor TEXT`가 문자열로 비정규화 | 의도적 비정규화, 창고 마스터 없음 |
-| transactions | 2NF — `item_name`, `vendor`, `warehouse` 중복 저장. `item_id` FK는 nullable | 이력성 데이터로 일부 비정규화 정당 |
-| vendors | 3NF — 정상 | 양호 |
-| transfers | 2NF — `from_warehouse`, `to_warehouse`, `item_name` 모두 TEXT. 날짜 `date TEXT` | 창고/품목 FK 없음 |
-| stocktakes | 1NF 경계 — `details JSONB` 배열에 품목별 실사 데이터가 비구조화 저장 | 실사 라인 별도 테이블 권장 |
-| audit_logs | 3NF — 정상. `detail TEXT`에 자유 텍스트 | 양호 |
-| account_entries | 2NF — `vendor TEXT`로 FK 없음 | vendors 외래키 추가 권장 |
-| purchase_orders | 1NF 경계 — `items JSONB` 배열에 발주 라인 비구조화. `vendor TEXT` | 발주 라인 별도 테이블 필요 |
-| pos_sales | 3NF — 정상 (분석용 집계 데이터) | 양호 |
-| custom_fields | 3NF — 정상 | 양호 |
-| user_settings | 3NF — key-value 의도적 설계 | 양호 |
-| employees | 2NF — `dept TEXT`(부서 마스터 없음), `allowances JSONB`(schema.sql 버전에만 존재, fix-hr.sql과 불일치) | 부서 테이블 권장 |
-| attendance | 3NF — 정상. 중복 인덱스 존재(idx_att_month vs idx_att_emp_month) | 인덱스 정리 권장 |
-| payrolls | 2NF — `confirmed_by UUID` 가 profiles FK 없음. schema.sql과 fix-hr.sql 컬럼 불일치(`base` vs `base_salary` 등) | 두 파일 간 스키마 충돌 주의 |
-| leaves | 2NF — `approved_by UUID` FK 없음. fix-hr.sql에서 `start_date`·`end_date` NOT NULL 추가됨 | 두 파일 간 차이 존재 |
-| salary_items | 3NF — 정상. fix-hr.sql이 `code` NOT NULL, `formula TEXT` 컬럼 추가 | fix-hr.sql이 schema.sql보다 명세 우수 |
-| team_workspaces | 1NF 경계 — `members JSONB`에 멤버 목록 비구조화. `id`·`owner_id`가 TEXT(UUID 아님) | 심각한 설계 문제 |
+```
+[profiles] 1──N [warehouses]
+     │
+     1──N [items] ──────────────────────────── N──1 [warehouses]
+              │                                          │
+              │                                [item_stocks]
+              │                               (item_id + warehouse_id = PK)
+              │                                : 품목별 창고별 현재고 캐시
+              │
+              1──N [transactions] ─── N──1 [vendors]
+              │        : item_id FK (NOT NULL, 전환 완료 후)
+              │        : warehouse_id FK
+              │
+              1──N [transfers]
+              │        : item_id FK (NOT NULL, 전환 완료 후)
+              │        : from_warehouse_id / to_warehouse_id FK
+              │
+              1──N [safety_stocks]
+              │        : item_id FK (NOT NULL)
+              │        : warehouse_id FK (NULL 허용 -- 전체 창고 대상)
+              │
+[stocktakes] 1──N [stocktake_items]
+                      : item_id FK
+                      : warehouse_id FK
+```
+
+### 핵심 FK 관계 요약
+
+| FK 컬럼 | 참조 | NULL 허용 | 비고 |
+|---------|------|-----------|------|
+| transactions.item_id | items.id | 전환 기간 YES, 완료 후 NO | |
+| transactions.warehouse_id | warehouses.id | YES | 창고 미지정 허용 |
+| transfers.item_id | items.id | 전환 기간 YES, 완료 후 NO | |
+| transfers.from_warehouse_id | warehouses.id | 전환 기간 YES, 완료 후 NO | |
+| transfers.to_warehouse_id | warehouses.id | 전환 기간 YES, 완료 후 NO | |
+| item_stocks.item_id | items.id | NO | PK 구성 |
+| item_stocks.warehouse_id | warehouses.id | NO | PK 구성 |
+| safety_stocks.item_id | items.id | NO | |
+| safety_stocks.warehouse_id | warehouses.id | YES | NULL=모든 창고 통합 |
+| stocktake_items.item_id | items.id | YES | 미등록 품목 실사 허용 |
+| stocktake_items.warehouse_id | warehouses.id | YES | |
 
 ---
 
-## 문제점 분류
+## 3. 테이블 상세
 
-### 필수 수정 (데이터 정합성·운영 위험)
+### 3.1 warehouses (창고 마스터)
 
-**[1] schema.sql vs fix-profiles-rls-hr.sql 스키마 충돌**
+> 기존 schema.sql 섹션 18에 정의됨. 변경 없음. 재고 모듈과의 연결 명확화.
 
-두 파일이 동일 테이블(employees, payrolls 등)을 다르게 정의합니다. 프로덕션에 어느 버전이 적용되었는지 불명확합니다.
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| name | VARCHAR(100) | NO | - | 창고명 |
+| code | VARCHAR(20) | YES | - | 창고 코드 |
+| address | TEXT | YES | - | 주소 |
+| manager | VARCHAR(100) | YES | - | 담당자 |
+| memo | TEXT | YES | - | 비고 |
+| is_active | BOOLEAN | NO | true | 활성 여부 |
+| created_at | TIMESTAMPTZ | NO | now() | |
+| updated_at | TIMESTAMPTZ | NO | now() | |
 
-| 테이블 | schema.sql | fix-hr.sql |
-|--------|-----------|------------|
-| employees | `phone`, `email`, `address`, `memo`, `status`, `annual_leave_total`/`annual_leave_used` 있음 | 없음. 대신 `allowances JSONB` 있음 |
-| payrolls | `base`, `gross` | `base_salary`, `gross_pay` |
-| payrolls | `other_deduct JSONB` | `deductions JSONB` + `other_deduct JSONB` (중복) |
-| leaves | start_date/end_date nullable | NOT NULL |
-| salary_items | `taxable`, `active` | `is_taxable`, `is_active`, `formula` |
+**인덱스**: (user_id)
+**제약**: UNIQUE(user_id, name)
 
-권고: `schema.sql`을 단일 소스로 통합하고 fix-hr.sql의 개선 사항을 병합합니다.
+---
 
-**[2] team_workspaces — id·owner_id가 TEXT (UUID 타입 불일치)**
+### 3.2 items (품목 마스터) — 기존 + 컬럼 추가
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| item_name | VARCHAR(200) | NO | - | 품목명 |
+| item_code | VARCHAR(50) | YES | - | 품목 코드 |
+| category | VARCHAR(100) | YES | - | 분류 |
+| unit | VARCHAR(20) | NO | 'EA' | 단위 |
+| unit_price | NUMERIC(15,2) | NO | 0 | 매입 단가 |
+| sale_price | NUMERIC(15,2) | NO | 0 | 판매 단가 |
+| supply_value | NUMERIC(15,2) | NO | 0 | 공급가 |
+| vat | NUMERIC(15,2) | NO | 0 | 부가세 |
+| spec | TEXT | YES | - | 규격 |
+| color | VARCHAR(50) | YES | - | 색상 |
+| warehouse_id | UUID | YES | - | FK -> warehouses.id (기본창고) |
+| warehouse | VARCHAR(100) | YES | - | 레거시 텍스트 (전환 기간 유지) |
+| min_stock | NUMERIC(10,2) | YES | - | 최소재고 (DEPRECATED -> safety_stocks 전환 후) |
+| expiry_date | TEXT | YES | - | 유통기한 텍스트 (레거시) |
+| expiry_date_d | DATE | YES | - | 유통기한 DATE |
+| lot_number | VARCHAR(100) | YES | - | 로트번호 |
+| asset_type | VARCHAR(50) | YES | - | 자산구분 |
+| memo | TEXT | YES | - | 비고 |
+| extra | JSONB | NO | '{}' | 커스텀 필드 |
+| quantity | NUMERIC(15,4) | NO | 0 | 레거시 캐시 (item_stocks 전환 후 deprecated) |
+| created_at | TIMESTAMPTZ | NO | now() | |
+| updated_at | TIMESTAMPTZ | NO | now() | |
+
+**인덱스**: (user_id), (user_id, category), (user_id, item_name), (user_id, warehouse_id)
+**제약**: UNIQUE(user_id, item_name)
+**비고**: `quantity` 컬럼은 item_stocks 전환 완료 후 deprecated 처리. 하위 호환을 위해 현재 유지.
+
+---
+
+### 3.3 item_stocks (창고별 현재고 캐시) — 신규
+
+> 방안B의 핵심 테이블. transactions INSERT/UPDATE/DELETE 시 트리거로 자동 갱신.
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| item_id | UUID | NO | - | PK 구성, FK -> items.id |
+| warehouse_id | UUID | NO | - | PK 구성, FK -> warehouses.id |
+| user_id | UUID | NO | - | RLS용, FK -> profiles.id |
+| quantity | NUMERIC(15,4) | NO | 0 | 현재고 (트리거 자동갱신) |
+| last_updated_at | TIMESTAMPTZ | NO | now() | 최종 갱신 시각 |
+
+**PK**: (item_id, warehouse_id)
+**인덱스**: (user_id, item_id), (user_id, warehouse_id)
+**RLS**: auth.uid() = user_id
+
+---
+
+### 3.4 transactions (입출고 이력) — 기존 + FK 추가
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| type | VARCHAR(10) | NO | - | CHECK: in/out/loss/adjust |
+| item_id | UUID | YES->NO | - | FK -> items.id (전환 기간 YES, 완료 후 NO) |
+| item_name | VARCHAR(200) | NO | - | 비정규화 사본 (수불대장 당시 품목명 보존) |
+| item_code | VARCHAR(50) | YES | - | 품목코드 사본 |
+| quantity | NUMERIC(15,4) | NO | - | 수량 |
+| unit_price | NUMERIC(15,2) | NO | 0 | 매입/원가 단가 |
+| selling_price | NUMERIC(15,2) | NO | 0 | 판매 단가 |
+| actual_selling_price | NUMERIC(15,2) | NO | 0 | 실제 판매가 (할인 반영) |
+| supply_value | NUMERIC(15,2) | NO | 0 | 공급가 |
+| vat | NUMERIC(15,2) | NO | 0 | 부가세 |
+| total_amount | NUMERIC(15,2) | NO | 0 | 합계 금액 |
+| date | TEXT | YES | - | 레거시 날짜 텍스트 |
+| txn_date | DATE | YES | - | DATE 타입 날짜 (인덱스 대상) |
+| vendor | VARCHAR(200) | YES | - | 거래처명 텍스트 (비정규화, 수불대장용) |
+| vendor_id | UUID | YES | - | FK -> vendors.id |
+| warehouse | VARCHAR(100) | YES | - | 레거시 창고 텍스트 |
+| warehouse_id | UUID | YES | - | FK -> warehouses.id (신규 추가) |
+| spec | TEXT | YES | - | 규격 |
+| color | VARCHAR(50) | YES | - | 색상 |
+| unit | VARCHAR(20) | YES | - | 단위 |
+| category | VARCHAR(100) | YES | - | 분류 |
+| note | TEXT | YES | - | 비고 |
+| created_at | TIMESTAMPTZ | NO | now() | |
+
+**인덱스**: (user_id), (user_id, txn_date DESC), (user_id, type, date DESC), (item_id) WHERE item_id IS NOT NULL, (warehouse_id) WHERE warehouse_id IS NOT NULL
+**비고**: `item_name`과 `vendor`는 수불대장 출력 시 품목명/거래처명 변경 이력과 무관하게 당시 데이터를 보존하기 위한 의도적 비정규화. INSERT 후 변경 불가로 운영.
+
+---
+
+### 3.5 transfers (창고 이동) — 기존 + FK 추가
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| item_id | UUID | YES->NO | - | FK -> items.id |
+| item_name | VARCHAR(200) | NO | - | 비정규화 사본 |
+| from_warehouse_id | UUID | YES->NO | - | FK -> warehouses.id |
+| to_warehouse_id | UUID | YES->NO | - | FK -> warehouses.id |
+| from_warehouse | VARCHAR(100) | YES | - | 레거시 텍스트 |
+| to_warehouse | VARCHAR(100) | YES | - | 레거시 텍스트 |
+| quantity | NUMERIC(15,4) | NO | - | 이동 수량 |
+| date | TEXT | YES | - | 레거시 날짜 |
+| date_d | DATE | YES | - | DATE 타입 |
+| note | TEXT | YES | - | 비고 |
+| created_at | TIMESTAMPTZ | NO | now() | |
+
+**인덱스**: (user_id), (user_id, date_d DESC), (item_id) WHERE item_id IS NOT NULL
+
+---
+
+### 3.6 stocktakes (재고 실사 헤더) — 기존 + 컬럼 보강
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| date | TEXT | YES | - | 실사 날짜 (레거시) |
+| date_d | DATE | YES | - | DATE 타입 |
+| inspector | VARCHAR(100) | YES | - | 실사 담당자 |
+| adjust_count | INTEGER | NO | 0 | 조정 품목 수 |
+| total_items | INTEGER | NO | 0 | 총 실사 품목 수 |
+| details | JSONB | YES | '[]' | 레거시 (신규 입력은 stocktake_items 사용) |
+| status | VARCHAR(20) | NO | 'draft' | draft/confirmed |
+| created_at | TIMESTAMPTZ | NO | now() | |
+
+---
+
+### 3.7 stocktake_items (실사 품목 라인) — 기존 + 컬럼 보강
+
+> 기존 schema.sql 섹션 20에 이미 정의됨. warehouse_id, unit_price 컬럼 추가.
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| stocktake_id | UUID | NO | - | FK -> stocktakes.id |
+| item_id | UUID | YES | - | FK -> items.id (미등록 품목 허용) |
+| item_name | VARCHAR(200) | NO | - | 비정규화 사본 |
+| warehouse_id | UUID | YES | - | FK -> warehouses.id (신규 추가) |
+| system_qty | NUMERIC(15,4) | NO | 0 | 시스템 현재고 (item_stocks 기준) |
+| actual_qty | NUMERIC(15,4) | NO | 0 | 실사 수량 |
+| diff_qty | NUMERIC(15,4) | YES | GENERATED | actual_qty - system_qty (STORED) |
+| unit_price | NUMERIC(15,2) | NO | 0 | 단가 (차이금액 계산용, 신규 추가) |
+| note | TEXT | YES | - | 비고 |
+
+**인덱스**: (stocktake_id), (item_id) WHERE item_id IS NOT NULL
+
+---
+
+### 3.8 safety_stocks (안전재고) — 신규
+
+> 기존 user_settings.key='safetyStock' JSONB를 정규화된 테이블로 분리.
+
+| 컬럼 | 타입 | NULL | 기본값 | 설명 |
+|------|------|------|--------|------|
+| id | UUID | NO | gen_random_uuid() | PK |
+| user_id | UUID | NO | - | FK -> profiles.id |
+| item_id | UUID | NO | - | FK -> items.id |
+| warehouse_id | UUID | YES | NULL | FK -> warehouses.id (NULL=전체 창고 통합) |
+| min_qty | NUMERIC(15,4) | NO | 0 | 안전재고 수량 |
+| created_at | TIMESTAMPTZ | NO | now() | |
+| updated_at | TIMESTAMPTZ | NO | now() | |
+
+**인덱스**: (user_id, item_id), (item_id, warehouse_id)
+**제약**: UNIQUE NULLS NOT DISTINCT (user_id, item_id, warehouse_id) — PG15, warehouse_id NULL 포함 유니크 보장
+**RLS**: auth.uid() = user_id
+
+---
+
+## 4. 관계 매트릭스
+
+| 소스 | 대상 | 관계 | FK 위치 | ON DELETE | 비고 |
+|------|------|------|---------|-----------|------|
+| profiles | warehouses | 1:N | warehouses.user_id | CASCADE | |
+| profiles | items | 1:N | items.user_id | CASCADE | |
+| profiles | item_stocks | 1:N | item_stocks.user_id | CASCADE | RLS용 |
+| profiles | transactions | 1:N | transactions.user_id | CASCADE | |
+| profiles | transfers | 1:N | transfers.user_id | CASCADE | |
+| profiles | safety_stocks | 1:N | safety_stocks.user_id | CASCADE | |
+| items | item_stocks | 1:N | item_stocks.item_id | CASCADE | 품목 삭제 시 재고도 삭제 |
+| items | transactions | 1:N | transactions.item_id | SET NULL | 이력 보존, item_name 유지 |
+| items | transfers | 1:N | transfers.item_id | SET NULL | |
+| items | safety_stocks | 1:N | safety_stocks.item_id | CASCADE | |
+| items | stocktake_items | 1:N | stocktake_items.item_id | SET NULL | 미등록 품목 허용 |
+| warehouses | item_stocks | 1:N | item_stocks.warehouse_id | RESTRICT | 재고 있는 창고 삭제 방지 |
+| warehouses | transactions | 1:N | transactions.warehouse_id | SET NULL | |
+| warehouses | transfers (from) | 1:N | transfers.from_warehouse_id | RESTRICT | 이동 이력 있으면 삭제 방지 |
+| warehouses | transfers (to) | 1:N | transfers.to_warehouse_id | RESTRICT | |
+| warehouses | safety_stocks | 1:N | safety_stocks.warehouse_id | CASCADE | |
+| stocktakes | stocktake_items | 1:N | stocktake_items.stocktake_id | CASCADE | |
+| vendors | transactions | 1:N | transactions.vendor_id | SET NULL | |
+
+---
+
+## 5. 비정규화 결정
+
+| 위치 | 비정규화 내용 | 이유 | 동기화 방법 |
+|------|-------------|------|-----------|
+| item_stocks.quantity | transactions SUM 캐시 | 창고별 현재고 O(1) 조회, 다창고 지원 | DB 트리거 (fn_update_item_stock) |
+| transactions.item_name | items.item_name 사본 | 수불대장: 품목명 변경 이력과 무관하게 당시 데이터 보존 | INSERT 시 고정, 이후 변경 금지 |
+| transactions.vendor | vendors.name 사본 | 거래처명 변경 이력 보존, 수불대장 정확성 | INSERT 시 고정 |
+| transfers.item_name | items.item_name 사본 | 이동 이력 보존 | INSERT 시 고정 |
+| stocktake_items.item_name | items.item_name 사본 | 실사 시점 품목명 보존 | INSERT 시 고정 |
+
+---
+
+## 6. 전체 DDL
+
+### 6.1 item_stocks 테이블 (신규)
 
 ```sql
--- 현재 (문제)
-id TEXT PRIMARY KEY
-owner_id TEXT NOT NULL
-
--- 수정 필요
-id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
-```
-
-현재 구조는 `auth.uid()::text = owner_id` 비교로 우회하고 있으나, 조인 성능과 FK 무결성이 손상됩니다.
-
-**[3] team_workspaces.members — JSONB 비정규화로 동시성 문제**
-
-members JSONB 배열에 멤버 정보 전체를 저장합니다. RPC(workspace_add_member 등)로 원자성을 확보했으나, 멤버 수 증가 시 JSONB 전체 재기록이 발생하고 멤버 개별 쿼리(특정 멤버 상태 조회)가 비효율적입니다.
-
-```sql
--- 권장 구조: workspace_members 별도 테이블
-CREATE TABLE workspace_members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID NOT NULL REFERENCES team_workspaces(id) ON DELETE CASCADE,
-  member_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  role TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('viewer','staff','manager','admin')),
-  status TEXT NOT NULL DEFAULT '초대중' CHECK (status IN ('초대중','active','rejected')),
-  invited_at TIMESTAMPTZ DEFAULT now(),
-  joined_at TIMESTAMPTZ,
-  UNIQUE(workspace_id, member_id)
+CREATE TABLE IF NOT EXISTS item_stocks (
+  item_id          UUID         NOT NULL REFERENCES items(id)      ON DELETE CASCADE,
+  warehouse_id     UUID         NOT NULL REFERENCES warehouses(id)  ON DELETE RESTRICT,
+  user_id          UUID         NOT NULL REFERENCES profiles(id)    ON DELETE CASCADE,
+  quantity         NUMERIC(15,4) NOT NULL DEFAULT 0,
+  last_updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  PRIMARY KEY (item_id, warehouse_id)
 );
+
+ALTER TABLE item_stocks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_stocks_all" ON item_stocks FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_item_stocks_user_item ON item_stocks(user_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_item_stocks_user_wh   ON item_stocks(user_id, warehouse_id);
+-- 재고 소진 알람용 부분 인덱스
+CREATE INDEX IF NOT EXISTS idx_item_stocks_zero
+  ON item_stocks(user_id, item_id)
+  WHERE quantity <= 0;
 ```
 
-**[4] purchase_orders.items — JSONB 발주 라인**
-
-발주 라인이 JSONB 배열로 저장되어 다음이 불가합니다.
-- 특정 품목의 발주 이력 조회 (`WHERE items @> ...` GIN 인덱스 없이 불가)
-- 발주서↔입고 트랜잭션 연결 (어느 입고가 어느 발주에서 왔는지 추적 불가)
+### 6.2 safety_stocks 테이블 (신규)
 
 ```sql
--- 권장: 발주 라인 정규화
-CREATE TABLE purchase_order_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
-  item_id UUID REFERENCES items(id) ON DELETE SET NULL,
-  item_name TEXT NOT NULL,
-  quantity NUMERIC NOT NULL DEFAULT 0,
-  unit_price NUMERIC DEFAULT 0,
-  received_qty NUMERIC DEFAULT 0,  -- 실제 입고 수량 (발주 대비 입고 추적)
-  note TEXT
+CREATE TABLE IF NOT EXISTS safety_stocks (
+  id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID          NOT NULL REFERENCES profiles(id)    ON DELETE CASCADE,
+  item_id      UUID          NOT NULL REFERENCES items(id)       ON DELETE CASCADE,
+  warehouse_id UUID          REFERENCES warehouses(id)           ON DELETE CASCADE,
+  min_qty      NUMERIC(15,4) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  -- PG15: warehouse_id NULL 포함 유니크 보장
+  CONSTRAINT uq_safety_stock UNIQUE NULLS NOT DISTINCT (user_id, item_id, warehouse_id)
 );
-CREATE INDEX idx_poi_order ON purchase_order_items(order_id);
-CREATE INDEX idx_poi_item ON purchase_order_items(item_id);
+
+ALTER TABLE safety_stocks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "safety_stocks_all" ON safety_stocks FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_safety_stocks_user_item ON safety_stocks(user_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_safety_stocks_item_wh   ON safety_stocks(item_id, warehouse_id);
+
+-- updated_at 자동 갱신 (기존 update_updated_at 함수 재사용)
+CREATE TRIGGER set_updated_at
+  BEFORE UPDATE ON safety_stocks
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
 
-**[5] stocktakes.details — JSONB 실사 라인**
+### 6.3 transactions 변경 (FK 추가 + 백필)
 
 ```sql
--- 권장: 실사 라인 정규화
-CREATE TABLE stocktake_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  stocktake_id UUID NOT NULL REFERENCES stocktakes(id) ON DELETE CASCADE,
-  item_id UUID REFERENCES items(id) ON DELETE SET NULL,
-  item_name TEXT NOT NULL,
-  system_qty NUMERIC DEFAULT 0,   -- 시스템 재고
-  actual_qty NUMERIC DEFAULT 0,   -- 실사 수량
-  diff_qty NUMERIC GENERATED ALWAYS AS (actual_qty - system_qty) STORED,
-  note TEXT
-);
-```
-
-**[6] 날짜 컬럼 TEXT 타입 다수**
-
-| 테이블 | 컬럼 | 현재 타입 | 문제 |
-|--------|------|---------|------|
-| transactions | date | TEXT | 날짜 범위 쿼리 문자열 비교 → 인덱스 비효율 |
-| transfers | date | TEXT | 동상 |
-| account_entries | due_date, paid_date | TEXT | 만기일 계산, 연체 조회 불가 |
-| purchase_orders | order_date, expected_date | TEXT | 납기 계산 불가 |
-| items | expiry_date | TEXT | 유통기한 임박 알림 날짜 비교 불가 |
-| pos_sales | sale_date | TEXT | 날짜 집계 비효율 |
-
-```sql
--- 권장 마이그레이션 예시 (transactions)
+-- warehouse_id FK 추가
 ALTER TABLE transactions
-  ADD COLUMN txn_date DATE;
-UPDATE transactions
-  SET txn_date = txn_date::DATE
-  WHERE date ~ '^\d{4}-\d{2}-\d{2}$';
--- 데이터 확인 후 date 컬럼 삭제 및 txn_date → date 리네임
+  ADD COLUMN IF NOT EXISTS warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
+
+-- vendor_id FK (이미 없는 경우)
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS vendor_id UUID REFERENCES vendors(id) ON DELETE SET NULL;
+
+-- 백필: warehouse 텍스트 -> warehouse_id
+UPDATE transactions t
+   SET warehouse_id = w.id
+  FROM warehouses w
+ WHERE w.user_id = t.user_id
+   AND w.name    = t.warehouse
+   AND t.warehouse_id IS NULL
+   AND t.warehouse IS NOT NULL;
+
+-- 백필: vendor 텍스트 -> vendor_id
+UPDATE transactions t
+   SET vendor_id = v.id
+  FROM vendors v
+ WHERE v.user_id = t.user_id
+   AND v.name    = t.vendor
+   AND t.vendor_id IS NULL
+   AND t.vendor IS NOT NULL;
+
+-- 인덱스 추가
+CREATE INDEX IF NOT EXISTS idx_tx_warehouse_id
+  ON transactions(user_id, warehouse_id, txn_date DESC)
+  WHERE warehouse_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tx_vendor_id
+  ON transactions(vendor_id)
+  WHERE vendor_id IS NOT NULL;
 ```
 
-**[7] payrolls.confirmed_by / leaves.approved_by — FK 없는 UUID 참조**
+### 6.4 transfers 변경 (FK 추가 + 백필)
 
 ```sql
--- 현재 (무결성 없음)
-confirmed_by UUID
-approved_by UUID
+-- item_id FK (nullable, 전환 후 NOT NULL)
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS item_id UUID REFERENCES items(id) ON DELETE SET NULL;
 
--- 수정
-confirmed_by UUID REFERENCES profiles(id) ON DELETE SET NULL
-approved_by UUID REFERENCES profiles(id) ON DELETE SET NULL
+-- 창고 FK
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS from_warehouse_id UUID REFERENCES warehouses(id) ON DELETE RESTRICT;
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS to_warehouse_id   UUID REFERENCES warehouses(id) ON DELETE RESTRICT;
+
+-- 백필: item_name -> item_id
+UPDATE transfers tr
+   SET item_id = i.id
+  FROM items i
+ WHERE i.user_id  = tr.user_id
+   AND i.item_name = tr.item_name
+   AND tr.item_id IS NULL;
+
+-- 백필: warehouse 텍스트 -> warehouse_id
+UPDATE transfers tr
+   SET from_warehouse_id = w.id
+  FROM warehouses w
+ WHERE w.user_id = tr.user_id
+   AND w.name    = tr.from_warehouse
+   AND tr.from_warehouse_id IS NULL;
+
+UPDATE transfers tr
+   SET to_warehouse_id = w.id
+  FROM warehouses w
+ WHERE w.user_id = tr.user_id
+   AND w.name    = tr.to_warehouse
+   AND tr.to_warehouse_id IS NULL;
+
+-- 인덱스
+CREATE INDEX IF NOT EXISTS idx_transfers_item_id ON transfers(item_id) WHERE item_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_transfers_from_wh ON transfers(from_warehouse_id) WHERE from_warehouse_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_transfers_to_wh   ON transfers(to_warehouse_id)   WHERE to_warehouse_id IS NOT NULL;
+```
+
+### 6.5 stocktake_items 컬럼 보강
+
+```sql
+-- warehouse_id 추가 (창고별 실사)
+ALTER TABLE stocktake_items
+  ADD COLUMN IF NOT EXISTS warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
+
+-- unit_price 추가 (차이금액 계산용)
+ALTER TABLE stocktake_items
+  ADD COLUMN IF NOT EXISTS unit_price NUMERIC(15,2) NOT NULL DEFAULT 0;
+
+-- 인덱스
+CREATE INDEX IF NOT EXISTS idx_sti_warehouse
+  ON stocktake_items(warehouse_id) WHERE warehouse_id IS NOT NULL;
+```
+
+### 6.6 트리거 — item_stocks 자동 갱신 (transactions)
+
+```sql
+CREATE OR REPLACE FUNCTION fn_update_item_stock()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_item_id      UUID;
+  v_warehouse_id UUID;
+  v_user_id      UUID;
+  v_delta        NUMERIC;
+  v_sign         NUMERIC;
+BEGIN
+  -- INSERT/UPDATE: NEW 기준, DELETE: OLD 기준
+  IF TG_OP = 'DELETE' THEN
+    v_item_id      := OLD.item_id;
+    v_warehouse_id := OLD.warehouse_id;
+    v_user_id      := OLD.user_id;
+  ELSE
+    v_item_id      := NEW.item_id;
+    v_warehouse_id := NEW.warehouse_id;
+    v_user_id      := NEW.user_id;
+  END IF;
+
+  -- item_id 또는 warehouse_id가 NULL이면 item_stocks 갱신 불가 -> 건너뜀
+  IF v_item_id IS NULL OR v_warehouse_id IS NULL THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    -- adjust 타입: 현재고를 NEW.quantity로 직접 설정
+    IF NEW.type = 'adjust' THEN
+      INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+        VALUES (v_item_id, v_warehouse_id, v_user_id, NEW.quantity, now())
+        ON CONFLICT (item_id, warehouse_id)
+        DO UPDATE SET quantity = NEW.quantity, last_updated_at = now();
+      RETURN NEW;
+    END IF;
+
+    v_delta := CASE NEW.type
+      WHEN 'in'   THEN  NEW.quantity
+      WHEN 'out'  THEN -NEW.quantity
+      WHEN 'loss' THEN -NEW.quantity
+      ELSE 0
+    END;
+
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (v_item_id, v_warehouse_id, v_user_id, GREATEST(0, v_delta), now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = GREATEST(0, item_stocks.quantity + v_delta),
+        last_updated_at = now();
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    -- item_id/warehouse_id 변경 시: OLD 위치 역전 + NEW 위치 적용
+    IF OLD.item_id IS DISTINCT FROM NEW.item_id
+       OR OLD.warehouse_id IS DISTINCT FROM NEW.warehouse_id THEN
+
+      IF OLD.item_id IS NOT NULL AND OLD.warehouse_id IS NOT NULL THEN
+        v_sign := CASE OLD.type
+          WHEN 'in'   THEN -1
+          WHEN 'out'  THEN  1
+          WHEN 'loss' THEN  1
+          ELSE 0
+        END;
+        UPDATE item_stocks SET
+          quantity        = GREATEST(0, quantity + v_sign * OLD.quantity),
+          last_updated_at = now()
+        WHERE item_id = OLD.item_id AND warehouse_id = OLD.warehouse_id;
+      END IF;
+
+      v_sign := CASE NEW.type
+        WHEN 'in'   THEN  1
+        WHEN 'out'  THEN -1
+        WHEN 'loss' THEN -1
+        ELSE 0
+      END;
+      INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+        VALUES (NEW.item_id, NEW.warehouse_id, v_user_id, GREATEST(0, v_sign * NEW.quantity), now())
+        ON CONFLICT (item_id, warehouse_id)
+        DO UPDATE SET
+          quantity        = GREATEST(0, item_stocks.quantity + v_sign * NEW.quantity),
+          last_updated_at = now();
+    ELSE
+      -- 동일 품목/창고, 수량/타입 변경
+      v_delta := CASE OLD.type
+        WHEN 'in'   THEN -OLD.quantity
+        WHEN 'out'  THEN  OLD.quantity
+        WHEN 'loss' THEN  OLD.quantity
+        ELSE 0
+      END;
+      v_delta := v_delta + CASE NEW.type
+        WHEN 'in'   THEN  NEW.quantity
+        WHEN 'out'  THEN -NEW.quantity
+        WHEN 'loss' THEN -NEW.quantity
+        ELSE 0
+      END;
+      UPDATE item_stocks SET
+        quantity        = GREATEST(0, quantity + v_delta),
+        last_updated_at = now()
+      WHERE item_id = v_item_id AND warehouse_id = v_warehouse_id;
+    END IF;
+
+  ELSIF TG_OP = 'DELETE' THEN
+    v_delta := CASE OLD.type
+      WHEN 'in'   THEN -OLD.quantity
+      WHEN 'out'  THEN  OLD.quantity
+      WHEN 'loss' THEN  OLD.quantity
+      ELSE 0
+    END;
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity + v_delta),
+      last_updated_at = now()
+    WHERE item_id = v_item_id AND warehouse_id = v_warehouse_id;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_update_item_stock ON transactions;
+CREATE TRIGGER trg_update_item_stock
+  AFTER INSERT OR UPDATE OR DELETE ON transactions
+  FOR EACH ROW EXECUTE FUNCTION fn_update_item_stock();
+```
+
+### 6.7 트리거 — item_stocks 자동 갱신 (transfers)
+
+```sql
+CREATE OR REPLACE FUNCTION fn_update_item_stock_on_transfer()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.item_id IS NULL OR NEW.from_warehouse_id IS NULL OR NEW.to_warehouse_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+    -- 출발 창고 차감
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity - NEW.quantity),
+      last_updated_at = now()
+    WHERE item_id = NEW.item_id AND warehouse_id = NEW.from_warehouse_id;
+    -- 도착 창고 증가
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (NEW.item_id, NEW.to_warehouse_id, NEW.user_id, NEW.quantity, now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = item_stocks.quantity + NEW.quantity,
+        last_updated_at = now();
+
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.item_id IS NULL OR OLD.from_warehouse_id IS NULL OR OLD.to_warehouse_id IS NULL THEN
+      RETURN OLD;
+    END IF;
+    -- 이동 역전: 출발 창고 복구
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (OLD.item_id, OLD.from_warehouse_id, OLD.user_id, OLD.quantity, now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = item_stocks.quantity + OLD.quantity,
+        last_updated_at = now();
+    -- 도착 창고 차감
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity - OLD.quantity),
+      last_updated_at = now()
+    WHERE item_id = OLD.item_id AND warehouse_id = OLD.to_warehouse_id;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_update_stock_on_transfer ON transfers;
+CREATE TRIGGER trg_update_stock_on_transfer
+  AFTER INSERT OR DELETE ON transfers
+  FOR EACH ROW EXECUTE FUNCTION fn_update_item_stock_on_transfer();
+```
+
+### 6.8 재고 전체 재계산 함수 (불일치 복구용)
+
+```sql
+CREATE OR REPLACE FUNCTION fn_recalculate_item_stocks(target_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  -- 본인 데이터만 재계산 가능
+  IF target_user_id != auth.uid() THEN
+    RAISE EXCEPTION '본인 데이터만 재계산할 수 있습니다.';
+  END IF;
+
+  -- 기존 캐시 삭제
+  DELETE FROM item_stocks WHERE user_id = target_user_id;
+
+  -- transactions 기반 재계산 (adjust 타입은 SUM에 포함하지 않고 별도 처리)
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT
+    item_id,
+    warehouse_id,
+    target_user_id,
+    GREATEST(0,
+      SUM(CASE
+        WHEN type = 'in'   THEN  quantity
+        WHEN type = 'out'  THEN -quantity
+        WHEN type = 'loss' THEN -quantity
+        ELSE 0
+      END)
+    ) AS quantity,
+    now()
+  FROM transactions
+  WHERE user_id      = target_user_id
+    AND item_id      IS NOT NULL
+    AND warehouse_id IS NOT NULL
+    AND type != 'adjust'  -- adjust는 별도 처리
+  GROUP BY item_id, warehouse_id
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = EXCLUDED.quantity,
+        last_updated_at = now();
+
+  -- adjust 타입: 가장 최근 adjust 값으로 덮어씀
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT DISTINCT ON (item_id, warehouse_id)
+    item_id,
+    warehouse_id,
+    target_user_id,
+    quantity,
+    now()
+  FROM transactions
+  WHERE user_id      = target_user_id
+    AND item_id      IS NOT NULL
+    AND warehouse_id IS NOT NULL
+    AND type = 'adjust'
+  ORDER BY item_id, warehouse_id, txn_date DESC, created_at DESC
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = EXCLUDED.quantity,
+        last_updated_at = now();
+
+  -- transfers 반영: from 창고 차감
+  UPDATE item_stocks ist SET
+    quantity        = GREATEST(0, ist.quantity - sub.out_qty),
+    last_updated_at = now()
+  FROM (
+    SELECT item_id, from_warehouse_id AS warehouse_id, SUM(quantity) AS out_qty
+    FROM transfers
+    WHERE user_id         = target_user_id
+      AND item_id         IS NOT NULL
+      AND from_warehouse_id IS NOT NULL
+    GROUP BY item_id, from_warehouse_id
+  ) sub
+  WHERE ist.item_id = sub.item_id AND ist.warehouse_id = sub.warehouse_id;
+
+  -- transfers 반영: to 창고 증가
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT item_id, to_warehouse_id, target_user_id, SUM(quantity), now()
+  FROM transfers
+  WHERE user_id        = target_user_id
+    AND item_id        IS NOT NULL
+    AND to_warehouse_id IS NOT NULL
+  GROUP BY item_id, to_warehouse_id
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = item_stocks.quantity + EXCLUDED.quantity,
+        last_updated_at = now();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+GRANT EXECUTE ON FUNCTION fn_recalculate_item_stocks(UUID) TO authenticated;
+```
+
+### 6.9 수불대장 뷰
+
+```sql
+CREATE OR REPLACE VIEW v_ledger AS
+SELECT
+  t.id,
+  t.user_id,
+  t.txn_date,
+  t.date                    AS date_text,
+  t.type,
+  t.item_id,
+  t.item_name,
+  t.item_code,
+  t.category,
+  t.spec,
+  t.color,
+  t.unit,
+  t.quantity,
+  t.unit_price,
+  t.selling_price,
+  t.actual_selling_price,
+  t.supply_value,
+  t.vat,
+  t.total_amount,
+  t.vendor                  AS vendor_name_at_txn,   -- 거래 당시 거래처명 (불변)
+  t.vendor_id,
+  v.name                    AS vendor_name_current,   -- 현재 거래처명 (변경 추적용)
+  t.warehouse               AS warehouse_name_at_txn, -- 거래 당시 창고명 (불변)
+  t.warehouse_id,
+  w.name                    AS warehouse_name_current,
+  ist.quantity              AS current_stock,          -- 해당 창고 현재고
+  t.note,
+  t.created_at
+FROM transactions t
+LEFT JOIN vendors     v   ON v.id   = t.vendor_id
+LEFT JOIN warehouses  w   ON w.id   = t.warehouse_id
+LEFT JOIN item_stocks ist ON ist.item_id = t.item_id
+                         AND ist.warehouse_id = t.warehouse_id;
+-- RLS: transactions 테이블의 RLS(tx_all)가 뷰를 통해 적용됨
+```
+
+### 6.10 안전재고 미달 알람 뷰
+
+```sql
+CREATE OR REPLACE VIEW v_low_stock_alert AS
+SELECT
+  ss.user_id,
+  ss.item_id,
+  i.item_name,
+  i.item_code,
+  i.category,
+  ss.warehouse_id,
+  w.name                              AS warehouse_name,
+  ss.min_qty                          AS safety_qty,
+  COALESCE(ist.quantity, 0)           AS current_qty,
+  ss.min_qty - COALESCE(ist.quantity, 0) AS shortage
+FROM safety_stocks ss
+JOIN items i ON i.id = ss.item_id
+LEFT JOIN warehouses w ON w.id = ss.warehouse_id
+LEFT JOIN item_stocks ist
+  ON ist.item_id = ss.item_id
+  AND (
+    ss.warehouse_id IS NULL              -- 전체 창고 통합 기준: 첫 번째 창고만 표시
+    OR ist.warehouse_id = ss.warehouse_id
+  )
+WHERE COALESCE(ist.quantity, 0) < ss.min_qty;
 ```
 
 ---
 
-### 권장 개선 (데이터 품질·성능)
+## 7. 액세스 패턴
 
-**[8] items/transactions의 vendor, warehouse — 문자열 FK**
-
-현재 품목과 거래처가 이름 문자열로만 연결됩니다. 거래처 이름 변경 시 연결이 끊어집니다.
-
-```sql
--- items 테이블에 FK 추가
-ALTER TABLE items ADD COLUMN vendor_id UUID REFERENCES vendors(id) ON DELETE SET NULL;
--- 기존 데이터 마이그레이션
-UPDATE items i SET vendor_id = v.id FROM vendors v WHERE v.user_id = i.user_id AND v.name = i.vendor;
-```
-
-창고의 경우 warehouses 마스터 테이블이 없습니다 (아래 누락 엔티티 참조).
-
-**[9] transactions.item_id nullable FK — 일관성 없는 연결**
-
-일부 트랜잭션은 item_id가 있고 일부는 없습니다. `ON DELETE SET NULL` 처리로 품목 삭제 시 이력의 item_id가 NULL이 되어 집계 쿼리에서 LEFT JOIN이 필요합니다. item_name으로 보완하고 있으나 이름 변경 시 조인 불가입니다.
-
-**[10] profiles의 구독/결제 JSONB**
-
-```sql
--- 현재
-subscription JSONB DEFAULT '{}'
-payment_history JSONB DEFAULT '[]'
-
--- 권장: 별도 테이블로 분리 (결제 이력 조회·집계 가능)
-CREATE TABLE subscriptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  plan TEXT NOT NULL CHECK (plan IN ('free','pro','enterprise')),
-  status TEXT NOT NULL DEFAULT 'active',
-  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ,
-  UNIQUE(user_id)
-);
-CREATE TABLE payment_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  amount NUMERIC(10,0) NOT NULL,
-  currency TEXT NOT NULL DEFAULT 'KRW',
-  status TEXT NOT NULL,
-  paid_at TIMESTAMPTZ,
-  pg_tx_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-```
-
-**[11] employees의 annual_leave — 두 파일 간 컬럼 불일치**
-
-schema.sql: `annual_leave_total NUMERIC(4,1)`, `annual_leave_used NUMERIC(4,1)`
-fix-hr.sql: `annual_leave_days NUMERIC(5,1)`, `annual_leave_used NUMERIC(5,1)`
-
-통일 필요. 또한 연차 부여·사용 이력이 없으므로 감사 추적 불가합니다.
-
-```sql
--- 권장: 연차 이력 테이블
-CREATE TABLE leave_accruals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  accrual_year INTEGER NOT NULL,
-  total_days NUMERIC(5,1) NOT NULL DEFAULT 15,
-  reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, employee_id, accrual_year)
-);
-```
-
-**[12] employees의 부서 — TEXT 컬럼, 마스터 없음**
-
-```sql
-CREATE TABLE departments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  parent_id UUID REFERENCES departments(id) ON DELETE SET NULL,
-  manager_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, name)
-);
-ALTER TABLE employees ADD COLUMN dept_id UUID REFERENCES departments(id) ON DELETE SET NULL;
-```
-
-**[13] account_entries.vendor — TEXT, vendors 테이블 미연결**
-
-```sql
-ALTER TABLE account_entries ADD COLUMN vendor_id UUID REFERENCES vendors(id) ON DELETE SET NULL;
-```
-
-**[14] purchase_orders.vendor — TEXT, vendors 테이블 미연결**
-
-```sql
-ALTER TABLE purchase_orders ADD COLUMN vendor_id UUID REFERENCES vendors(id) ON DELETE SET NULL;
-```
-
-**[15] items 금액 파생 컬럼 관리**
-
-`supply_value`, `vat`, `total_price`가 모두 별도 컬럼으로 존재합니다. `total_price = supply_value + vat`인 경우 Generated Column으로 관리하거나 트리거로 자동 계산할 수 있습니다. 현재는 애플리케이션에서 수동으로 세 컬럼을 동기화해야 합니다.
+| 패턴 | 쿼리 유형 | 빈도 | 대상 테이블 | 인덱스 |
+|------|----------|------|-----------|--------|
+| P1: 전체 품목 현재고 | SELECT | 매우 높음 | item_stocks JOIN items | (user_id, item_id) |
+| P2: 창고별 재고 | SELECT | 높음 | item_stocks | (user_id, warehouse_id) |
+| P3: 수불대장 (기간/품목) | SELECT | 높음 | v_ledger / transactions | (user_id, txn_date DESC), (item_id) |
+| P4: 안전재고 미달 | SELECT | 중간 | v_low_stock_alert | (user_id, item_id) |
+| P5: 실사 차이 분석 | SELECT | 중간 | stocktake_items | (stocktake_id), (item_id) |
+| P6: 품목별 입출고 이력 | SELECT | 중간 | transactions | (item_id, user_id) |
+| P7: 재고 실사 등록 | INSERT | 낮음 | stocktakes + stocktake_items | - |
+| P8: 입고 등록 | INSERT | 높음 | transactions -> 트리거 -> item_stocks | - |
+| P9: 창고 이동 등록 | INSERT | 중간 | transfers -> 트리거 -> item_stocks | - |
 
 ---
 
-### 양호 (유지)
+## 8. JS Store 변경 영향 분석
 
-**[A] audit_logs RLS — INSERT/SELECT 분리**
+### 8.1 추가/변경해야 할 Store 키
 
-UPDATE/DELETE 차단으로 감사 로그 변조를 방지한 설계는 우수합니다.
+```javascript
+// store.js 에 추가할 상태 키
+{
+  // 신규
+  itemStocks: [],      // item_stocks 테이블 -- 품목별 창고별 현재고
+                       // 기존 mappedData[i].quantity 대신 이 테이블 참조
+  safetyStocks: [],    // safety_stocks 테이블 -- 기존 safetyStock:{} 대체
 
-**[B] employees.rrn_enc — BYTEA + RPC 암호화**
-
-주민번호를 BYTEA로 저장하고 클라이언트에 AES 키를 노출하지 않는 RPC 패턴은 적절합니다. decrypt_rrn() 함수가 audit_log를 자동으로 기록하는 점도 우수합니다.
-
-**[C] attendance UNIQUE(user_id, employee_id, work_date)**
-
-하루 한 건 제약으로 중복 근태 입력을 DB 레벨에서 차단합니다.
-
-**[D] payrolls UNIQUE(user_id, pay_year, pay_month, employee_id)**
-
-월별 급여 중복 확정 방지 제약입니다.
-
-**[E] update_updated_at() 트리거**
-
-FOREACH ARRAY 패턴으로 여러 테이블에 updated_at 트리거를 일괄 적용한 것은 유지보수성이 높습니다.
-
-**[F] handle_new_user() SECURITY DEFINER + search_path 고정**
-
-schema injection 방어가 적용되어 있습니다.
-
-**[G] transactions 복합 인덱스 idx_tx_composite(user_id, date DESC, type)**
-
-출고/입고 탭별 필터링 쿼리에 최적화된 인덱스입니다.
-
----
-
-## 누락 엔티티 및 추가 권장 DDL
-
-### 창고 마스터 테이블 (높은 우선순위)
-
-현재 창고 이름이 items, transactions, transfers 세 테이블에 TEXT로 분산 저장됩니다. 창고 이름 변경 시 세 테이블 전체를 UPDATE해야 합니다.
-
-```sql
-CREATE TABLE warehouses (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  address TEXT,
-  manager TEXT,
-  phone TEXT,
-  is_default BOOLEAN DEFAULT false,
-  memo TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, name)
-);
-ALTER TABLE warehouses ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "warehouses_all" ON warehouses FOR ALL USING (auth.uid() = user_id);
-
--- 기존 items에 FK 컬럼 추가 (마이그레이션)
-ALTER TABLE items ADD COLUMN warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
-ALTER TABLE transfers ADD COLUMN from_warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
-ALTER TABLE transfers ADD COLUMN to_warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
+  // 기존 (warehouses는 이미 store에 있을 수 있음)
+  warehouses: [],
+}
 ```
 
-### 발주서↔입고 연결 테이블 (높은 우선순위)
+### 8.2 기존 Store 키 변경 영향
 
-현재 발주서(purchase_orders)와 입고(transactions type='in')가 연결되지 않아 발주 대비 입고 현황 추적이 불가합니다.
+| 기존 Store 키 | 기존 DB 매핑 | 변경 후 | 영향 |
+|-------------|------------|--------|------|
+| `mappedData[i].quantity` | items.quantity | item_stocks.quantity (캐시 조회) | 현재고 조회 로직 변경 필요 |
+| `safetyStock` (객체, 품목명 키) | user_settings.key='safetyStock' | safety_stocks 테이블 | db.js 전환 함수 추가 필요 |
+| `transactions[i].itemName` | transactions.item_name | 유지 (비정규화 사본) | 변경 없음 |
+| `transactions[i].itemId` | transactions.item_id | 기존 nullable, 필수화 예정 | db.js camelCase 변환 추가 |
+| `transfers[i].itemId` | transfers.item_id | 신규 추가 | db.js 변환 추가 |
 
-```sql
--- transactions에 발주서 참조 추가
-ALTER TABLE transactions ADD COLUMN order_id UUID REFERENCES purchase_orders(id) ON DELETE SET NULL;
-CREATE INDEX idx_tx_order ON transactions(order_id) WHERE order_id IS NOT NULL;
+### 8.3 db.js 변경 필요 사항
+
+```javascript
+// 추가 필요한 변환 함수
+
+export const itemStocks = {
+  listAll:    () => { /* SELECT * FROM item_stocks WHERE user_id = auth.uid() */ },
+  byItem:     (itemId) => { /* SELECT * FROM item_stocks WHERE item_id = $1 */ },
+  recalculate: () => { /* SELECT fn_recalculate_item_stocks(auth.uid()) */ },
+};
+
+// safety_stocks (기존 user_settings safetyStock 대체)
+export const safetyStocks = {
+  list:   () => { /* SELECT * FROM safety_stocks WHERE user_id = auth.uid() */ },
+  upsert: (itemId, warehouseId, minQty) => { /* INSERT ... ON CONFLICT DO UPDATE */ },
+  delete: (itemId, warehouseId) => { /* DELETE */ },
+};
+
+// DB->JS camelCase 변환 추가 필요 컬럼
+// item_id          -> itemId
+// warehouse_id     -> warehouseId
+// vendor_id        -> vendorId
+// from_warehouse_id -> fromWarehouseId
+// to_warehouse_id   -> toWarehouseId
+// last_updated_at   -> lastUpdatedAt
 ```
 
-### 구독/결제 이력 (중간 우선순위)
+### 8.4 현재고 조회 패턴 변경
 
-위 [10]번 항목 DDL 참조.
+```javascript
+// 기존 (items.quantity -- sync 실패시 0)
+const stock = item.quantity;
 
-### 부서 마스터 (중간 우선순위)
+// 변경 후: itemStocks 캐시 참조
+// 전체 창고 합산 현재고
+const stock = itemStocks
+  .filter(s => s.itemId === item.id)
+  .reduce((sum, s) => sum + (s.quantity || 0), 0);
 
-위 [12]번 항목 DDL 참조.
-
-### 연차 부여 이력 (중간 우선순위)
-
-위 [11]번 항목 DDL 참조.
-
-### 팀 워크스페이스 멤버 정규화 (높은 우선순위)
-
-위 [3]번 항목 DDL 참조.
-
----
-
-## JSONB 컬럼 사용 평가
-
-| 테이블 | 컬럼 | 평가 | 근거 |
-|--------|------|------|------|
-| profiles | currency | 적절 | 코드+심볼+환율 3개 값이 항상 함께 사용됨 |
-| profiles | subscription | 부적절 | 구독 상태/만료일 조회가 필요 → 별도 테이블 |
-| profiles | payment_history | 부적절 | 결제 이력 조회·집계 필요 → 별도 테이블 |
-| items | extra | 적절 | 커스텀 필드 값 저장 목적, 구조가 사용자마다 다름 |
-| stocktakes | details | 부적절 | 실사 라인 수 제한 없음, 개별 조회/집계 필요 → 별도 테이블 |
-| purchase_orders | items | 부적절 | 발주 라인 조회·집계·FK 연결 필요 → 별도 테이블 |
-| employees | insurance_flags | 적절 | 4개 불리언 플래그, 4대보험 각각 독립 컬럼으로도 가능하나 확장성 고려 시 JSONB 허용 |
-| payrolls | allowances | 조건부 적절 | salary_items 마스터와 연결된 수당 코드+금액 저장. GIN 인덱스 미적용 시 쿼리 비효율 |
-| payrolls | other_deduct | 조건부 적절 | 비정형 공제 항목 저장. fix-hr.sql에서 deductions와 중복 존재 → 통합 필요 |
-| team_workspaces | members | 부적절 | 멤버 개별 상태 변경, 역할 조회, 수 집계 필요 → 별도 테이블 |
-
----
-
-## 관계 매트릭스
-
-| 소스 | 대상 | 현재 관계 | FK 위치 | ON DELETE | 문제 |
-|------|------|---------|--------|----------|------|
-| auth.users | profiles | 1:1 | profiles.id | CASCADE | 정상 |
-| profiles | items | 1:N | items.user_id | CASCADE | 정상 |
-| profiles | transactions | 1:N | transactions.user_id | CASCADE | 정상 |
-| profiles | vendors | 1:N | vendors.user_id | CASCADE | 정상 |
-| items | transactions | 1:N (nullable) | transactions.item_id | SET NULL | item_id nullable로 일관성 없음 |
-| profiles | purchase_orders | 1:N | purchase_orders.user_id | CASCADE | vendor TEXT, FK 없음 |
-| purchase_orders | transactions | 연결 없음 | — | — | 발주↔입고 추적 불가 |
-| profiles | employees | 1:N | employees.user_id | CASCADE | 정상 |
-| employees | attendance | 1:N | attendance.employee_id | CASCADE | 정상 |
-| employees | payrolls | 1:N | payrolls.employee_id | CASCADE | confirmed_by FK 없음 |
-| employees | leaves | 1:N | leaves.employee_id | CASCADE | approved_by FK 없음 |
-| profiles | team_workspaces | 1:1 | team_workspaces.owner_id (TEXT) | 없음 | UUID 아닌 TEXT, FK 없음 |
-| items | transfers | 연결 없음 | — | — | item_name TEXT만, 품목 FK 없음 |
-| vendors | account_entries | 연결 없음 | — | — | vendor TEXT만, FK 없음 |
-
----
-
-## 비정규화 결정 평가
-
-| 위치 | 비정규화 내용 | 정당성 | 동기화 방법 | 평가 |
-|------|-------------|-------|-----------|------|
-| transactions.item_name | 품목명 복사 | 이력 데이터 불변성 유지 (품목 삭제 후에도 이력 보존) | 없음 (의도적) | 정당 |
-| transactions.vendor | 거래처명 복사 | 동상 | 없음 (의도적) | 정당 |
-| transactions.warehouse | 창고명 복사 | 동상 | 없음 (의도적) | 정당 |
-| items.warehouse TEXT | 창고명 비정규화 | 창고 마스터 미구축 | 창고 이름 변경 시 대량 UPDATE 필요 | 부적절 — 창고 마스터 구축 필요 |
-| items.vendor TEXT | 거래처명 비정규화 | 빠른 개발 | 거래처 이름 변경 시 연결 끊어짐 | 개선 필요 |
-| payrolls.allowances JSONB | 수당 상세 비정규화 | 급여 확정 시점 스냅샷 보존 | salary_items 변경해도 과거 급여에 영향 없음 | 정당 (스냅샷 목적) |
-| team_workspaces.members JSONB | 멤버 목록 비정규화 | 단일 문서 조회 최적화 | RPC 3개로 원자적 수정 | 부적절 — 규모 증가 시 문제 |
-
----
-
-## 향후 확장 영향도 분석
-
-### 고급 회계 (복식부기) 모듈
-
-chart_of_accounts(계정과목)와 journal_entries(분개장) 추가 시:
-
-- **영향 없음**: 기존 테이블 변경 불필요
-- **연결 필요**: account_entries → journal_entries 연결 (account_entries가 단식 장부이므로 복식 전환 시 데이터 마이그레이션 필요)
-- **권장 추가 컬럼**: `account_entries`에 `account_code TEXT REFERENCES chart_of_accounts(code)` 추가
-
-```sql
-CREATE TABLE chart_of_accounts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  code TEXT NOT NULL,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('asset','liability','equity','revenue','expense')),
-  parent_id UUID REFERENCES chart_of_accounts(id),
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, code)
-);
-
-CREATE TABLE journal_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  entry_date DATE NOT NULL,
-  description TEXT,
-  ref_type TEXT,  -- 'transaction'|'account_entry'|'payroll'|'manual'
-  ref_id UUID,    -- 연결 원본 ID
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE journal_lines (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id UUID NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
-  account_id UUID NOT NULL REFERENCES chart_of_accounts(id),
-  debit NUMERIC(15,2) DEFAULT 0,
-  credit NUMERIC(15,2) DEFAULT 0,
-  memo TEXT,
-  CONSTRAINT debit_or_credit CHECK (debit = 0 OR credit = 0)
-);
+// 특정 창고 현재고
+const stock = itemStocks.find(
+  s => s.itemId === item.id && s.warehouseId === targetWarehouseId
+)?.quantity ?? 0;
 ```
 
-### CRM 모듈
+### 8.5 안전재고 마이그레이션 (user_settings -> safety_stocks)
 
-- **vendors 테이블 확장**: `type` 컬럼에 'customer' 값이 이미 있어 기반 존재
-- 그러나 customers 엔티티가 vendors와 혼용되면 비즈니스 의미가 불분명해짐
-- 권장: vendors를 공급자 전용으로 유지하고 `customers` 별도 테이블 생성, 또는 `parties` 통합 테이블로 리팩토링
-
-```sql
-CREATE TABLE crm_contacts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  party_type TEXT NOT NULL CHECK (party_type IN ('customer','lead','partner')),
-  company_name TEXT,
-  contact_name TEXT NOT NULL,
-  phone TEXT,
-  email TEXT,
-  stage TEXT DEFAULT 'lead',  -- lead/qualified/proposal/closed_won/closed_lost
-  assigned_to UUID REFERENCES profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
+```javascript
+// 기존: safetyStock: {"사과": 100, "배": 50}
+// 전환 스크립트 (db.js 또는 마이그레이션 페이지에서 1회 실행)
+async function migrateSafetyStock(safetyStockObj, items) {
+  for (const [itemName, minQty] of Object.entries(safetyStockObj)) {
+    const item = items.find(i => i.itemName === itemName);
+    if (!item) continue;
+    await supabase.from('safety_stocks').upsert({
+      user_id: currentUserId,
+      item_id: item.id,
+      warehouse_id: null,  // 전체 창고 통합
+      min_qty: minQty,
+    }, { onConflict: 'user_id,item_id,warehouse_id' });
+  }
+}
 ```
-
-### 프로젝트 관리 모듈
-
-- **영향 없음**: 기존 테이블 변경 불필요
-- employees 테이블과 연결하여 담당자 지정 가능
 
 ---
 
-## 마이그레이션 관리자 전달 사항
+## 9. 마이그레이션 관리자 전달 사항
 
-1. schema.sql과 fix-profiles-rls-hr.sql의 HR 테이블 정의 충돌을 해결하는 단일 마이그레이션 파일을 작성하세요. 특히 payrolls 테이블의 `base` vs `base_salary`, `other_deduct` 중복 컬럼을 처리해야 합니다.
-2. TEXT 타입 날짜 컬럼(transactions.date, account_entries.due_date 등) 6개의 DATE 타입 전환 마이그레이션은 데이터 형식 검증(`date ~ '^\d{4}-\d{2}-\d{2}$'`) 후 단계적으로 실행하세요.
-3. team_workspaces.id와 owner_id를 UUID 타입으로 전환할 때 기존 워크스페이스 RPC 3개(workspace_add_member 등)도 함께 수정이 필요합니다.
-4. purchase_order_items 테이블 추가 후 기존 purchase_orders.items JSONB 데이터를 행으로 분해하는 마이그레이션 스크립트가 필요합니다.
-5. warehouses 마스터 테이블 생성 후 items.warehouse, transfers.from_warehouse/to_warehouse의 기존 TEXT 값을 참조 ID로 변환하는 마이그레이션이 필요합니다.
+### 9.1 실행 순서 (의존성 순)
 
-## 성능 분석가 전달 사항
+1. warehouses 테이블 존재 확인 (schema.sql 섹션 18에 이미 정의됨)
+2. item_stocks 테이블 생성 (DDL 6.1)
+3. safety_stocks 테이블 생성 (DDL 6.2)
+4. transactions 컬럼 추가 + 백필 (DDL 6.3)
+5. transfers 컬럼 추가 + 백필 (DDL 6.4)
+6. stocktake_items 컬럼 보강 (DDL 6.5)
+7. 트리거 설치: fn_update_item_stock (DDL 6.6)
+8. 트리거 설치: fn_update_item_stock_on_transfer (DDL 6.7)
+9. 재계산 함수 설치: fn_recalculate_item_stocks (DDL 6.8)
+10. 뷰 생성: v_ledger, v_low_stock_alert (DDL 6.9, 6.10)
+11. item_stocks 초기 데이터: 각 사용자별 `SELECT fn_recalculate_item_stocks(user_id)` 실행
+12. 안전재고 마이그레이션: user_settings.safetyStock -> safety_stocks (앱 or 스크립트)
 
-1. `payrolls.allowances`와 `payrolls.other_deduct` JSONB에 GIN 인덱스가 없습니다. 특정 수당 코드 집계 쿼리(`allowances->>'식대'`) 빈도가 높다면 GIN 인덱스 추가를 검토하세요.
-2. `transactions.date`가 TEXT이므로 현재 `idx_tx_date ON transactions(user_id, date DESC)` 인덱스가 날짜 범위 쿼리(`WHERE date BETWEEN '2026-01-01' AND '2026-03-31'`)에서 문자열 정렬로 동작합니다. DATE 타입 전환 전까지 쿼리에서 ISO-8601 형식(`YYYY-MM-DD`) 준수를 보장하세요.
-3. attendance 테이블에 `idx_att_month(user_id, work_date)`, `idx_att_emp(employee_id, work_date DESC)`, `idx_att_emp_month(user_id, employee_id, work_date)` 세 인덱스가 중복됩니다. `idx_att_emp_month`가 나머지 두 인덱스를 커버하므로 `idx_att_month`와 `idx_att_emp` 제거를 검토하세요.
-4. `items` 테이블의 `idx_items_low_stock`은 partial index(`WHERE quantity <= min_stock`)입니다. `min_stock`이 NULL인 품목은 이 인덱스에 포함되지 않으므로 안전재고 알림 쿼리에서 NULL 처리를 확인하세요.
+### 9.2 item_name -> item_id 전환 전략 (3단계)
 
-## 보안 감사자 전달 사항
+**Phase 1 — NULL 허용 기간 (현재):**
+- transactions.item_id NULL 허용 유지
+- 신규 INSERT 시 앱에서 item_id를 함께 전송 (item_name도 유지)
+- 기존 행은 DDL 6.3/6.4 백필 쿼리로 item_id 설정 시도
 
-1. `employees.rrn_enc`: AES 키가 `current_setting('app.rrn_key', true)`에서 읽힙니다. Supabase Vault 미사용 시 이 설정값의 저장 위치와 접근 권한을 감사하세요.
-2. `profiles_select_for_invite` 정책이 인증된 사용자 전체에게 모든 프로필을 SELECT 허용합니다 (`USING (auth.uid() IS NOT NULL)`). 이는 이메일/이름 정보 대량 열람 경로가 됩니다. 초대 시 필요한 컬럼만 노출하는 RPC 또는 컬럼 레벨 정책으로 범위를 축소하세요.
-3. `payrolls`, `leaves`의 `confirmed_by`/`approved_by`가 FK 없는 UUID입니다. 존재하지 않는 사용자 UUID를 삽입할 수 있어 승인 추적이 신뢰성을 잃습니다.
-4. `team_workspaces` RLS `tw_select`는 인증된 모든 사용자가 모든 워크스페이스를 READ할 수 있습니다(`USING (true)`). members JSONB 안의 개인정보(이름, 이메일)가 노출될 수 있습니다.
-5. `handle_new_user()` 함수에서 관리자 이메일이 하드코딩되어 있습니다. 소스 코드 접근자가 관리자 이메일을 파악할 수 있으며, 이메일 변경 시 DB 함수도 수동 갱신해야 합니다. DB 설정 테이블로 외부화를 검토하세요.
+**Phase 2 — 백필 완료 확인:**
+```sql
+-- NULL 남은 행 확인 (0이면 Phase 3 진행)
+SELECT COUNT(*) FROM transactions WHERE item_id IS NULL AND item_name IS NOT NULL;
+SELECT COUNT(*) FROM transfers WHERE item_id IS NULL;
+```
+
+**Phase 3 — NOT NULL 제약 추가 (완료 후):**
+```sql
+ALTER TABLE transactions   ALTER COLUMN item_id        SET NOT NULL;
+ALTER TABLE transfers      ALTER COLUMN item_id        SET NOT NULL;
+ALTER TABLE transfers      ALTER COLUMN from_warehouse_id SET NOT NULL;
+ALTER TABLE transfers      ALTER COLUMN to_warehouse_id   SET NOT NULL;
+```
+
+### 9.3 무중단 전환 위험 구간
+
+| 작업 | 위험도 | 대응 방안 |
+|------|--------|---------|
+| ALTER TABLE (컬럼 추가) | 낮음 | PG15 DDL 잠금 시간 짧음 |
+| 대량 UPDATE 백필 | 중간 | 1,000행씩 배치 처리, 피크 타임 회피 |
+| 트리거 설치 | 낮음 | 기존 데이터에 소급 적용 없음 |
+| NOT NULL 추가 (Phase 3) | 중간 | NULL 행 0개 확인 후 실행 |
+| item_stocks 초기 계산 | 낮음 | fn_recalculate 함수가 원자적 처리 |
+
+### 9.4 롤백 계획
+
+```sql
+-- 트리거 제거로 item_stocks 갱신 중단 (item_stocks 테이블은 무해)
+DROP TRIGGER IF EXISTS trg_update_item_stock          ON transactions;
+DROP TRIGGER IF EXISTS trg_update_stock_on_transfer   ON transfers;
+-- safety_stocks, item_stocks 테이블 삭제 (데이터 손실 없음)
+DROP TABLE IF EXISTS item_stocks;
+DROP TABLE IF EXISTS safety_stocks;
+```
+
+---
+
+## 10. 성능 분석가 전달 사항
+
+### 10.1 예상 데이터 규모
+
+| 테이블 | 예상 행 수 (사용자당) | 증가율 |
+|--------|---------------------|--------|
+| items | 100~5,000 | 낮음 |
+| transactions | 수천~수만 (누적) | 높음 |
+| item_stocks | items * warehouses 수 (최대 수천) | 낮음 |
+| safety_stocks | items 수와 동일 | 낮음 |
+| transfers | 수백~수천 (누적) | 중간 |
+| stocktake_items | 실사당 items 수 | 중간 |
+
+### 10.2 인덱스 우선순위
+
+| 우선순위 | 인덱스 | 대상 패턴 |
+|---------|--------|---------|
+| 1 | item_stocks(user_id, item_id) | P1 현재고 조회 |
+| 2 | item_stocks(user_id, warehouse_id) | P2 창고별 집계 |
+| 3 | transactions(user_id, txn_date DESC) | P3 수불대장 |
+| 4 | transactions(item_id, user_id) WHERE item_id IS NOT NULL | P6 품목별 이력 |
+| 5 | safety_stocks(user_id, item_id) | P4 안전재고 미달 |
+
+### 10.3 Materialized View 수정 필요
+
+기존 `mv_inventory_summary`는 items.quantity를 사용. item_stocks 전환 후 재정의 필요:
+```sql
+-- REFRESH 주기: 대시보드 로드 시 또는 15분마다
+-- item_stocks.quantity로 교체 필요
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_inventory_summary;
+```
+
+---
+
+## 11. 보안 감사자 전달 사항
+
+### 11.1 민감 데이터 컬럼
+
+| 테이블 | 컬럼 | 민감도 | 현황 |
+|--------|------|--------|------|
+| transactions | unit_price, total_amount | 높음 | RLS 적용됨 |
+| item_stocks | quantity | 중간 | RLS 적용됨 |
+| safety_stocks | min_qty | 낮음 | RLS 적용됨 |
+
+### 11.2 신규 테이블 RLS 체크리스트
+
+```sql
+-- 적용 확인 필수
+ALTER TABLE item_stocks   ENABLE ROW LEVEL SECURITY;  -- DDL 6.1에 포함
+ALTER TABLE safety_stocks ENABLE ROW LEVEL SECURITY;  -- DDL 6.2에 포함
+
+-- 정책 존재 확인
+SELECT tablename, policyname FROM pg_policies
+WHERE tablename IN ('item_stocks', 'safety_stocks');
+```
+
+### 11.3 트리거 함수 보안
+
+- 모든 트리거 함수: `SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp` 적용
+- `fn_recalculate_item_stocks`: 함수 내부에 `auth.uid() != target_user_id` 검사 포함 (DDL 6.8)
+- 뷰(v_ledger, v_low_stock_alert): 기반 테이블의 RLS가 자동 적용됨
+
+### 11.4 접근 제어 요구사항
+
+| 기능 | 필요 역할 | 비고 |
+|------|---------|------|
+| 현재고 조회 | viewer 이상 | RLS로 자기 데이터만 |
+| 재고 재계산 | staff 이상 | fn_recalculate 직접 호출 |
+| 안전재고 설정 | manager 이상 | 앱 레이어에서 role 확인 권장 |
+| 창고 삭제 | admin | RESTRICT FK로 재고 있으면 차단 |
