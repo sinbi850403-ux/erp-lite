@@ -10,13 +10,15 @@ import { getUserId, handleError } from './core.js';
 // 창고 이동 (Transfers)
 // ============================================================
 export const transfers = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('transfers')
       .select('*')
       .eq('user_id', userId)
       .order('date', { ascending: false });
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '이동 이력 조회');
     return data || [];
   },
@@ -58,13 +60,15 @@ export const transfers = {
 // 재고 실사 (Stocktakes)
 // ============================================================
 export const stocktakes = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('stocktakes')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '실사 이력 조회');
     return data || [];
   },
@@ -132,12 +136,14 @@ export const itemStocks = {
 // 기존 user_settings.key='safetyStock' JSON 대체
 // ============================================================
 export const safetyStocks = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('safety_stocks')
       .select('id, item_id, warehouse_id, min_qty, updated_at')
       .eq('user_id', userId);
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '안전재고 조회');
     return (data || []).map(r => ({
       id:          r.id,

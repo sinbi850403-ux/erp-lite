@@ -27,22 +27,24 @@ export async function loadAllData() {
     'customFields', 'settings', 'itemStocks', 'safetyStocks',
   ];
 
-  const ALL_ROWS = { limit: 1_000_000 };
+  // Supabase PostREST API의 기본 limit은 1000개
+  // 그 이상의 데이터는 명시적으로 높은 limit 설정 필요
+  const ALL_ROWS = { limit: 999999 };
 
   const results = await Promise.allSettled([
     items.list(ALL_ROWS),
     transactions.list(ALL_ROWS),
-    vendors.list(),
-    transfers.list(),
-    stocktakes.list(),
+    vendors.list({ limit: 999999 }),
+    transfers.list({ limit: 999999 }),
+    stocktakes.list({ limit: 999999 }),
     auditLogs.list({ limit: 200 }),
-    accountEntries.list(),
-    purchaseOrders.list(),
+    accountEntries.list({ limit: 999999 }),
+    purchaseOrders.list({ limit: 999999 }),
     posSales.list({ limit: 1000 }),
-    customFields.list(),
+    customFields.list({ limit: 999999 }),
     settings.getAll(),
     itemStocks.listAll(),
-    safetyStocks.list(),
+    safetyStocks.list({ limit: 999999 }),
   ]);
   const pick = (idx, fallback) => {
     const r = results[idx];
