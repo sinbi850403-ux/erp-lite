@@ -101,7 +101,6 @@ export const itemStocks = {
         .from('item_stocks')
         .select('item_id, warehouse_id, quantity, last_updated_at')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
       handleError(error, '현재고 조회');
@@ -132,7 +131,6 @@ export const itemStocks = {
         .select('item_id, warehouse_id, quantity, last_updated_at')
         .eq('user_id', userId)
         .eq('item_id', itemId)
-        .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
       handleError(error, '품목 현재고 조회');
