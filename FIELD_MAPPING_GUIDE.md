@@ -2,7 +2,7 @@
 
 ## 1. 사용자 요구사항 (최종 표준)
 
-입고 기록에 필요한 14개 필드:
+### 1.1 입고(Intake) 기록 — 14개 필드
 
 | # | 한글명 | DB 컬럼명 | JS camelCase | 타입 | 설명 |
 |----|--------|-----------|-------------|------|------|
@@ -25,11 +25,34 @@
 - 비고 (note): 기타 메모
 - 창고 (warehouse): 보관 위치 (기본값: "본사 창고")
 
+### 1.2 출고(Outbound) 기록 — 14개 필드
+
+| # | 한글명 | DB 컬럼명 | JS camelCase | 타입 | 설명 |
+|----|--------|-----------|-------------|------|------|
+| 1 | 순번 | id | id | UUID | 자동 생성 (crypto.randomUUID) |
+| 2 | 자산 | category | category | TEXT | 부서/자산 분류 |
+| 3 | 출고일자 | date | date | TEXT (YYYY-MM-DD) | 출고 날짜 |
+| 4 | 거래처 | vendor | vendor | TEXT | 고객/판매처명 |
+| 5 | 상품코드 | item_code | itemCode | TEXT | 제품 코드 |
+| 6 | 상품명 | item_name | itemName | TEXT | 제품명 |
+| 7 | 색상 | color | color | TEXT | 제품 색상 |
+| 8 | 규격 | spec | spec | TEXT | 제품 규격 |
+| 9 | 단위 | unit | unit | TEXT | 수량 단위 (EA, PCS 등) |
+| 10 | 출고수량 | quantity | quantity | NUMERIC | 출고 수량 |
+| 11 | 출고원가 | unit_price | unitPrice | NUMERIC | 제품 원가 (₩) |
+| 12 | 공급가 | supply_value | supplyValue | NUMERIC | 계산됨: quantity × unitPrice |
+| 13 | 부가세 | vat | vat | NUMERIC | 계산됨: ceil(supplyValue × 0.1) |
+| 14 | 합계 | total_amount | totalAmount | NUMERIC | 계산됨: supplyValue + vat |
+
+**추가 필드 (선택사항)**
+- 비고 (note): 기타 메모
+- 창고 (warehouse): 출고 창고 위치 (기본값: "본사 창고")
+
 ---
 
 ## 2. Excel 템플릿 헤더 (BulkUploadModal.jsx)
 
-### 입고 양식
+### 2.1 입고 양식
 ```
 순번 | 자산 | 입고일자 | 거래처 | 상품코드 | 품명 | 색상 | 규격 | 단위 | 입고수량 | 단가 | 공급가 | 부가세 | 합계 | 비고
 ```
@@ -44,30 +67,47 @@
 1 | 전자기기 | 2026-04-29 | (주)삼성전자 | SM-S925 | 갤럭시 S25 | 블랙 | 256GB | EA | 100 | 1200000 | 120000000 | 12000000 | 132000000 |
 ```
 
+### 2.2 출고 양식
+```
+순번 | 자산 | 출고일자 | 거래처 | 상품코드 | 상품명 | 색상 | 규격 | 단위 | 출고수량 | 출고원가 | 공급가 | 부가세 | 합계 | 비고
+```
+
+**정렬 규칙**
+1. 순번: 사용자가 행 번호 입력 (선택사항, 파싱 시 무시됨)
+2. 자산~합계: 필수/계산 필드 순서
+3. 비고: 추가 정보
+
+**샘플 데이터**
+```
+1 | 전자기기 | 2026-04-29 | 강남점 | SM-S925 | 갤럭시 S25 | 블랙 | 256GB | EA | 10 | 1500000 | 15000000 | 1500000 | 16500000 |
+```
+
 ---
 
 ## 3. 필드 검색 매핑 (inoutExcelParser.js → buildColMap)
 
 Excel 헤더 → 컬럼 인덱스 매핑. **정확한 헤더명 필수**.
 
-| 필드 | buildColMap 키 | 검색 대상 (우선순) | 매칭됨? |
-|------|---------------|-----------------|--------|
-| type | type | '구분' | ❌ (사용자가 입력 안함, modeDefault로 대체) |
-| vendor | vendor | '거래처', '매장명' | ✅ '거래처' |
-| itemName | itemName | '품명', '품목명' | ✅ '품명' |
-| itemCode | itemCode | '상품코드', '품목코드' | ✅ '상품코드' |
-| quantity | quantity | '입고수량' (입고), '출고수량' (출고), '수량' | ✅ '입고수량' |
-| unitPrice | unitPrice | '매입원가', '매입가', **'단가'**, '원가' | ✅ '단가' |
-| sellingPrice | sellingPrice | '판매가', '출고단가' | ❌ (입고에선 사용 안함) |
-| date | date | '입고일자' (입고), '출고일자' (출고), '날짜' | ✅ '입고일자' |
-| warehouse | warehouse | '창고', '위치', '보관' | ❌ (기본값 "본사 창고") |
-| note | note | '비고' | ✅ '비고' |
-| spec | spec | '규격' | ✅ '규격' |
-| unit | unit | '단위' | ✅ '단위' |
-| color | color | '색상', '컬러', 'color' | ✅ '색상' |
-| category | category | '자산', '분류', '카테고리' | ✅ '자산' |
+| 필드 | buildColMap 키 | 검색 대상 (우선순) | 입고 매칭 | 출고 매칭 |
+|------|---------------|-----------------|---------|---------|
+| type | type | '구분' | ❌ (modeDefault) | ❌ (modeDefault) |
+| vendor | vendor | '거래처', '매장명' | ✅ '거래처' | ✅ '거래처' |
+| itemName | itemName | '품명', '품목명' | ✅ '품명' | ✅ '상품명' |
+| itemCode | itemCode | '상품코드', '품목코드' | ✅ '상품코드' | ✅ '상품코드' |
+| quantity | quantity | '입고수량' (입고) / '출고수량' (출고), '수량' | ✅ '입고수량' | ✅ '출고수량' |
+| unitPrice | unitPrice | '매입원가', **'출고원가'**, '매입가', '단가', '원가' | ✅ '단가' | ✅ '출고원가' |
+| sellingPrice | sellingPrice | '판매가', '출고단가' | ❌ (미사용) | ❌ (미사용) |
+| date | date | '입고일자' (입고) / '출고일자' (출고), '날짜' | ✅ '입고일자' | ✅ '출고일자' |
+| warehouse | warehouse | '창고', '위치', '보관' | ❌ (기본값) | ❌ (기본값) |
+| note | note | '비고' | ✅ '비고' | ✅ '비고' |
+| spec | spec | '규격' | ✅ '규격' | ✅ '규격' |
+| unit | unit | '단위' | ✅ '단위' | ✅ '단위' |
+| color | color | '색상', '컬러', 'color' | ✅ '색상' | ✅ '색상' |
+| category | category | '자산', '분류', '카테고리' | ✅ '자산' | ✅ '자산' |
 
-**주의**: '상품명' ❌ → '품명' ✅ (파서가 '품명'을 찾음)
+**주의사항**:
+- 입고: itemName 검색 '품명', unitPrice 검색 '단가'
+- 출고: itemName 검색 '상품명', unitPrice 검색 '출고원가'
 
 ---
 
