@@ -5,7 +5,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../supabase-client.js';
-import { getLastLocalSyncTime } from './supabaseSync.js';
+import { getLastLocalSyncTime, isSyncing } from './supabaseSync.js';
 
 // === Realtime 실시간 동기화 ===
 
@@ -19,7 +19,8 @@ const REALTIME_TABLES = [
 ];
 
 function scheduleRealtimeReload(onReload) {
-  // 3초 이내에 내가 직접 Supabase에 썼으면 내 변경이 돌아온 것 → 무시
+  // 내가 직접 쓰는 중이거나 완료 후 3초 이내면 내 변경이 돌아온 것 → 무시
+  if (isSyncing()) return;
   if (Date.now() - getLastLocalSyncTime() < 3000) return;
 
   if (_realtimeReloadTimer) clearTimeout(_realtimeReloadTimer);
