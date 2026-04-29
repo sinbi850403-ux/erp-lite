@@ -22,14 +22,14 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     let rows, sheetName, fileName;
     if (modeDefault === 'out') {
       rows = [
-        ['자산', '출고일자', '거래처', '상품코드', '품명', '색상', '규격', '단위', '출고수량', '출고단가', '비고'],
-        ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 10, 1500000, ''],
+        ['자산', '출고일자', '거래처', '창고', '상품코드', '품명', '색상', '규격', '단위', '출고수량', '출고단가', '비고'],
+        ['전자기기', today, '강남점', '본사 창고', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 10, 1500000, ''],
       ];
       sheetName = '출고_양식'; fileName = '출고_일괄등록_양식';
     } else {
       rows = [
-        ['자산', '입고일자', '거래처', '상품코드', '품명', '색상', '규격', '단위', '입고수량', '매입원가', '비고'],
-        ['전자기기', today, '(주)삼성전자', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 100, 1200000, ''],
+        ['자산', '입고일자', '거래처', '창고', '상품코드', '품명', '색상', '규격', '단위', '입고수량', '매입원가', '비고'],
+        ['전자기기', today, '(주)삼성전자', '본사 창고', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 100, 1200000, ''],
       ];
       sheetName = '입고_양식'; fileName = '입고_일괄등록_양식';
     }
@@ -77,7 +77,7 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     addTransactionsBulk(previewRows.map(r => ({
       type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
       quantity: r.quantity, unitPrice: r.unitPrice, sellingPrice: r.sellingPrice,
-      date: r.date, note: r.note, spec: r.spec, unit: r.unit, color: r.color, category: r.category,
+      date: r.date, warehouse: r.warehouse || '본사 창고', note: r.note, spec: r.spec, unit: r.unit, color: r.color, category: r.category,
     })));
     const inCount = previewRows.filter(r => r.type === 'in').length;
     const outCount = previewRows.filter(r => r.type === 'out').length;
@@ -103,7 +103,7 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
           <div className="alert alert-info" style={{ marginBottom: '16px', fontSize: '13px' }}>
             <strong>사용 방법</strong><br />
             1. 아래에서 샘플 양식을 내려받습니다.<br />
-            2. 양식에 입고/출고 데이터를 입력합니다.<br />
+            2. 양식에 입고/출고 데이터를 입력합니다. (창고는 선택사항 — 비워두면 "본사 창고"로 자동 할당)<br />
             3. 저장한 엑셀 파일을 끌어놓거나 선택하면 미리보기 후 한 번에 등록할 수 있습니다.
           </div>
           <button className="btn btn-outline" onClick={handleDownloadTemplate} style={{ marginBottom: '16px' }}>

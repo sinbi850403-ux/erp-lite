@@ -46,6 +46,7 @@ export function buildColMap(headers, modeDefault) {
     date:         modeDefault === 'out'
       ? findCol('출고일자', '입고일자', '날짜')
       : findCol('입고일자', '출고일자', '날짜'),
+    warehouse:    findCol('창고', '위치', '보관'),
     note:         findCol('비고'),
     spec:         findCol('규격'),
     unit:         findCol('단위'),
@@ -93,6 +94,7 @@ export function parseExcelRows(sheetData, colMap, modeDefault, items) {
       unitPrice:    colMap.unitPrice >= 0    ? parseBulkNumber(row[colMap.unitPrice])    : 0,
       sellingPrice: colMap.sellingPrice >= 0 ? parseBulkNumber(row[colMap.sellingPrice]) : 0,
       date:         dateStr || todayStr(),
+      warehouse:    colMap.warehouse >= 0 ? String(row[colMap.warehouse] ?? '').trim() : '',
       note:         colMap.note >= 0     ? String(row[colMap.note] ?? '').trim()     : '',
       spec:         colMap.spec >= 0     ? String(row[colMap.spec] ?? '').trim()     : (matchedItem?.spec     || ''),
       unit:         colMap.unit >= 0     ? String(row[colMap.unit] ?? '').trim()     : (matchedItem?.unit     || ''),

@@ -122,11 +122,32 @@ async function syncToSupabase() {
 
     // 입출고 동기화 — 새로 추가된 건만
     if (keysToSync.has('transactions')) {
+      // warehouse 문자열 → warehouse_id UUID 변환 (기본값: 본사 창고)
+      const getWarehouseId = (warehouseName) => {
+        if (!warehouseName) {
+          return '80c5ae39-c6fb-4dbc-a18f-bca85ecf8930'; // 본사 창고 ID
+        }
+        const warehouse = (stateHolder.current.warehouses || []).find(w =>
+          w.name === warehouseName
+        );
+        return warehouse ? warehouse.id : '80c5ae39-c6fb-4dbc-a18f-bca85ecf8930';
+      };
+
+      // item_name 문자열 → item_id UUID 변환
+      const getItemId = (itemName) => {
+        if (!itemName) return null;
+        const item = (stateHolder.current.mappedData || []).find(m =>
+          m.itemName === itemName
+        );
+        return item ? item._id : null;
+      };
+
       const newTxs = (stateHolder.current.transactions || [])
         .filter(tx => !tx._synced)
         .map(tx => ({
           id: tx.id,            //  클라이언트 UUID → Supabase와 동일 ID 공유 (upsert 멱등성 보장)
           type: tx.type,
+          item_id: getItemId(tx.itemName),
           item_name: tx.itemName,
           item_code: tx.itemCode || null,
           quantity: tx.quantity,
@@ -142,7 +163,7 @@ async function syncToSupabase() {
           color: tx.color || null,
           date: tx.date,
           vendor: tx.vendor,
-          warehouse: tx.warehouse,
+          warehouse_id: getWarehouseId(tx.warehouse),
           note: tx.note,
         }));
 
