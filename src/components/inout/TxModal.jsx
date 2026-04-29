@@ -73,14 +73,22 @@ export function TxModal({ txType, items, vendors, onClose, onSave }) {
     const qty = parseFloat(form.quantity);
     if (!name) { showToast('품목명을 입력해 주세요.', 'warning'); return; }
     if (!qty || qty <= 0) { showToast('수량을 입력해 주세요.', 'warning'); return; }
+    const unitPrice = parseFloat(form.unitPrice) || 0;
+    const sellingPrice = parseFloat(form.sellingPrice) || 0;
+    const supplyValue = Math.round(unitPrice * qty);
+    const vat = Math.ceil(supplyValue * 0.1);
     onSave({
       type: txType,
       itemName: name,
       itemCode: selectedItem?.itemCode || '',
       vendor: form.vendor.trim(),
       quantity: qty,
-      unitPrice: parseFloat(form.unitPrice) || 0,
-      sellingPrice: parseFloat(form.sellingPrice) || 0,
+      unitPrice,
+      sellingPrice,
+      supplyValue,
+      vat,
+      totalAmount: supplyValue + vat,
+      actualSellingPrice: sellingPrice,
       note: form.note.trim(),
       date: form.date || today,
     });

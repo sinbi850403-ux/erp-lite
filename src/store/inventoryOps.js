@@ -65,10 +65,23 @@ export function addTransaction(tx) {
   const clientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+  // 계산 필드 보정 (미제공 시 계산)
+  const qty = toNum(tx.quantity);
+  const unitPrice = toNum(tx.unitPrice);
+  const supplyValue = tx.supplyValue || (unitPrice > 0 ? Math.round(unitPrice * qty) : 0);
+  const vat = tx.vat || Math.ceil(supplyValue * 0.1);
+  const totalAmount = tx.totalAmount || (supplyValue + vat);
+  const actualSellingPrice = tx.actualSellingPrice || toNum(tx.sellingPrice);
+
   const newTx = {
     id: clientId,
     createdAt: new Date().toISOString(),
     ...tx,
+    supplyValue,
+    vat,
+    totalAmount,
+    actualSellingPrice,
   };
   stateHolder.current.transactions = [newTx, ...stateHolder.current.transactions];
 
@@ -164,7 +177,24 @@ export function addTransactionsBulk(txList) {
     const clientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const newTx = { id: clientId, createdAt: new Date().toISOString(), ...tx };
+
+    // 계산 필드 보정 (미제공 시 계산)
+    const qty = toNum(tx.quantity);
+    const unitPrice = toNum(tx.unitPrice);
+    const supplyValue = tx.supplyValue || (unitPrice > 0 ? Math.round(unitPrice * qty) : 0);
+    const vat = tx.vat || Math.ceil(supplyValue * 0.1);
+    const totalAmount = tx.totalAmount || (supplyValue + vat);
+    const actualSellingPrice = tx.actualSellingPrice || toNum(tx.sellingPrice);
+
+    const newTx = {
+      id: clientId,
+      createdAt: new Date().toISOString(),
+      ...tx,
+      supplyValue,
+      vat,
+      totalAmount,
+      actualSellingPrice,
+    };
     newTxs.push(newTx);
 
     // 재고 수량 반영

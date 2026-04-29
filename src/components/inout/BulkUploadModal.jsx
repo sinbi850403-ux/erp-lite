@@ -74,11 +74,21 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
 
   const handleConfirm = () => {
     if (!previewRows) return;
-    addTransactionsBulk(previewRows.map(r => ({
-      type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
-      quantity: r.quantity, unitPrice: r.unitPrice, sellingPrice: r.sellingPrice,
-      date: r.date, warehouse: r.warehouse || '본사 창고', note: r.note, spec: r.spec, unit: r.unit, color: r.color, category: r.category,
-    })));
+    addTransactionsBulk(previewRows.map(r => {
+      const qty = parseFloat(r.quantity) || 0;
+      const unitPrice = parseFloat(r.unitPrice) || 0;
+      const sellingPrice = parseFloat(r.sellingPrice) || 0;
+      const supplyValue = Math.round(unitPrice * qty);
+      const vat = Math.ceil(supplyValue * 0.1);
+      return {
+        type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
+        quantity: qty, unitPrice, sellingPrice,
+        supplyValue, vat, totalAmount: supplyValue + vat,
+        actualSellingPrice: sellingPrice,
+        date: r.date, warehouse: r.warehouse || '본사 창고', note: r.note,
+        spec: r.spec, unit: r.unit, color: r.color, category: r.category,
+      };
+    }));
     const inCount = previewRows.filter(r => r.type === 'in').length;
     const outCount = previewRows.filter(r => r.type === 'out').length;
     showToast(`일괄 등록 완료: 총 ${previewRows.length}건 (입고 ${inCount}, 출고 ${outCount})`, 'success');
