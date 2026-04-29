@@ -122,24 +122,24 @@ async function syncToSupabase() {
 
     // 입출고 동기화 — 새로 추가된 건만
     if (keysToSync.has('transactions')) {
+      // DB에서 items와 warehouses 직접 로드 (stateHolder 의존 제거)
+      const dbItems = await managedQuery(() => db.items.list({ limit: 1_000_000 })).catch(() => []);
+      const dbWarehouses = await managedQuery(() => db.warehouses.list()).catch(() => []);
+
       // warehouse 문자열 → warehouse_id UUID 변환 (기본값: 본사 창고)
       const getWarehouseId = (warehouseName) => {
         if (!warehouseName) {
           return '80c5ae39-c6fb-4dbc-a18f-bca85ecf8930'; // 본사 창고 ID
         }
-        const warehouse = (stateHolder.current.warehouses || []).find(w =>
-          w.name === warehouseName
-        );
+        const warehouse = dbWarehouses.find(w => w.name === warehouseName);
         return warehouse ? warehouse.id : '80c5ae39-c6fb-4dbc-a18f-bca85ecf8930';
       };
 
       // item_name 문자열 → item_id UUID 변환
       const getItemId = (itemName) => {
         if (!itemName) return null;
-        const item = (stateHolder.current.mappedData || []).find(m =>
-          m.itemName === itemName
-        );
-        return item ? item._id : null;
+        const item = dbItems.find(m => m.item_name === itemName);
+        return item ? item.id : null;
       };
 
       const newTxs = (stateHolder.current.transactions || [])
