@@ -61,13 +61,22 @@ export function waitForAuthThenSync() {
  * 왜 전체가 아닌 부분 동기화? → 품목 10,000개를 매번 보내면 느림
  */
 let _lastLocalSyncTime = 0; // 내가 마지막으로 Supabase에 쓴 시각 (내 변경이 Realtime으로 돌아오면 무시)
+let _isSyncing = false;    // 현재 sync 진행 중 → Realtime reload 억제
 
 export function getLastLocalSyncTime() {
   return _lastLocalSyncTime;
 }
 
+export function isSyncing() {
+  return _isSyncing;
+}
+
 async function syncToSupabase() {
   if (!isSupabaseConfigured || _dirtyKeys.size === 0) return;
+  // sync 시작 시점에 타임스탬프 설정 — Realtime 이벤트 억제 창을 즉시 활성화
+  // (기존: 완료 후 설정 → 완료 전 Realtime이 restoreState를 발동시켜 재고수량이 0으로 초기화되는 버그)
+  _lastLocalSyncTime = Date.now();
+  _isSyncing = true;
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
     waitForAuthThenSync();
@@ -315,7 +324,6 @@ async function syncToSupabase() {
     } else {
       _syncRetryCount = 0;
     }
-    // 쓰기 완료 후 타임스탬프 기록 — Realtime 이벤트 억제 창을 정확하게 유지
     _lastLocalSyncTime = Date.now();
   } catch (err) {
     // 전체 실패 시 모든 키 복원
@@ -331,6 +339,8 @@ async function syncToSupabase() {
     }
     _syncRetryCount++;
     setTimeout(() => syncToSupabase(), 10_000);
+  } finally {
+    _isSyncing = false;
   }
 }
 
