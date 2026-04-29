@@ -147,6 +147,9 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       } else if (sort.key === 'outTotal') {
         av = Math.round((parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0) * 1.1);
         bv = Math.round((parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0) * 1.1);
+      } else if (sort.key === 'outVat') {
+        av = Math.round((parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0) * 0.1);
+        bv = Math.round((parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0) * 0.1);
       } else if (sort.key === 'profit') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
         const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
@@ -228,7 +231,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
 
   const outTotals = useMemo(() => {
     if (!isOutMode) return null;
-    let totQty = 0, totOutAmt = 0, totOutTotal = 0, totWacSupply = 0, totProfit = 0;
+    let totQty = 0, totOutAmt = 0, totVat = 0, totOutTotal = 0, totWacSupply = 0, totProfit = 0;
     sorted.forEach(tx => {
       const q = parseFloat(tx.quantity) || 0;
       const itd = itemMap.get(tx.itemName) || {};
@@ -236,12 +239,14 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       const oa = Math.round(sp * q);
       const wac = wacMap[tx.itemName] || (parseFloat(tx.unitPrice || itd.unitPrice) || 0);
       const ws = Math.round(wac * q);
+      const vat = Math.round(oa * 0.1);
       totQty += q; totOutAmt += oa;
       totOutTotal += Math.round(oa * 1.1);
       totWacSupply += ws; totProfit += oa - ws;
+      totVat += vat;
     });
     return {
-      totQty, totOutAmt, totOutTotal, totWacSupply, totProfit,
+      totQty, totOutAmt, totVat, totOutTotal, totWacSupply, totProfit,
       totProfitMargin: totOutAmt > 0 ? (totProfit / totOutAmt * 100).toFixed(1) + '%' : '-',
       totCogsMargin:   totOutAmt > 0 ? (totWacSupply / totOutAmt * 100).toFixed(1) + '%' : '-',
     };

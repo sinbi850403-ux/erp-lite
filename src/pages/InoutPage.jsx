@@ -392,7 +392,10 @@ export function InoutPage({ mode = 'all' }) {
                     {[
                       { key: 'sellingPrice', label: '출고단가' },
                       { key: 'outAmt',       label: '판매가'   },
+                      { key: 'outVat',       label: '부가세'   },
                       { key: 'outTotal',     label: '출고합계' },
+                      { key: 'profit',       label: '이익액'   },
+                      { key: 'profitMargin', label: '이익률'   },
                     ].map(({ key, label }) => (
                       <SortTh key={key} sortKey={key} sort={sort} onSort={toggleSort} className="text-right" style={{
                         fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
@@ -481,7 +484,14 @@ export function InoutPage({ mode = 'all' }) {
                           {/* 판매 그룹 */}
                           <td className="text-right">{salePrice ? W(salePrice) : '-'}</td>
                           <td className="text-right">{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{outAmt ? W(Math.round(outAmt * 0.1)) : '-'}</td>
                           <td className="text-right">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right" style={{ color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: 600 }}>
+                            {outAmt ? W(profit) : '-'}
+                          </td>
+                          <td className="text-right" style={{ color: profit > 0 ? 'var(--success)' : profit < 0 ? 'var(--danger)' : 'var(--text-muted)', fontSize: '12px' }}>
+                            {outAmt > 0 ? (profit / outAmt * 100).toFixed(1) + '%' : '-'}
+                          </td>
                         </>
                       ) : isInMode ? (
                         <>
@@ -556,15 +566,19 @@ export function InoutPage({ mode = 'all' }) {
               })()}
               {isOutMode && outTotals && sorted.length > 0 && (() => {
                 const S = { fontWeight: 700, padding: '8px 12px', borderTop: '2px solid var(--border-color,#333)' };
+                const profitColor = outTotals.totProfit > 0 ? '#16a34a' : outTotals.totProfit < 0 ? '#dc2626' : '#666';
                 return (
                   <tfoot>
                     <tr style={{ background: 'var(--bg-lighter)', fontWeight: 700 }}>
                       <td colSpan={10} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
                         합계 ({sorted.length.toLocaleString()}건)
                       </td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>-</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutAmt)}</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutTotal)}</td>
+                      <td className="text-right" style={{ ...S, fontWeight: 400 }}>-</td>
+                      <td className="text-right" style={S}>{W(outTotals.totOutAmt)}</td>
+                      <td className="text-right" style={{ ...S, color: 'var(--text-muted)', fontWeight: 400 }}>{W(outTotals.totVat)}</td>
+                      <td className="text-right" style={S}>{W(outTotals.totOutTotal)}</td>
+                      <td className="text-right" style={{ ...S, color: profitColor }}>{W(outTotals.totProfit)}</td>
+                      <td className="text-right" style={{ ...S, color: profitColor, fontSize: '12px' }}>{outTotals.totProfitMargin}</td>
                       <td style={S}></td>
                     </tr>
                   </tfoot>
