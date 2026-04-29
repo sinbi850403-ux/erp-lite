@@ -49,6 +49,7 @@ export function buildColMap(headers, modeDefault) {
     note:         findCol('비고'),
     spec:         findCol('규격'),
     unit:         findCol('단위'),
+    color:        findCol('색상', '컬러', 'color'),
     category:     findCol('자산', '분류', '카테고리'),
   };
 }
@@ -95,6 +96,7 @@ export function parseExcelRows(sheetData, colMap, modeDefault, items) {
       note:         colMap.note >= 0     ? String(row[colMap.note] ?? '').trim()     : '',
       spec:         colMap.spec >= 0     ? String(row[colMap.spec] ?? '').trim()     : (matchedItem?.spec     || ''),
       unit:         colMap.unit >= 0     ? String(row[colMap.unit] ?? '').trim()     : (matchedItem?.unit     || ''),
+      color:        colMap.color >= 0    ? String(row[colMap.color] ?? '').trim()    : (matchedItem?.color    || ''),
       category:     colMap.category >= 0 ? String(row[colMap.category] ?? '').trim() : (matchedItem?.category || ''),
       matched:      Boolean(matchedItem),
     });
