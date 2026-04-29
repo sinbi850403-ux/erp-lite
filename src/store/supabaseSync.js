@@ -122,9 +122,15 @@ async function syncToSupabase() {
 
     // 입출고 동기화 — 새로 추가된 건만
     if (keysToSync.has('transactions')) {
-      // DB에서 items와 warehouses 직접 로드 (stateHolder 의존 제거)
-      const dbItems = await managedQuery(() => db.items.list({ limit: 1_000_000 })).catch(() => []);
-      const dbWarehouses = await managedQuery(() => db.warehouses.list()).catch(() => []);
+      // Supabase에서 items와 warehouses 직접 로드 (stateHolder 의존 제거)
+      const { data: dbItems = [] } = await supabase.from('items')
+        .select('id, item_name')
+        .limit(1000)
+        .catch(() => ({ data: [] }));
+
+      const { data: dbWarehouses = [] } = await supabase.from('warehouses')
+        .select('id, name')
+        .catch(() => ({ data: [] }));
 
       // warehouse 문자열 → warehouse_id UUID 변환 (기본값: 본사 창고)
       const getWarehouseId = (warehouseName) => {
