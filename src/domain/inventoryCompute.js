@@ -196,15 +196,42 @@ export function applyFilters(data, safetyStock, { keyword, category, warehouse, 
 export function applySort(data, sort) {
   if (!sort || !sort.key || sort.key === 'default') return data;
   const { key, direction } = sort;
+  const fieldMeta = ALL_FIELDS.find(f => f.key === key);
+  const isNumericField = !!fieldMeta?.numeric;
+
+  const toMaybeNumber = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const s = String(v).replace(/,/g, '').trim();
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
   return [...data].sort((a, b) => {
     if (key === '__lowStock') {
       return (b.__lowStock ? 1 : 0) - (a.__lowStock ? 1 : 0);
     }
-    const aNum = toNum(a[key]), bNum = toNum(b[key]);
-    if (!isNaN(aNum) && !isNaN(bNum)) {
+
+    if (isNumericField) {
+      const aNum = toMaybeNumber(a[key]);
+      const bNum = toMaybeNumber(b[key]);
+      if (aNum == null && bNum == null) return 0;
+      if (aNum == null) return 1;
+      if (bNum == null) return -1;
       return direction === 'asc' ? aNum - bNum : bNum - aNum;
     }
-    const av = String(a[key] || ''), bv = String(b[key] || '');
-    return direction === 'asc' ? av.localeCompare(bv, 'ko') : bv.localeCompare(av, 'ko');
+
+    const av = String(a[key] ?? '').trim();
+    const bv = String(b[key] ?? '').trim();
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+
+    // 상품코드는 자연 정렬(0012, 010, 100 등) 적용
+    const compare = key === 'itemCode'
+      ? av.localeCompare(bv, 'ko', { numeric: true, sensitivity: 'base' })
+      : av.localeCompare(bv, 'ko', { sensitivity: 'base' });
+    return direction === 'asc' ? compare : -compare;
   });
 }
