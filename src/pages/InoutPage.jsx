@@ -110,6 +110,35 @@ export function InoutPage({ mode = 'all' }) {
     return Array.from(groups.values());
   }, [isOutMode, sorted, resolveItem, resolveWac]);
 
+  const groupedInRows = useMemo(() => {
+    if (!isInMode) return [];
+    const groups = new Map();
+    sorted.forEach((tx) => {
+      const itemData = resolveItem(tx);
+      const code = tx.itemCode || itemData.itemCode || '';
+      const name = tx.itemName || itemData.itemName || '-';
+      const key = String(code || name);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          code,
+          name,
+          rows: [],
+          qty: 0,
+          supply: 0,
+        });
+      }
+      const group = groups.get(key);
+      const qty = parseFloat(tx.quantity) || 0;
+      const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+      const supply = Math.round(unitPrice * qty);
+      group.rows.push(tx);
+      group.qty += qty;
+      group.supply += supply;
+    });
+    return Array.from(groups.values());
+  }, [isInMode, sorted, resolveItem]);
+
   const toggleGroup = (groupKey) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -537,6 +566,65 @@ export function InoutPage({ mode = 'all' }) {
                             <td>
                               {canDelete && (
                                 <button className="btn btn-xs btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => handleDelete(tx)}>
+                                  삭제
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                }) : isInMode ? groupedInRows.map((group) => {
+                  const isExpanded = expandedGroups.has(group.key);
+                  return (
+                    <React.Fragment key={`group-in-${group.key}`}>
+                      <tr className="row-warning">
+                        <td colSpan={16} style={{ padding: '8px 12px', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleGroup(group.key)}>
+                          {isExpanded ? '▼' : '▶'} [{group.code || '-'}] {group.name} · {group.rows.length}건 · 수량 {fmt(group.qty)} · 공급가 {W(group.supply)}
+                        </td>
+                      </tr>
+                      {isExpanded && group.rows.map((tx, i) => {
+                        const rowNum = i + 1;
+                        const qty = parseFloat(tx.quantity) || 0;
+                        const itemData = resolveItem(tx);
+                        const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+                        const supply = Math.round(unitPrice * qty);
+                        const vat = Math.ceil(supply * 0.1);
+                        const totalPrice = supply + vat;
+                        const category = tx.category || itemData.category || '';
+                        const itemCode = tx.itemCode || itemData.itemCode || '';
+                        const spec = tx.spec || itemData.spec || '';
+                        const unit = tx.unit || itemData.unit || '';
+                        const isSelected = selectedIds.has(tx.id);
+                        return (
+                          <tr key={tx.id} className={isSelected ? 'selected' : ''}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(tx.id)} />
+                            </td>
+                            <td className="col-num">{rowNum}</td>
+                            <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{category || '-'}</td>
+                            <td style={{ fontSize: '13px' }}>{formatDate(tx.date)}</td>
+                            <td style={{ fontSize: '13px' }}>{tx.vendor || '-'}</td>
+                            <td style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{itemCode || '-'}</td>
+                            <td className="col-fill"><strong>{tx.itemName || '-'}</strong></td>
+                            <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tx.color || itemData.color || '-'}</td>
+                            <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{spec || '-'}</td>
+                            <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{unit || '-'}</td>
+                            <td className="text-right" style={{ fontWeight: 600, fontSize: '13px' }}>
+                              +{qty ? qty.toLocaleString('ko-KR') : '-'}
+                            </td>
+                            <td className="text-right" style={{ fontSize: '13px' }}>{unitPrice ? W(unitPrice) : '-'}</td>
+                            <td className="text-right" style={{ fontSize: '13px' }}>{supply ? W(supply) : '-'}</td>
+                            <td className="text-right" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{supply ? W(vat) : '-'}</td>
+                            <td className="text-right" style={{ fontWeight: 700, fontSize: '13px' }}>{supply ? W(totalPrice) : '-'}</td>
+                            <td>
+                              {canDelete && (
+                                <button
+                                  className="btn btn-xs btn-outline"
+                                  style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                                  onClick={() => handleDelete(tx)}
+                                >
                                   삭제
                                 </button>
                               )}

@@ -262,6 +262,7 @@ export default function LedgerPage() {
   const [itemFilter, setItemFilter] = useState('');
   const [showOpening, setShowOpening] = useState(false);
   const [sort, setSort] = useState({ key: 'closingValue', direction: 'desc' });
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
 
   const handleSort = (key) => {
     setSort(prev => ({
@@ -282,6 +283,35 @@ export default function LedgerPage() {
     [items, transactions, fromDate, toDate, vendorFilter, itemFilter, openingOverrides]
   );
   const rows = useMemo(() => sortRows(rawRows, sort), [rawRows, sort]);
+  const groupedRows = useMemo(() => {
+    const groups = new Map();
+    rows.forEach((row) => {
+      const key = String(row.itemCode || row.itemName || '');
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          itemCode: row.itemCode || '',
+          itemName: row.itemName || '-',
+          rows: [],
+          closingQty: 0,
+          closingValue: 0,
+        });
+      }
+      const group = groups.get(key);
+      group.rows.push(row);
+      group.closingQty += Number(row.closingQty || 0);
+      group.closingValue += Number(row.closingValue || 0);
+    });
+    return Array.from(groups.values());
+  }, [rows]);
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  };
 
   const totals = useMemo(() => rows.reduce((acc, r) => ({
     openingQty:   acc.openingQty   + r.openingQty,
@@ -463,31 +493,43 @@ export default function LedgerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, i) => (
-                    <tr key={i}>
-                      <td className="col-num" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.vendor || '-'}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.itemCode || '-'}</td>
-                      <td><strong>{row.itemName}</strong></td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.color || '-'}</td>
-                      <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{row.year}</td>
-                      <td className="text-right">{n(row.openingQty)}</td>
-                      <td className="text-right">{n(row.openingAmt)}</td>
-                      <td className="text-right type-in">{n(row.inQty)}</td>
-                      <td className="text-right type-in">{row.inAmt > 0 ? fmt(row.inAmt) : '-'}</td>
-                      <td className="text-right type-out">{n(row.outQty)}</td>
-                      <td className="text-right type-out">{row.outAmt > 0 ? fmt(row.outAmt) : '-'}</td>
-                      <td className="text-right" style={{ color: row.lossQty > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                        {n(row.lossQty)}
-                      </td>
-                      <td className="text-right" style={{ color: row.lossAmt > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                        {row.lossAmt > 0 ? fmt(row.lossAmt) : '-'}
-                      </td>
-                      <td className="text-right" style={{ fontWeight: 700 }}>{row.closingQty.toLocaleString('ko-KR')}</td>
-                      <td className="text-right" style={{ fontWeight: 700 }}>{row.closingValue > 0 ? fmt(row.closingValue) : '-'}</td>
-                      <td className="text-right">{fmt(row.unitPrice)}</td>
-                    </tr>
-                  ))}
+                  {groupedRows.map((group) => {
+                    const isExpanded = expandedGroups.has(group.key);
+                    return (
+                      <React.Fragment key={`ledger-group-${group.key}`}>
+                        <tr className="row-warning">
+                          <td colSpan={17} style={{ padding: '8px 12px', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleGroup(group.key)}>
+                            {isExpanded ? '▼' : '▶'} [{group.itemCode || '-'}] {group.itemName} · {group.rows.length}건 · 기말재고수량 {n(group.closingQty)} · 기말재고금액 {fmt(group.closingValue)}
+                          </td>
+                        </tr>
+                        {isExpanded && group.rows.map((row, i) => (
+                          <tr key={`${group.key}-${i}`}>
+                            <td className="col-num" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
+                            <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.vendor || '-'}</td>
+                            <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.itemCode || '-'}</td>
+                            <td><strong>{row.itemName}</strong></td>
+                            <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{row.color || '-'}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{row.year}</td>
+                            <td className="text-right">{n(row.openingQty)}</td>
+                            <td className="text-right">{n(row.openingAmt)}</td>
+                            <td className="text-right type-in">{n(row.inQty)}</td>
+                            <td className="text-right type-in">{row.inAmt > 0 ? fmt(row.inAmt) : '-'}</td>
+                            <td className="text-right type-out">{n(row.outQty)}</td>
+                            <td className="text-right type-out">{row.outAmt > 0 ? fmt(row.outAmt) : '-'}</td>
+                            <td className="text-right" style={{ color: row.lossQty > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                              {n(row.lossQty)}
+                            </td>
+                            <td className="text-right" style={{ color: row.lossAmt > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                              {row.lossAmt > 0 ? fmt(row.lossAmt) : '-'}
+                            </td>
+                            <td className="text-right" style={{ fontWeight: 700 }}>{row.closingQty.toLocaleString('ko-KR')}</td>
+                            <td className="text-right" style={{ fontWeight: 700 }}>{row.closingValue > 0 ? fmt(row.closingValue) : '-'}</td>
+                            <td className="text-right">{fmt(row.unitPrice)}</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr style={{ fontWeight: 700, background: 'var(--bg-card)' }}>

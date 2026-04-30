@@ -41,6 +41,7 @@ export default function InventoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [colPanel, setColPanel]       = useState(false);
   const [deleting, setDeleting]       = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
 
   const setFilter = useCallback(patch => setFilterRaw(prev => ({ ...prev, ...patch })), []);
 
@@ -81,6 +82,35 @@ export default function InventoryPage() {
   const data     = useMemo(() => computeData(enrichedData, transactions), [enrichedData, transactions]);
   const filtered = useMemo(() => applyFilters(data, safetyStock, filter), [data, safetyStock, filter]);
   const sorted   = useMemo(() => applySort(filtered, sort), [filtered, sort]);
+  const groupedRows = useMemo(() => {
+    const groups = new Map();
+    sorted.forEach((row, i) => {
+      const key = String(row.itemCode || row.itemName || '');
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          itemCode: row.itemCode || '',
+          itemName: row.itemName || '-',
+          rows: [],
+          qty: 0,
+          totalPrice: 0,
+        });
+      }
+      const group = groups.get(key);
+      group.rows.push({ row, index: i });
+      group.qty += toNum(row.quantity);
+      group.totalPrice += toNum(row.totalPrice);
+    });
+    return Array.from(groups.values());
+  }, [sorted]);
+  const toggleGroup = useCallback((groupKey) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }, []);
 
   useEffect(() => { if (tableRef.current) enableColumnResize(tableRef.current); }, [sorted]);
 
@@ -320,30 +350,43 @@ export default function InventoryPage() {
             <tbody>
               {sorted.length === 0 ? (
                 <tr><td colSpan={activeFields.length + 3} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>검색 결과가 없습니다</td></tr>
-              ) : sorted.map((row, i) => {
-                const isLow = safetyStock[row.itemName] != null && toNum(row.quantity) <= safetyStock[row.itemName];
+              ) : groupedRows.map((group) => {
+                const isExpanded = expandedGroups.has(group.key);
+                const groupColSpan = activeFields.length + (canDelete ? 1 : 0) + 1 + ((canEdit || canDelete) ? 1 : 0);
                 return (
-                  <tr key={row.itemCode || row.itemName || i} className={isLow ? 'row-warning' : ''}>
-                    {canDelete && <td><input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)} /></td>}
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
-                    {activeFields.map(key => {
-                      const f   = ALL_FIELDS.find(x => x.key === key);
-                      const val = formatCell(key, row[key]);
+                  <React.Fragment key={`inv-group-${group.key}`}>
+                    <tr className="row-warning">
+                      <td colSpan={groupColSpan} style={{ padding: '8px 12px', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleGroup(group.key)}>
+                        {isExpanded ? '▼' : '▶'} [{group.itemCode || '-'}] {group.itemName} · {group.rows.length}건 · 재고수량 {Math.round(group.qty).toLocaleString('ko-KR')} · 합계금액 {fmt(group.totalPrice)}
+                      </td>
+                    </tr>
+                    {isExpanded && group.rows.map(({ row, index: i }) => {
+                      const isLow = safetyStock[row.itemName] != null && toNum(row.quantity) <= safetyStock[row.itemName];
                       return (
-                        <td key={key} className={f?.numeric ? 'text-right' : ''}>
-                          {isLow && key === 'quantity' ? <span style={{ color: 'var(--danger)' }}> {val}</span> : val}
-                        </td>
+                        <tr key={row.itemCode || row.itemName || i} className={isLow ? 'row-warning' : ''}>
+                          {canDelete && <td><input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)} /></td>}
+                          <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
+                          {activeFields.map(key => {
+                            const f   = ALL_FIELDS.find(x => x.key === key);
+                            const val = formatCell(key, row[key]);
+                            return (
+                              <td key={key} className={f?.numeric ? 'text-right' : ''}>
+                                {isLow && key === 'quantity' ? <span style={{ color: 'var(--danger)' }}> {val}</span> : val}
+                              </td>
+                            );
+                          })}
+                          {(canEdit || canDelete) && (
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                {canEdit && <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'edit', idx: i })}>수정</button>}
+                                {canDelete && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleting(i)}>삭제</button>}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
                       );
                     })}
-                    {(canEdit || canDelete) && (
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {canEdit && <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'edit', idx: i })}>수정</button>}
-                          {canDelete && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleting(i)}>삭제</button>}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
+                  </React.Fragment>
                 );
               })}
             </tbody>
