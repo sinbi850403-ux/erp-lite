@@ -192,8 +192,10 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
                 </table>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button className="btn btn-outline" onClick={() => setPreviewRows(null)}>취소</button>
-                <button className="btn btn-primary" onClick={handleConfirm}>총 {previewRows.length}건 등록</button>
+                <button className="btn btn-outline" onClick={() => setPreviewRows(null)} disabled={loading}>취소</button>
+                <button className="btn btn-primary" onClick={handleConfirm} disabled={loading}>
+                  {loading ? '등록 중...' : `총 ${previewRows.length}건 등록`}
+                </button>
               </div>
             </div>
           )}
