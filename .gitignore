@@ -27,3 +27,8 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Claude worktrees (local development only)
+.claude/worktrees/
+.claude/plans/
+_workspace/
