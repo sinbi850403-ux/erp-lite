@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { showToast } from '../toast.js';
+import { normalizeCurrency } from '../utils/formatters.js';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = () => {
@@ -71,8 +72,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       if (!acc[k]) acc[k] = { amt: 0, qty: 0 };
       const qty = parseFloat(tx.quantity) || 0;
       if (qty <= 0) return;
-      const supply = parseFloat(tx.supplyValue) || 0;
-      let price = parseFloat(tx.unitPrice) || 0;
+      const supply = normalizeCurrency(tx.supplyValue);
+      let price = normalizeCurrency(tx.unitPrice);
       if (supply > 0) price = supply / qty;
       if (!Number.isFinite(price) || price <= 0) return;
       acc[k].amt += price * qty;
@@ -88,10 +89,10 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     const byKey = wacMap[makeKey(tx.itemName, tx.itemCode)] || 0;
     if (byKey > 0) return byKey;
 
-    const itemCost = parseFloat(itemData?.unitPrice) || 0;
+    const itemCost = normalizeCurrency(itemData?.unitPrice);
     if (itemCost > 0) return itemCost;
 
-    const rowCost = parseFloat(tx.unitPrice) || 0;
+    const rowCost = normalizeCurrency(tx.unitPrice);
     if (rowCost > 0) return rowCost;
     return 0;
   };

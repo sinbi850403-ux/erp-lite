@@ -9,7 +9,7 @@ import { downloadExcel } from '../excel.js';
 import { canAction } from '../auth.js';
 import { addTransaction, deleteTransaction } from '../store.js';
 import { enableColumnResize } from '../ux-toolkit.js';
-import { fmtNum as fmt, fmtWon as W } from '../utils/formatters.js';
+import { fmtNum as fmt, fmtWon as W, normalizeCurrency } from '../utils/formatters.js';
 import { formatDateStr as formatDate } from '../domain/inoutExcelParser.js';
 import { TxModal } from '../components/inout/TxModal.jsx';
 import { BulkUploadModal } from '../components/inout/BulkUploadModal.jsx';
@@ -98,7 +98,7 @@ export function InoutPage({ mode = 'all' }) {
       }
       const group = groups.get(key);
       const qty = parseFloat(tx.quantity) || 0;
-      const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
+      const salePrice = normalizeCurrency(tx.sellingPrice || itemData.salePrice);
       const outAmt = Math.round(salePrice * qty);
       const wac = resolveWac(tx, itemData);
       const cost = Math.round(wac * qty);
@@ -130,7 +130,7 @@ export function InoutPage({ mode = 'all' }) {
       }
       const group = groups.get(key);
       const qty = parseFloat(tx.quantity) || 0;
-      const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+      const unitPrice = normalizeCurrency(tx.unitPrice || itemData.unitPrice);
       const supply = Math.round(unitPrice * qty);
       group.rows.push(tx);
       group.qty += qty;
@@ -195,7 +195,7 @@ export function InoutPage({ mode = 'all' }) {
       data = list.map(tx => {
         const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const cost = parseFloat(tx.unitPrice) || 0;
+        const cost = normalizeCurrency(tx.unitPrice);
         const supply = Math.round(cost * qty);
         const vat = Math.ceil(supply * 0.1);
         return {
@@ -212,7 +212,7 @@ export function InoutPage({ mode = 'all' }) {
       data = list.map(tx => {
         const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const salePrice = parseFloat(tx.sellingPrice || it.sellingPrice) || 0;
+        const salePrice = normalizeCurrency(tx.sellingPrice || it.sellingPrice);
         const outAmt = Math.round(salePrice * qty);
         return {
           '자산': it.category || tx.category || '', '출고일자': tx.date || '',
@@ -227,7 +227,7 @@ export function InoutPage({ mode = 'all' }) {
       data = transactions.map(tx => {
         const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const cost = parseFloat(tx.unitPrice) || 0;
+        const cost = normalizeCurrency(tx.unitPrice);
         const supply = Math.round(cost * qty);
         const vat = tx.type === 'in' ? Math.ceil(supply * 0.1) : Math.floor(supply * 0.1);
         return {
@@ -531,8 +531,8 @@ export function InoutPage({ mode = 'all' }) {
                         const rowNum = i + 1;
                         const qty = parseFloat(tx.quantity) || 0;
                         const itemData = resolveItem(tx);
-                        const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
-                        const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
+                        const unitPrice = normalizeCurrency(tx.unitPrice || itemData.unitPrice);
+                        const salePrice = normalizeCurrency(tx.sellingPrice || itemData.salePrice);
                         const outAmt = Math.round(salePrice * qty);
                         const wac = resolveWac(tx, itemData) || unitPrice;
                         const wacSupply = Math.round(wac * qty);
@@ -588,7 +588,7 @@ export function InoutPage({ mode = 'all' }) {
                         const rowNum = i + 1;
                         const qty = parseFloat(tx.quantity) || 0;
                         const itemData = resolveItem(tx);
-                        const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+                        const unitPrice = normalizeCurrency(tx.unitPrice || itemData.unitPrice);
                         const supply = Math.round(unitPrice * qty);
                         const vat = Math.ceil(supply * 0.1);
                         const totalPrice = supply + vat;
@@ -638,11 +638,11 @@ export function InoutPage({ mode = 'all' }) {
                   const rowNum = i + 1;
                   const qty = parseFloat(tx.quantity) || 0;
                   const itemData = resolveItem(tx);
-                  const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+                  const unitPrice = normalizeCurrency(tx.unitPrice || itemData.unitPrice);
                   const supply = Math.round(unitPrice * qty);
                   const vat = Math.ceil(supply * 0.1);
                   const totalPrice = supply + vat;
-                  const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
+                  const salePrice = normalizeCurrency(tx.sellingPrice || itemData.salePrice);
                   const outAmt = Math.round(salePrice * qty);
                   const wac = resolveWac(tx, itemData) || unitPrice;
                   const wacSupply = Math.round(wac * qty);

@@ -9,7 +9,7 @@ import { downloadExcel } from '../excel.js';
 import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { applyKoreanFont, getKoreanFontStyle } from '../pdf-font.js';
-import { fmtWon as fmt } from '../utils/formatters.js';
+import { fmtWon as fmt, normalizeCurrency } from '../utils/formatters.js';
 
 applyPlugin(jsPDF);
 
@@ -97,7 +97,7 @@ function buildLedger(items, transactions, from, to, vendorFilter, itemFilter, op
 
   return targetItems.map(item => {
     const currentQty  = parseFloat(item.quantity)  || 0;
-    const unitPrice   = parseFloat(item.unitPrice)  || 0;
+    const unitPrice   = normalizeCurrency(item.unitPrice);
     let periodInQty = 0, periodInAmt = 0;
     let periodOutQty = 0, periodOutAmt = 0, periodCostAmt = 0;
     let periodLossQty = 0, periodLossAmt = 0;
@@ -123,17 +123,17 @@ function buildLedger(items, transactions, from, to, vendorFilter, itemFilter, op
       if (tx.date >= from && tx.date <= to) {
         if (tx.type === 'in') {
           periodInQty += qty;
-          periodInAmt += Math.round((parseFloat(tx.unitPrice) || 0) * qty);
+          periodInAmt += Math.round(normalizeCurrency(tx.unitPrice) * qty);
           if (tx.vendor) primaryVendor = tx.vendor;
         } else if (tx.type === 'out') {
           periodOutQty += qty;
-          periodOutAmt  += Math.round((parseFloat(tx.sellingPrice) || 0) * qty);
-          periodCostAmt += Math.round((parseFloat(tx.unitPrice)    || 0) * qty);
+          periodOutAmt  += Math.round(normalizeCurrency(tx.sellingPrice) * qty);
+          periodCostAmt += Math.round(normalizeCurrency(tx.unitPrice) * qty);
           // 입고 거래처가 없으면 출고 거래처로 보완
           if (tx.vendor && !primaryVendor) primaryVendor = tx.vendor;
         } else if (tx.type === 'loss' || tx.type === 'adjust') {
           periodLossQty += qty;
-          periodLossAmt += Math.round((parseFloat(tx.unitPrice) || 0) * qty);
+          periodLossAmt += Math.round(normalizeCurrency(tx.unitPrice) * qty);
         }
       }
     });
@@ -182,7 +182,7 @@ function buildLedger(items, transactions, from, to, vendorFilter, itemFilter, op
       lossAmt: finalLossAmt,
       closingQty,
       closingValue,
-      sellingPrice: parseFloat(item.sellingPrice || item.salePrice) || 0,
+      sellingPrice: normalizeCurrency(item.sellingPrice || item.salePrice),
     };
   });
 }
