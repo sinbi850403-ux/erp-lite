@@ -20,40 +20,50 @@ export function computeData(rawData, transactions) {
     if (name) return `name:${name}`;
     return '';
   };
-  (transactions || []).forEach(tx => {
-    const k = makeKey(tx.itemName, tx.itemCode);
-    if (!k) return;
-    if (!txAgg[k]) {
-      txAgg[k] = {
+  const getOrCreateAgg = (key) => {
+    if (!key) return null;
+    if (!txAgg[key]) {
+      txAgg[key] = {
         inQty: 0, inAmt: 0, outQty: 0, outAmt: 0, costAmt: 0,
         itemCode: '', vendor: '', category: '', color: '', spec: '', unit: '',
       };
     }
+    return txAgg[key];
+  };
+  (transactions || []).forEach(tx => {
+    const codeKey = makeKey('', tx.itemCode);
+    const nameKey = makeKey(tx.itemName, '');
+    const baseKey = codeKey || nameKey;
+    if (!baseKey) return;
+    const agg = getOrCreateAgg(baseKey);
+    if (codeKey && !txAgg[codeKey]) txAgg[codeKey] = agg;
+    if (nameKey && !txAgg[nameKey]) txAgg[nameKey] = agg;
+
     const qty = parseFloat(tx.quantity) || 0;
-    if (!txAgg[k].itemCode && tx.itemCode) txAgg[k].itemCode = String(tx.itemCode).trim();
-    if (!txAgg[k].vendor && tx.vendor) txAgg[k].vendor = String(tx.vendor).trim();
-    if (!txAgg[k].category && tx.category) txAgg[k].category = String(tx.category).trim();
-    if (!txAgg[k].color && tx.color) txAgg[k].color = String(tx.color).trim();
-    if (!txAgg[k].spec && tx.spec) txAgg[k].spec = String(tx.spec).trim();
-    if (!txAgg[k].unit && tx.unit) txAgg[k].unit = String(tx.unit).trim();
+    if (!agg.itemCode && tx.itemCode) agg.itemCode = String(tx.itemCode).trim();
+    if (!agg.vendor && tx.vendor) agg.vendor = String(tx.vendor).trim();
+    if (!agg.category && tx.category) agg.category = String(tx.category).trim();
+    if (!agg.color && tx.color) agg.color = String(tx.color).trim();
+    if (!agg.spec && tx.spec) agg.spec = String(tx.spec).trim();
+    if (!agg.unit && tx.unit) agg.unit = String(tx.unit).trim();
     if (tx.type === 'in') {
-      txAgg[k].inQty += qty;
+      agg.inQty += qty;
       const inSupply = parseFloat(tx.supplyValue);
       if (Number.isFinite(inSupply) && inSupply > 0) {
-        txAgg[k].inAmt += Math.round(inSupply);
+        agg.inAmt += Math.round(inSupply);
       } else {
-        txAgg[k].inAmt += Math.round((parseFloat(tx.unitPrice) || 0) * qty);
+        agg.inAmt += Math.round((parseFloat(tx.unitPrice) || 0) * qty);
       }
     } else {
-      txAgg[k].outQty += qty;
+      agg.outQty += qty;
       const sp = parseFloat(tx.actualSellingPrice || tx.sellingPrice || tx.salePrice) || 0;
       const cp = parseFloat(tx.unitPrice) || 0;
-      txAgg[k].outAmt  += Math.round(sp * qty);
+      agg.outAmt  += Math.round(sp * qty);
       const outSupply = parseFloat(tx.supplyValue);
       if (Number.isFinite(outSupply) && outSupply > 0) {
-        txAgg[k].costAmt += Math.round(outSupply);
+        agg.costAmt += Math.round(outSupply);
       } else {
-        txAgg[k].costAmt += Math.round(cp * qty);
+        agg.costAmt += Math.round(cp * qty);
       }
     }
   });
