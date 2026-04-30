@@ -2,7 +2,7 @@
  * LedgerPage.jsx - 수불부 (재고수불대장)
  * 헤더: 거래처 | 상품코드 | 상품명 | 년도 | 전월이월(수량/금액) | 입고(수량/금액) | 출고(수량/금액) | 로스(수량/금액) | 기말재고(수량/금액) | 단가
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../hooks/useStore.js';
 import { showToast } from '../toast.js';
 import { downloadExcel } from '../excel.js';
@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import { applyPlugin } from 'jspdf-autotable';
 import { applyKoreanFont, getKoreanFontStyle } from '../pdf-font.js';
 import { fmtWon as fmt, normalizeCurrency } from '../utils/formatters.js';
+import { enableColumnResize } from '../ux-toolkit.js';
 
 applyPlugin(jsPDF);
 
@@ -262,6 +263,7 @@ export default function LedgerPage() {
   const [itemFilter, setItemFilter] = useState('');
   const [showOpening, setShowOpening] = useState(false);
   const [sort, setSort] = useState({ key: 'closingValue', direction: 'desc' });
+  const tableRef = useRef(null);
 
   const handleSort = (key) => {
     setSort(prev => ({
@@ -374,6 +376,10 @@ export default function LedgerPage() {
 
   const n = (v) => v > 0 ? v.toLocaleString('ko-KR') : '-';
 
+  useEffect(() => {
+    if (tableRef.current) enableColumnResize(tableRef.current);
+  }, [rows, sort]);
+
   return (
     <div>
       <div className="page-header">
@@ -435,7 +441,7 @@ export default function LedgerPage() {
               </div>
             </div>
             <div className="table-wrapper" style={{ border: 'none', borderRadius: 0, overflowX: 'auto' }}>
-              <table className="data-table inv-table" style={{ minWidth: '1200px' }}>
+              <table className="data-table inv-table" ref={tableRef} style={{ minWidth: '1200px' }}>
                 <thead>
                   <tr>
                     <th rowSpan={2} style={{ verticalAlign: 'middle', textAlign: 'center', width: '36px' }}>#</th>
