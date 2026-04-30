@@ -2,8 +2,12 @@ import { ALL_FIELDS, DEFAULT_VISIBLE, toNum } from './inventoryConfig.js';
 
 export function computeData(rawData, transactions) {
   const txAgg = {};
-  const normName = (v) => String(v || '').trim();
-  const normCode = (v) => String(v || '').trim();
+  const normName = (v) =>
+    String(v || '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[^\p{L}\p{N}]/gu, '');
+  const normCode = (v) => String(v || '').trim().replace(/\s+/g, '').toLowerCase();
   const makeKey = (itemName, itemCode) => {
     const code = normCode(itemCode);
     if (code) return `code:${code}`;
