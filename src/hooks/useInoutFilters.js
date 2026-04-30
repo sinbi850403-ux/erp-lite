@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { showToast } from '../toast.js';
-import { normalizeCurrency } from '../utils/formatters.js';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStr = () => {
@@ -24,6 +23,30 @@ const makeKey = (itemName, itemCode) => {
   const n = normName(itemName);
   if (n) return `n:${n}`;
   return '';
+};
+const toPositiveNumber = (v) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+const deriveUnitCostFromSupply = (row) => {
+  const qty = toPositiveNumber(row?.quantity);
+  const supply = toPositiveNumber(row?.supplyValue);
+  if (qty <= 0 || supply <= 0) return 0;
+  return supply / qty;
+};
+const medianOfSorted = (arr) => {
+  const n = arr.length;
+  if (!n) return 0;
+  const m = Math.floor(n / 2);
+  return n % 2 ? arr[m] : (arr[m - 1] + arr[m]) / 2;
+};
+const quantileOfSorted = (arr, q) => {
+  if (!arr.length) return 0;
+  const pos = (arr.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const next = arr[base + 1] ?? arr[base];
+  return arr[base] + rest * (next - arr[base]);
 };
 
 export function useInoutFilters({ transactions, mappedData, mode }) {
@@ -56,45 +79,95 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       const nk = makeKey(it.itemName, '');
       if (ck && !map.has(ck)) map.set(ck, it);
       if (nk && !map.has(nk)) map.set(nk, it);
-      if (it.itemName && !map.has(it.itemName)) map.set(it.itemName, it); // 기존 호환
+      if (it.itemName && !map.has(it.itemName)) map.set(it.itemName, it); // 疫꿸퀣???紐낆넎
     });
     return map;
   }, [mappedData]);
 
   const resolveItem = (tx) => itemMap.get(makeKey(tx.itemName, tx.itemCode)) || itemMap.get(makeKey(tx.itemName, '')) || {};
 
-  const wacMap = useMemo(() => {
-    const acc = {};
-    transactions.forEach(tx => {
+  const costStatsMap = useMemo(() => {
+    const buckets = {};
+    transactions.forEach((tx) => {
       if (tx.type !== 'in') return;
       const k = makeKey(tx.itemName, tx.itemCode);
       if (!k) return;
-      if (!acc[k]) acc[k] = { amt: 0, qty: 0 };
-      const qty = parseFloat(tx.quantity) || 0;
+
+      const qty = toPositiveNumber(tx.quantity);
       if (qty <= 0) return;
-      const supply = normalizeCurrency(tx.supplyValue);
-      let price = normalizeCurrency(tx.unitPrice);
-      if (supply > 0) price = supply / qty;
-      if (!Number.isFinite(price) || price <= 0) return;
-      acc[k].amt += price * qty;
-      acc[k].qty += qty;
+
+      const fromSupply = deriveUnitCostFromSupply(tx);
+      const fromUnit = toPositiveNumber(tx.unitPrice);
+      const unitCost = fromSupply > 0 ? fromSupply : fromUnit;
+      if (!unitCost) return;
+
+      if (!buckets[k]) buckets[k] = [];
+      buckets[k].push({ unitCost, qty });
     });
+
     const result = {};
-    Object.entries(acc).forEach(([k, v]) => {
-      result[k] = v.qty > 0 && v.amt > 0 ? v.amt / v.qty : 0;
+    Object.entries(buckets).forEach(([k, rows]) => {
+      const units = rows.map((r) => r.unitCost).sort((a, b) => a - b);
+      if (!units.length) return;
+
+      const q1 = quantileOfSorted(units, 0.25);
+      const q3 = quantileOfSorted(units, 0.75);
+      const iqr = Math.max(0, q3 - q1);
+      const lower = Math.max(0, q1 - 1.5 * iqr);
+      const upper = q3 + 1.5 * iqr;
+
+      let inliers = rows.filter((r) => r.unitCost >= lower && r.unitCost <= upper);
+      if (!inliers.length) inliers = rows;
+
+      const totalQty = inliers.reduce((s, r) => s + r.qty, 0);
+      const totalAmt = inliers.reduce((s, r) => s + r.unitCost * r.qty, 0);
+      const inlierUnits = inliers.map((r) => r.unitCost).sort((a, b) => a - b);
+
+      result[k] = {
+        weighted: totalQty > 0 ? totalAmt / totalQty : 0,
+        median: medianOfSorted(inlierUnits),
+        min: inlierUnits[0] || 0,
+        max: inlierUnits[inlierUnits.length - 1] || 0,
+        count: inlierUnits.length,
+      };
     });
     return result;
   }, [transactions]);
+
+  const wacMap = useMemo(() => {
+    const map = {};
+    Object.entries(costStatsMap).forEach(([k, s]) => {
+      map[k] = toPositiveNumber(s?.weighted || s?.median || 0);
+    });
+    return map;
+  }, [costStatsMap]);
+
   const resolveWac = (tx, itemData) => {
-    const byKey = wacMap[makeKey(tx.itemName, tx.itemCode)] || 0;
-    if (byKey > 0) return byKey;
+    const key = makeKey(tx.itemName, tx.itemCode);
+    const stats = costStatsMap[key] || null;
+    const salePrice = toPositiveNumber(tx.actualSellingPrice || tx.sellingPrice || itemData?.salePrice);
+    const maxCostRatioToSale = 5;
+    const isPlausibleCost = (cost) => (
+      cost > 0 &&
+      Number.isFinite(cost) &&
+      (salePrice <= 0 || cost <= salePrice * maxCostRatioToSale)
+    );
 
-    const itemCost = normalizeCurrency(itemData?.unitPrice);
-    if (itemCost > 0) return itemCost;
+    const costFromStats = toPositiveNumber(stats?.weighted || stats?.median || 0);
+    if (isPlausibleCost(costFromStats)) return costFromStats;
 
-    const rowCost = normalizeCurrency(tx.unitPrice);
-    if (rowCost > 0) return rowCost;
-    return 0;
+    const costFromItemSupply = deriveUnitCostFromSupply(itemData);
+    if (isPlausibleCost(costFromItemSupply)) return costFromItemSupply;
+
+    const costFromItemUnit = toPositiveNumber(itemData?.unitPrice);
+    if (isPlausibleCost(costFromItemUnit)) return costFromItemUnit;
+
+    const costFromRow = toPositiveNumber(tx.unitPrice);
+    if (isPlausibleCost(costFromRow)) return costFromRow;
+
+    // ?癒? ?袁⑤궖揶쎛 ?袁? ??쑴??怨명뒄嚥??癒?뼊??롢늺, ?癒?뵡???⑥눖猷????땾嚥???볥걹??? ??낅즲嚥?筌띲끉????????묐립?醫롮몵嚥?????
+    if (salePrice > 0) return salePrice;
+    return costFromStats || costFromItemSupply || costFromItemUnit || costFromRow || 0;
   };
 
   const inList = useMemo(() => transactions.filter(tx => tx.type === 'in'), [transactions]);
@@ -107,25 +180,25 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
 
   const quickChips = isInMode
     ? [
-        { value: 'in', label: '전체 보기' },
-        { value: 'today', label: '오늘 기록' },
-        { value: 'recent3', label: '최근 3일' },
-        { value: 'missingVendor', label: '거래처 미입력' },
+        { value: 'in', label: '?袁⑷퍥 癰귣떯由? },
+        { value: 'today', label: '??삳뮎 疫꿸퀡以? },
+        { value: 'recent3', label: '筌ㅼ뮄??3?? },
+        { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
       ]
     : isOutMode
       ? [
-          { value: 'out', label: '전체 보기' },
-          { value: 'today', label: '오늘 기록' },
-          { value: 'recent3', label: '최근 3일' },
-          { value: 'missingVendor', label: '거래처 미입력' },
+          { value: 'out', label: '?袁⑷퍥 癰귣떯由? },
+          { value: 'today', label: '??삳뮎 疫꿸퀡以? },
+          { value: 'recent3', label: '筌ㅼ뮄??3?? },
+          { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
         ]
       : [
-          { value: 'all', label: '전체 보기' },
-          { value: 'today', label: '오늘 기록' },
-          { value: 'in', label: '입고만' },
-          { value: 'out', label: '출고만' },
-          { value: 'missingVendor', label: '거래처 미입력' },
-          { value: 'recent3', label: '최근 3일' },
+          { value: 'all', label: '?袁⑷퍥 癰귣떯由? },
+          { value: 'today', label: '??삳뮎 疫꿸퀡以? },
+          { value: 'in', label: '??껎э쭕? },
+          { value: 'out', label: '?곗뮄?э쭕? },
+          { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
+          { value: 'recent3', label: '筌ㅼ뮄??3?? },
         ];
 
   const handleQuickChange = (val) => {
@@ -199,8 +272,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         bv = Math.round((parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0) * 0.1);
       } else if (sort.key === 'profit') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         av = (aSp - aUp) * aQty; bv = (bSp - bUp) * bQty;
@@ -218,8 +291,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         bv = bSupply + Math.ceil(bSupply * 0.1);
       } else if (sort.key === 'profitMargin') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         const aSupply = aUp * aQty; const aOut = aSp * aQty;
@@ -228,8 +301,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         bv = bOut > 0 ? (bOut - bSupply) / bOut * 100 : 0;
       } else if (sort.key === 'cogsMargin') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         const aOut = aSp * aQty; const bOut = bSp * bQty;
@@ -325,7 +398,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     setDateFilter('');
     setQuick(initialQuick);
     setSort({ key: 'date', dir: 'desc' });
-    showToast('필터와 정렬을 초기화했습니다.', 'info');
+    showToast('?袁り숲?? ?類ｌ졊???λ뜃由?酉六??щ빍??', 'info');
   };
 
   return {

@@ -36,11 +36,27 @@ export function AuthProvider({ children }) {
 
       // 로그인 직후 세션 갱신 레이스로 0건이 들어오는 케이스 보정:
       // 코어 데이터가 비어 있으면 1회 지연 재시도로 안정 세션에서 다시 로드
-      const hasCoreData = () => {
+      const getCoreCounts = () => {
         const s = getStoreState() || {};
-        return (s.mappedData?.length || 0) > 0 || (s.transactions?.length || 0) > 0;
+        return {
+          itemCount: s.mappedData?.length || 0,
+          txCount: s.transactions?.length || 0,
+        };
       };
-      if (isSupabaseConfigured && uid && !hasCoreData() && !hasRetriedBootstrapRef.current) {
+      const looksPartialBootstrap = () => {
+        const { itemCount, txCount } = getCoreCounts();
+        return itemCount > 0 && txCount === 0;
+      };
+      const hasNoCoreData = () => {
+        const { itemCount, txCount } = getCoreCounts();
+        return itemCount === 0 && txCount === 0;
+      };
+      if (
+        isSupabaseConfigured &&
+        uid &&
+        (hasNoCoreData() || looksPartialBootstrap()) &&
+        !hasRetriedBootstrapRef.current
+      ) {
         hasRetriedBootstrapRef.current = true;
         await new Promise(r => setTimeout(r, 1200));
         await restoreState(uid);

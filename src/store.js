@@ -184,16 +184,17 @@ export async function restoreState(userId = null) {
         let cloudData = await managedQuery(() => db.loadAllData());
 
         // 여전히 0건이면 1회 재시도 (네트워크 일시 오류 또는 토큰 전파 지연 대응)
-        if (
-          (cloudData.mappedData?.length ?? 0) === 0 &&
-          (cloudData.transactions?.length ?? 0) === 0
-        ) {
+        const cloudItemCount = cloudData.mappedData?.length ?? 0;
+        const cloudTxCount = cloudData.transactions?.length ?? 0;
+        const looksPartialCloudLoad =
+          (cloudItemCount === 0 && cloudTxCount === 0) ||
+          (cloudItemCount > 0 && cloudTxCount === 0);
+        if (looksPartialCloudLoad) {
           await new Promise(r => setTimeout(r, 1500));
           const retry = await managedQuery(() => db.loadAllData());
-          if (
-            (retry.mappedData?.length ?? 0) > 0 ||
-            (retry.transactions?.length ?? 0) > 0
-          ) {
+          const retryItemCount = retry.mappedData?.length ?? 0;
+          const retryTxCount = retry.transactions?.length ?? 0;
+          if (retryItemCount > 0 || retryTxCount > 0) {
             cloudData = retry;
           }
         }
