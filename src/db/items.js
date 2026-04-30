@@ -244,26 +244,13 @@ export const items = {
     const BATCH_SIZE = 500;
     const results = [];
 
-    const codedRows = dedupedRows.filter((row) => row.item_code_norm);
-    const noCodeRows = dedupedRows.filter((row) => !row.item_code_norm);
-
-    for (let i = 0; i < codedRows.length; i += BATCH_SIZE) {
-      const batch = codedRows.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < dedupedRows.length; i += BATCH_SIZE) {
+      const batch = dedupedRows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase
         .from('items')
-        .upsert(batch, { onConflict: 'user_id,item_code_norm' })
+        .upsert(batch)
         .select();
-      handleError(error, `품목 일괄 저장(코드 기준 ${i}~${i + batch.length})`);
-      results.push(...(data || []));
-    }
-
-    for (let i = 0; i < noCodeRows.length; i += BATCH_SIZE) {
-      const batch = noCodeRows.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
-        .from('items')
-        .upsert(batch, { onConflict: 'user_id,item_name' })
-        .select();
-      handleError(error, `품목 일괄 저장(품명 기준 ${i}~${i + batch.length})`);
+      handleError(error, `품목 일괄 저장(${i}~${i + batch.length})`);
       results.push(...(data || []));
     }
 
