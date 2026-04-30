@@ -6,6 +6,48 @@ const monthStr = () => {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
 };
+const normCode = (v) => {
+  const raw = String(v ?? '').trim().replace(/\s+/g, '').toLowerCase();
+  if (!raw) return '';
+  const stripped = raw.replace(/^0+/, '');
+  return stripped || '0';
+};
+const normName = (v) =>
+  String(v ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+const makeKey = (itemName, itemCode) => {
+  const c = normCode(itemCode);
+  if (c) return `c:${c}`;
+  const n = normName(itemName);
+  if (n) return `n:${n}`;
+  return '';
+};
+const toPositiveNumber = (v) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+const deriveUnitCostFromSupply = (row) => {
+  const qty = toPositiveNumber(row?.quantity);
+  const supply = toPositiveNumber(row?.supplyValue);
+  if (qty <= 0 || supply <= 0) return 0;
+  return supply / qty;
+};
+const medianOfSorted = (arr) => {
+  const n = arr.length;
+  if (!n) return 0;
+  const m = Math.floor(n / 2);
+  return n % 2 ? arr[m] : (arr[m - 1] + arr[m]) / 2;
+};
+const quantileOfSorted = (arr, q) => {
+  if (!arr.length) return 0;
+  const pos = (arr.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const next = arr[base + 1] ?? arr[base];
+  return arr[base] + rest * (next - arr[base]);
+};
 
 export function useInoutFilters({ transactions, mappedData, mode }) {
   const isInMode = mode === 'in';
@@ -30,25 +72,103 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     }
   }, []);
 
-  const itemMap = useMemo(() => new Map(mappedData.map(it => [it.itemName, it])), [mappedData]);
-
-  const wacMap = useMemo(() => {
-    const acc = {};
-    transactions.forEach(tx => {
-      if (tx.type !== 'in') return;
-      const k = tx.itemName; if (!k) return;
-      if (!acc[k]) acc[k] = { amt: 0, qty: 0 };
-      const qty = parseFloat(tx.quantity) || 0;
-      const price = parseFloat(tx.unitPrice) || 0;
-      acc[k].amt += price * qty;
-      acc[k].qty += qty;
+  const itemMap = useMemo(() => {
+    const map = new Map();
+    (mappedData || []).forEach((it) => {
+      const ck = makeKey('', it.itemCode);
+      const nk = makeKey(it.itemName, '');
+      if (ck && !map.has(ck)) map.set(ck, it);
+      if (nk && !map.has(nk)) map.set(nk, it);
+      if (it.itemName && !map.has(it.itemName)) map.set(it.itemName, it); // ?リ옇????筌뤿굞??
     });
+    return map;
+  }, [mappedData]);
+
+  const resolveItem = (tx) => itemMap.get(makeKey(tx.itemName, tx.itemCode)) || itemMap.get(makeKey(tx.itemName, '')) || {};
+
+  const costStatsMap = useMemo(() => {
+    const buckets = {};
+    transactions.forEach((tx) => {
+      if (tx.type !== 'in') return;
+      const k = makeKey(tx.itemName, tx.itemCode);
+      if (!k) return;
+
+      const qty = toPositiveNumber(tx.quantity);
+      if (qty <= 0) return;
+
+      const fromSupply = deriveUnitCostFromSupply(tx);
+      const fromUnit = toPositiveNumber(tx.unitPrice);
+      const unitCost = fromSupply > 0 ? fromSupply : fromUnit;
+      if (!unitCost) return;
+
+      if (!buckets[k]) buckets[k] = [];
+      buckets[k].push({ unitCost, qty });
+    });
+
     const result = {};
-    Object.entries(acc).forEach(([k, v]) => {
-      result[k] = v.qty > 0 && v.amt > 0 ? v.amt / v.qty : 0;
+    Object.entries(buckets).forEach(([k, rows]) => {
+      const units = rows.map((r) => r.unitCost).sort((a, b) => a - b);
+      if (!units.length) return;
+
+      const q1 = quantileOfSorted(units, 0.25);
+      const q3 = quantileOfSorted(units, 0.75);
+      const iqr = Math.max(0, q3 - q1);
+      const lower = Math.max(0, q1 - 1.5 * iqr);
+      const upper = q3 + 1.5 * iqr;
+
+      let inliers = rows.filter((r) => r.unitCost >= lower && r.unitCost <= upper);
+      if (!inliers.length) inliers = rows;
+
+      const totalQty = inliers.reduce((s, r) => s + r.qty, 0);
+      const totalAmt = inliers.reduce((s, r) => s + r.unitCost * r.qty, 0);
+      const inlierUnits = inliers.map((r) => r.unitCost).sort((a, b) => a - b);
+
+      result[k] = {
+        weighted: totalQty > 0 ? totalAmt / totalQty : 0,
+        median: medianOfSorted(inlierUnits),
+        min: inlierUnits[0] || 0,
+        max: inlierUnits[inlierUnits.length - 1] || 0,
+        count: inlierUnits.length,
+      };
     });
     return result;
   }, [transactions]);
+
+  const wacMap = useMemo(() => {
+    const map = {};
+    Object.entries(costStatsMap).forEach(([k, s]) => {
+      map[k] = toPositiveNumber(s?.weighted || s?.median || 0);
+    });
+    return map;
+  }, [costStatsMap]);
+
+  const resolveWac = (tx, itemData) => {
+    const key = makeKey(tx.itemName, tx.itemCode);
+    const stats = costStatsMap[key] || null;
+    const salePrice = toPositiveNumber(tx.actualSellingPrice || tx.sellingPrice || itemData?.salePrice);
+    const maxCostRatioToSale = 5;
+    const isPlausibleCost = (cost) => (
+      cost > 0 &&
+      Number.isFinite(cost) &&
+      (salePrice <= 0 || cost <= salePrice * maxCostRatioToSale)
+    );
+
+    const costFromStats = toPositiveNumber(stats?.weighted || stats?.median || 0);
+    if (isPlausibleCost(costFromStats)) return costFromStats;
+
+    const costFromItemSupply = deriveUnitCostFromSupply(itemData);
+    if (isPlausibleCost(costFromItemSupply)) return costFromItemSupply;
+
+    const costFromItemUnit = toPositiveNumber(itemData?.unitPrice);
+    if (isPlausibleCost(costFromItemUnit)) return costFromItemUnit;
+
+    const costFromRow = toPositiveNumber(tx.unitPrice);
+    if (isPlausibleCost(costFromRow)) return costFromRow;
+
+    // ??? ?熬곣뫀沅뽪뤆?쎛 ?熬? ??????⑤챸?꾢슖????堉??濡?듆, ???逾????λ닑??????얍슖???蹂κ국??? ???낆┣??嶺뚮씞?????????臾먮┰??ル‘紐드슖?????
+    if (salePrice > 0) return salePrice;
+    return costFromStats || costFromItemSupply || costFromItemUnit || costFromRow || 0;
+  };
 
   const inList = useMemo(() => transactions.filter(tx => tx.type === 'in'), [transactions]);
   const outList = useMemo(() => transactions.filter(tx => tx.type === 'out'), [transactions]);
@@ -80,7 +200,6 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
           { value: 'missingVendor', label: '거래처 미입력' },
           { value: 'recent3', label: '최근 3일' },
         ];
-
   const handleQuickChange = (val) => {
     setQuick(val);
     if (!isInMode && !isOutMode) {
@@ -121,8 +240,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
   const sorted = useMemo(() => {
     const dir = sort.dir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      const aItem = itemMap.get(a.itemName) || {};
-      const bItem = itemMap.get(b.itemName) || {};
+      const aItem = resolveItem(a);
+      const bItem = resolveItem(b);
       let av, bv;
       if (sort.key === 'date') {
         av = new Date(a.date || a.createdAt || 0).getTime();
@@ -137,8 +256,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         av = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         bv = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
       } else if (sort.key === 'supply') {
-        const aWac = wacMap[a.itemName] || (parseFloat(a.unitPrice || aItem.unitPrice) || 0);
-        const bWac = wacMap[b.itemName] || (parseFloat(b.unitPrice || bItem.unitPrice) || 0);
+        const aWac = resolveWac(a, aItem);
+        const bWac = resolveWac(b, bItem);
         av = aWac * (parseFloat(a.quantity) || 0);
         bv = bWac * (parseFloat(b.quantity) || 0);
       } else if (sort.key === 'outAmt') {
@@ -147,10 +266,13 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       } else if (sort.key === 'outTotal') {
         av = Math.round((parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0) * 1.1);
         bv = Math.round((parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0) * 1.1);
+      } else if (sort.key === 'outVat') {
+        av = Math.round((parseFloat(a.sellingPrice || aItem.salePrice) || 0) * (parseFloat(a.quantity) || 0) * 0.1);
+        bv = Math.round((parseFloat(b.sellingPrice || bItem.salePrice) || 0) * (parseFloat(b.quantity) || 0) * 0.1);
       } else if (sort.key === 'profit') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         av = (aSp - aUp) * aQty; bv = (bSp - bUp) * bQty;
@@ -168,8 +290,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         bv = bSupply + Math.ceil(bSupply * 0.1);
       } else if (sort.key === 'profitMargin') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         const aSupply = aUp * aQty; const aOut = aSp * aQty;
@@ -178,8 +300,8 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         bv = bOut > 0 ? (bOut - bSupply) / bOut * 100 : 0;
       } else if (sort.key === 'cogsMargin') {
         const aQty = parseFloat(a.quantity) || 0; const bQty = parseFloat(b.quantity) || 0;
-        const aUp = parseFloat(a.unitPrice || aItem.unitPrice) || 0;
-        const bUp = parseFloat(b.unitPrice || bItem.unitPrice) || 0;
+        const aUp = resolveWac(a, aItem);
+        const bUp = resolveWac(b, bItem);
         const aSp = parseFloat(a.sellingPrice || aItem.salePrice) || 0;
         const bSp = parseFloat(b.sellingPrice || bItem.salePrice) || 0;
         const aOut = aSp * aQty; const bOut = bSp * bQty;
@@ -189,6 +311,9 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
         av = (a.note || '').toLowerCase(); bv = (b.note || '').toLowerCase();
       } else if (sort.key === 'itemName') {
         av = (a.itemName || '').toLowerCase(); bv = (b.itemName || '').toLowerCase();
+      } else if (sort.key === 'color') {
+        av = (a.color || aItem.color || '').toLowerCase();
+        bv = (b.color || bItem.color || '').toLowerCase();
       } else if (sort.key === 'vendor') {
         av = (a.vendor || '').toLowerCase(); bv = (b.vendor || '').toLowerCase();
       } else if (sort.key === 'category') {
@@ -216,7 +341,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     let totQty = 0, totSupply = 0, totVat = 0, totTotal = 0;
     sorted.forEach(tx => {
       const q = parseFloat(tx.quantity) || 0;
-      const itd = itemMap.get(tx.itemName) || {};
+      const itd = resolveItem(tx);
       const cost = parseFloat(tx.unitPrice || itd.unitPrice) || 0;
       const sup = Math.round(cost * q);
       totQty += q; totSupply += sup;
@@ -228,20 +353,22 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
 
   const outTotals = useMemo(() => {
     if (!isOutMode) return null;
-    let totQty = 0, totOutAmt = 0, totOutTotal = 0, totWacSupply = 0, totProfit = 0;
+    let totQty = 0, totOutAmt = 0, totVat = 0, totOutTotal = 0, totWacSupply = 0, totProfit = 0;
     sorted.forEach(tx => {
       const q = parseFloat(tx.quantity) || 0;
-      const itd = itemMap.get(tx.itemName) || {};
+      const itd = resolveItem(tx);
       const sp = parseFloat(tx.sellingPrice || itd.salePrice) || 0;
       const oa = Math.round(sp * q);
-      const wac = wacMap[tx.itemName] || (parseFloat(tx.unitPrice || itd.unitPrice) || 0);
+      const wac = resolveWac(tx, itd);
       const ws = Math.round(wac * q);
+      const vat = Math.round(oa * 0.1);
       totQty += q; totOutAmt += oa;
       totOutTotal += Math.round(oa * 1.1);
       totWacSupply += ws; totProfit += oa - ws;
+      totVat += vat;
     });
     return {
-      totQty, totOutAmt, totOutTotal, totWacSupply, totProfit,
+      totQty, totOutAmt, totVat, totOutTotal, totWacSupply, totProfit,
       totProfitMargin: totOutAmt > 0 ? (totProfit / totOutAmt * 100).toFixed(1) + '%' : '-',
       totCogsMargin:   totOutAmt > 0 ? (totWacSupply / totOutAmt * 100).toFixed(1) + '%' : '-',
     };
@@ -270,7 +397,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     setDateFilter('');
     setQuick(initialQuick);
     setSort({ key: 'date', dir: 'desc' });
-    showToast('필터와 정렬을 초기화했습니다.', 'info');
+    showToast('?熬곥굤??? ?筌먲퐣議???貫?껆뵳??됀筌???鍮??', 'info');
   };
 
   return {
@@ -280,7 +407,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     dateFilter, setDateFilter,
     monthFilter, setMonthFilter,
     quick, sort, setSort,
-    sorted, filtered, itemMap, wacMap,
+    sorted, filtered, itemMap, wacMap, resolveItem, resolveWac,
     vendorOptions, quickChips,
     handleQuickChange, handleReset, toggleSort,
     inTotals, outTotals,

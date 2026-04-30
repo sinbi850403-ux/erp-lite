@@ -9,13 +9,15 @@ import { getUserId, handleError } from './core.js';
 // 거래처 (Vendors) CRUD
 // ============================================================
 export const vendors = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('vendors')
       .select('*')
       .eq('user_id', userId)
       .order('name');
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '거래처 조회');
     return data || [];
   },

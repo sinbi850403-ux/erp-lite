@@ -1,4 +1,4 @@
-/**
+﻿/**
  * db/core.js — 공유 유틸리티 (테이블 로직 없음)
  *
  * 왜 별도 레이어?
@@ -108,23 +108,28 @@ export async function resolveFKMap(table, nameColumn, userId, names) {
  * — 팀 워크스페이스 소속 시 오너 UID 반환 (_workspaceUserId 우선)
  */
 export async function getUserId() {
-  if (_workspaceUserId) return _workspaceUserId;
-
   if (_cachedUserId && Date.now() - _cachedUserIdAt < USER_ID_CACHE_TTL_MS) {
     return _cachedUserId;
   }
 
-  const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
-  if (session?.user?.id) {
-    _cachedUserId = session.user.id;
-    _cachedUserIdAt = Date.now();
-    return _cachedUserId;
+  try {
+    const { data: { session } } = await withDbTimeout(supabase.auth.getSession(), 'getSession');
+    if (session?.user?.id) {
+      _cachedUserId = session.user.id;
+      _cachedUserIdAt = Date.now();
+      return _cachedUserId;
+    }
+
+    const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
+    if (user?.id) {
+      _cachedUserId = user.id;
+      _cachedUserIdAt = Date.now();
+      return _cachedUserId;
+    }
+  } catch (_) {
+    // fall through
   }
 
-  const { data: { user } } = await withDbTimeout(supabase.auth.getUser(), 'getUser');
-  if (!user) throw new Error('로그인이 필요합니다');
-
-  _cachedUserId = user.id;
-  _cachedUserIdAt = Date.now();
-  return _cachedUserId;
+  if (_workspaceUserId) return _workspaceUserId;
+  throw new Error('로그인이 필요합니다.');
 }

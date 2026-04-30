@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { initAuth, getCurrentUser, getUserProfileData, logout as authLogout } from '../auth.js';
 import { isSupabaseConfigured } from '../supabase-client.js';
-import { restoreState, setupRealtimeSync, cleanupRealtimeSync } from '../store.js';
+import { restoreState, setupRealtimeSync, cleanupRealtimeSync, getState as getStoreState } from '../store.js';
 import { primeUserIdCache, setWorkspaceUserId, clearWorkspaceUserId } from '../db.js';
 import { injectGetCurrentUser, injectGetUserProfile, PLANS, setPlan, getCurrentPlan } from '../plan.js';
 import { setMonitorUser, clearMonitorUser } from '../error-monitor.js';
@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [startPage, setStartPage] = useState('home');
   const initializingRef = useRef(false);
+  const hasRetriedBootstrapRef = useRef(false);
 
   // 의존성 주입 (plan.js가 auth.js에 의존하지 않도록 역전)
   useEffect(() => {
@@ -33,13 +34,43 @@ export function AuthProvider({ children }) {
       primeUserIdCache(uid);
       await restoreState(uid);
 
+      // 로그인 직후 세션 갱신 레이스로 0건이 들어오는 케이스 보정:
+      // 코어 데이터가 비어 있으면 1회 지연 재시도로 안정 세션에서 다시 로드
+      const getCoreCounts = () => {
+        const s = getStoreState() || {};
+        return {
+          itemCount: s.mappedData?.length || 0,
+          txCount: s.transactions?.length || 0,
+        };
+      };
+      const looksPartialBootstrap = () => {
+        const { itemCount, txCount } = getCoreCounts();
+        return itemCount > 0 && txCount === 0;
+      };
+      const hasNoCoreData = () => {
+        const { itemCount, txCount } = getCoreCounts();
+        return itemCount === 0 && txCount === 0;
+      };
+      if (
+        isSupabaseConfigured &&
+        uid &&
+        (hasNoCoreData() || looksPartialBootstrap()) &&
+        !hasRetriedBootstrapRef.current
+      ) {
+        hasRetriedBootstrapRef.current = true;
+        await new Promise(r => setTimeout(r, 1200));
+        await restoreState(uid);
+      }
+
       const profilePlan = getUserProfileData()?.plan;
       if (profilePlan && PLANS[profilePlan]) setPlan(profilePlan);
 
       const lastPage = localStorage.getItem(LAST_PAGE_KEY);
       const page = (lastPage && lastPage in PAGE_LOADERS) ? lastPage : 'home';
       setStartPage(page);
-      setupRealtimeSync();
+      // Realtime 자동 동기화 비활성화 (2026-04-29)
+      // 사용자가 수동으로 새로고침 버튼을 눌러야만 데이터 업데이트됨
+      // setupRealtimeSync();
 
       // 워크스페이스 소속 시 오너 UID로 전환
       if (uid) {
@@ -65,13 +96,26 @@ export function AuthProvider({ children }) {
     }
 
     // ── 최대 대기 타이머 ─────────────────────────────────────────────────────
-    // Supabase cold-start(2~5초) 대응: initAuth 콜백이 늦게 오더라도
-    // 최대 2초 후에는 반드시 ready 상태로 전환 (로그인 화면 표시)
-    const readyFallback = setTimeout(() => setIsReady(true), 2000);
+    // 저장된 세션이 있으면 INITIAL_SESSION 복원을 기다려야 하므로 5초,
+    // 없으면 Supabase cold-start 대응으로 2초 후 로그인 화면 표시
+    const hasStoredSession = (() => {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && /^sb-.+-auth-token$/.test(k)) {
+            const v = localStorage.getItem(k);
+            if (v && v !== 'null' && v !== '{}') return true;
+          }
+        }
+      } catch { /* ignore */ }
+      return false;
+    })();
+    const readyFallback = setTimeout(() => setIsReady(true), hasStoredSession ? 5000 : 2000);
 
     initAuth(async (newUser, newProfile) => {
       clearTimeout(readyFallback);
       if (newUser) {
+        hasRetriedBootstrapRef.current = false;
         setMonitorUser(newUser.uid, newUser.email);
         const profilePlan = newProfile?.plan;
         if (profilePlan && PLANS[profilePlan]) setPlan(profilePlan);

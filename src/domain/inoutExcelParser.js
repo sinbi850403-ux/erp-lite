@@ -2,6 +2,16 @@
 
 export const EXCEL_EPOCH_OFFSET = 25569;
 
+function excelSerialToDateString(serialValue) {
+  const serial = Number(serialValue);
+  if (!Number.isFinite(serial)) return '';
+  // Excel serial date (days since 1899-12-30). Keep integer day part only.
+  const utcMs = Math.round((Math.floor(serial) - EXCEL_EPOCH_OFFSET) * 86400 * 1000);
+  const d = new Date(utcMs);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
 /** 엑셀 셀 값 → 숫자 (₩, 쉼표, 공백 제거) */
 export function parseBulkNumber(v) {
   const n = parseFloat(String(v ?? '').replace(/[₩,\s]/g, ''));
@@ -18,10 +28,19 @@ export function normType(v) {
 /** 날짜 문자열 → YYYY-MM-DD */
 export function formatDateStr(dateStr) {
   if (!dateStr || dateStr === '-') return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return dateStr;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return String(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const raw = String(dateStr).trim();
+  // Excel serial delivered as text (e.g. "45737", "45737.0")
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const fromSerial = excelSerialToDateString(raw);
+    if (fromSerial) return fromSerial;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  // Guard against abnormal parsed years (e.g. +057370-11...)
+  if (y < 1900 || y > 2100) return '';
+  return `${y}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** 헤더 배열 + modeDefault → colMap (컬럼 인덱스 맵) */
@@ -41,14 +60,16 @@ export function buildColMap(headers, modeDefault) {
     quantity:     modeDefault === 'out'
       ? findCol('출고수량', '입고수량', '수량')
       : findCol('입고수량', '출고수량', '수량'),
-    unitPrice:    findCol('단가', '원가'),
+    unitPrice:    findCol('매입원가', '매입가', '단가', '원가'),
     sellingPrice: findCol('판매가', '출고단가'),
     date:         modeDefault === 'out'
       ? findCol('출고일자', '입고일자', '날짜')
       : findCol('입고일자', '출고일자', '날짜'),
+    warehouse:    findCol('창고', '위치', '보관'),
     note:         findCol('비고'),
     spec:         findCol('규격'),
     unit:         findCol('단위'),
+    color:        findCol('색상', '컬러', 'color'),
     category:     findCol('자산', '분류', '카테고리'),
   };
 }
@@ -71,13 +92,15 @@ export function parseExcelRows(sheetData, colMap, modeDefault, items) {
       (rawItemCode && it.itemCode && it.itemCode === rawItemCode)
     );
     if (!itemName && matchedItem) itemName = matchedItem.itemName;
-    if (!itemName || quantity <= 0) continue;
+    // 코드만 있는 신규 출고/입고도 통과: 임시로 품명에 코드를 대입해 자동 등록 가능하게 함
+    if (!itemName && rawItemCode) itemName = rawItemCode;
+    if ((!itemName && !rawItemCode) || quantity <= 0) continue;
 
     let dateStr = '';
     if (colMap.date >= 0) {
       const raw = row[colMap.date];
       if (typeof raw === 'number') {
-        dateStr = new Date((raw - EXCEL_EPOCH_OFFSET) * 86400 * 1000).toISOString().slice(0, 10);
+        dateStr = excelSerialToDateString(raw);
       } else {
         dateStr = formatDateStr(String(raw ?? '').trim());
       }
@@ -92,9 +115,11 @@ export function parseExcelRows(sheetData, colMap, modeDefault, items) {
       unitPrice:    colMap.unitPrice >= 0    ? parseBulkNumber(row[colMap.unitPrice])    : 0,
       sellingPrice: colMap.sellingPrice >= 0 ? parseBulkNumber(row[colMap.sellingPrice]) : 0,
       date:         dateStr || todayStr(),
+      warehouse:    colMap.warehouse >= 0 ? String(row[colMap.warehouse] ?? '').trim() : '',
       note:         colMap.note >= 0     ? String(row[colMap.note] ?? '').trim()     : '',
       spec:         colMap.spec >= 0     ? String(row[colMap.spec] ?? '').trim()     : (matchedItem?.spec     || ''),
       unit:         colMap.unit >= 0     ? String(row[colMap.unit] ?? '').trim()     : (matchedItem?.unit     || ''),
+      color:        colMap.color >= 0    ? String(row[colMap.color] ?? '').trim()    : (matchedItem?.color    || ''),
       category:     colMap.category >= 0 ? String(row[colMap.category] ?? '').trim() : (matchedItem?.category || ''),
       matched:      Boolean(matchedItem),
     });

@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import { showToast } from '../../toast.js';
 import { downloadExcelSheets, readExcelFile } from '../../excel.js';
 import { addTransactionsBulk } from '../../store.js';
 import { buildColMap, parseExcelRows } from '../../domain/inoutExcelParser.js';
 import { fmtNum as fmt, fmtWon as W } from '../../utils/formatters.js';
+import * as db from '../../db.js';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -22,14 +23,14 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     let rows, sheetName, fileName;
     if (modeDefault === 'out') {
       rows = [
-        ['자산', '출고일자', '거래처', '상품코드', '품명', '규격', '단위', '출고수량', '출고단가'],
-        ['전자기기', today, '강남점', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 10, 1500000],
+        ['자산', '출고일자', '거래처', '창고', '상품코드', '품명', '색상', '규격', '단위', '출고수량', '출고단가', '비고'],
+        ['전자기기', today, '강남점', '본사 창고', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 10, 1500000, ''],
       ];
       sheetName = '출고_양식'; fileName = '출고_일괄등록_양식';
     } else {
       rows = [
-        ['자산', '입고일자', '거래처', '상품코드', '품명', '규격', '단위', '입고수량', '원가'],
-        ['전자기기', today, '(주)삼성전자', 'SM-S925', '갤럭시 S25', '256GB 블랙', 'EA', 100, 1200000],
+        ['자산', '입고일자', '거래처', '창고', '상품코드', '품명', '색상', '규격', '단위', '입고수량', '매입원가', '비고'],
+        ['전자기기', today, '(주)삼성전자', '본사 창고', 'SM-S925', '갤럭시 S25', '블랙', '256GB', 'EA', 100, 1200000, ''],
       ];
       sheetName = '입고_양식'; fileName = '입고_일괄등록_양식';
     }
@@ -72,18 +73,105 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     if (file) processFile(file);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!previewRows) return;
-    addTransactionsBulk(previewRows.map(r => ({
-      type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
-      quantity: r.quantity, unitPrice: r.unitPrice, sellingPrice: r.sellingPrice,
-      date: r.date, note: r.note, spec: r.spec, unit: r.unit, category: r.category,
-    })));
-    const inCount = previewRows.filter(r => r.type === 'in').length;
-    const outCount = previewRows.filter(r => r.type === 'out').length;
-    showToast(`일괄 등록 완료: 총 ${previewRows.length}건 (입고 ${inCount}, 출고 ${outCount})`, 'success');
-    onSuccess();
-    onClose();
+    setLoading(true);
+    try {
+      // 1. 없는 거래처 자동 생성
+      const vendorNames = [...new Set(previewRows.map(r => r.vendor).filter(Boolean))];
+      if (vendorNames.length) {
+        try {
+          await db.vendors.upsertBulk(vendorNames.map(name => ({ name })));
+        } catch (err) {
+          console.warn('[BulkUploadModal] vendor auto-create skipped (permission/policy):', err);
+        }
+      }
+
+      // 2. 없는 상품 자동 생성
+      const norm = (v) => String(v ?? '').trim().toLowerCase();
+      const itemKey = (name, code) => {
+        const c = norm(code);
+        if (c) return `code:${c}`;
+        const n = norm(name);
+        return n ? `name:${n}` : '';
+      };
+      const itemMap = new Map();
+      (items || []).forEach((it) => {
+        const k = itemKey(it.itemName, it.itemCode);
+        if (k) itemMap.set(k, it.id);
+      });
+
+      const candidateItems = previewRows
+        .map((r) => ({ itemName: r.itemName, itemCode: r.itemCode, unit: r.unit || 'EA', category: r.category || '' }))
+        .filter((r) => r.itemName || r.itemCode);
+
+      const LARGE_UPLOAD_ITEM_CREATE_THRESHOLD = 200;
+      let itemCreateDisabled = candidateItems.length > LARGE_UPLOAD_ITEM_CREATE_THRESHOLD;
+      if (itemCreateDisabled) {
+        console.warn(
+          `[BulkUploadModal] large upload detected (${candidateItems.length}), skip item auto-create for speed`
+        );
+      }
+      for (const c of candidateItems) {
+        if (itemCreateDisabled) break;
+        const k = itemKey(c.itemName, c.itemCode);
+        if (!k || itemMap.has(k)) continue;
+        try {
+          const newItem = await db.items.create({
+            itemName: c.itemName || c.itemCode,
+            itemCode: c.itemCode || '',
+            category: c.category || '',
+            unit: c.unit || 'EA',
+          });
+          if (newItem?.id) {
+            itemMap.set(k, newItem.id);
+          }
+        } catch (err) {
+          // 중복 생성 시 무시하고 기존 항목 사용
+          if (err.message?.includes('duplicate')) {
+            console.warn(`[BulkUploadModal] 상품 중복: ${c.itemName || c.itemCode}`);
+          } else {
+            itemCreateDisabled = true;
+            console.warn('[BulkUploadModal] item create blocked, stop item auto-create:', err);
+            break;
+          }
+        }
+      }
+
+      // 3. 데이터 DB 저장 + 메모리 저장
+      const txsToSave = previewRows.map(r => {
+        const qty = parseFloat(r.quantity) || 0;
+        const unitPrice = parseFloat(r.unitPrice) || 0;
+        const sellingPrice = parseFloat(r.sellingPrice) || 0;
+        const supplyValue = Math.round(unitPrice * qty);
+        const vat = Math.ceil(supplyValue * 0.1);
+        return {
+          id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+          type: r.type, vendor: r.vendor, itemName: r.itemName, itemCode: r.itemCode,
+          quantity: qty, unitPrice, sellingPrice,
+          supplyValue, vat, totalAmount: supplyValue + vat,
+          actualSellingPrice: sellingPrice,
+          date: r.date, warehouse: r.warehouse || '본사 창고', note: r.note,
+          spec: r.spec, unit: r.unit, color: r.color, category: r.category,
+        };
+      });
+
+      // DB에 저장
+      await db.transactions.bulkCreate(txsToSave);
+
+      // 메모리에도 동기화 (UI 즉시 반영)
+      addTransactionsBulk(txsToSave);
+      const inCount = previewRows.filter(r => r.type === 'in').length;
+      const outCount = previewRows.filter(r => r.type === 'out').length;
+      showToast(`일괄 등록 완료: 총 ${previewRows.length}건 (입고 ${inCount}, 출고 ${outCount})`, 'success');
+      onSuccess();
+      onClose();
+    } catch (err) {
+      showToast(`등록 중 오류: ${err.message}`, 'error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -103,12 +191,14 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
           <div className="alert alert-info" style={{ marginBottom: '16px', fontSize: '13px' }}>
             <strong>사용 방법</strong><br />
             1. 아래에서 샘플 양식을 내려받습니다.<br />
-            2. 양식에 입고/출고 데이터를 입력합니다.<br />
+            2. 양식에 입고/출고 데이터를 입력합니다. (창고는 선택사항 — 비워두면 "본사 창고"로 자동 할당)<br />
             3. 저장한 엑셀 파일을 끌어놓거나 선택하면 미리보기 후 한 번에 등록할 수 있습니다.
           </div>
           <button className="btn btn-outline" onClick={handleDownloadTemplate} style={{ marginBottom: '16px' }}>
              엑셀 양식 다운로드
           </button>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0 0 16px' }} />
 
           {/* 드롭존 */}
           <div
@@ -190,3 +280,5 @@ export function BulkUploadModal({ items, modeDefault, onClose, onSuccess }) {
     </div>
   );
 }
+
+

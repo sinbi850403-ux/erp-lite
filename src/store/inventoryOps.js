@@ -2,7 +2,7 @@
  * inventoryOps.js - 입출고·재고 도메인 연산
  */
 
-import { stateHolder } from './stateRef.js';
+import { stateHolder, dispatchUpdate } from './stateRef.js';
 import { saveToDB } from './indexedDb.js';
 import { scheduleSyncToSupabase } from './supabaseSync.js';
 import { isSupabaseConfigured, supabase } from '../supabase-client.js';
@@ -62,13 +62,28 @@ export function setInventorySyncCallback(fn) { _syncCallback = fn; }
  */
 export function addTransaction(tx) {
   //  클라이언트 UUID 사용 → Supabase와 동일 ID 공유 → 삭제/upsert 정확히 동작
-  const clientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const clientId = tx?.id || (
+    (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  );
+
+  // 계산 필드 보정 (미제공 시 계산)
+  const qty = toNum(tx.quantity);
+  const unitPrice = toNum(tx.unitPrice);
+  const supplyValue = tx.supplyValue || (unitPrice > 0 ? Math.round(unitPrice * qty) : 0);
+  const vat = tx.vat || Math.ceil(supplyValue * 0.1);
+  const totalAmount = tx.totalAmount || (supplyValue + vat);
+  const actualSellingPrice = tx.actualSellingPrice || toNum(tx.sellingPrice);
+
   const newTx = {
     id: clientId,
     createdAt: new Date().toISOString(),
     ...tx,
+    supplyValue,
+    vat,
+    totalAmount,
+    actualSellingPrice,
   };
   stateHolder.current.transactions = [newTx, ...stateHolder.current.transactions];
 
@@ -137,6 +152,7 @@ export function addTransaction(tx) {
   }
 
   saveToDB();
+  dispatchUpdate(['transactions', 'mappedData']);
   // UI 즉시 갱신 (재고 현황 자동 반영)
   if (_syncCallback) _syncCallback();
   // Supabase에 입출고 + 품목 수량 변경 동기화
@@ -160,10 +176,29 @@ export function addTransactionsBulk(txList) {
   const newTxs = [];
 
   for (const tx of txList) {
-    const clientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const newTx = { id: clientId, createdAt: new Date().toISOString(), ...tx };
+    const clientId = tx?.id || (
+      (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    );
+
+    // 계산 필드 보정 (미제공 시 계산)
+    const qty = toNum(tx.quantity);
+    const unitPrice = toNum(tx.unitPrice);
+    const supplyValue = tx.supplyValue || (unitPrice > 0 ? Math.round(unitPrice * qty) : 0);
+    const vat = tx.vat || Math.ceil(supplyValue * 0.1);
+    const totalAmount = tx.totalAmount || (supplyValue + vat);
+    const actualSellingPrice = tx.actualSellingPrice || toNum(tx.sellingPrice);
+
+    const newTx = {
+      id: clientId,
+      createdAt: new Date().toISOString(),
+      ...tx,
+      supplyValue,
+      vat,
+      totalAmount,
+      actualSellingPrice,
+    };
     newTxs.push(newTx);
 
     // 재고 수량 반영
@@ -213,6 +248,7 @@ export function addTransactionsBulk(txList) {
 
   // IndexedDB 1번, sync 1번
   saveToDB();
+  dispatchUpdate(['transactions', 'mappedData']);
   if (_syncCallback) _syncCallback();
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['transactions', 'mappedData']);
@@ -282,6 +318,7 @@ export function deleteTransaction(id) {
 
   stateHolder.current.transactions.splice(index, 1);
   saveToDB();
+  dispatchUpdate(['transactions', 'mappedData']);
   if (isSupabaseConfigured) {
     // transactions도 함께 동기화 (삭제 반영)
     scheduleSyncToSupabase(['transactions', 'mappedData']);
@@ -376,6 +413,7 @@ export function restoreItem(item, index = 0) {
     : 0;
   stateHolder.current.mappedData.splice(safeIndex, 0, item);
   saveToDB();
+  dispatchUpdate(['mappedData']);
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['mappedData']);
   }
@@ -412,6 +450,7 @@ export function restoreTransaction(tx, index = 0) {
   }
 
   saveToDB();
+  dispatchUpdate(['transactions', 'mappedData']);
   if (isSupabaseConfigured) {
     scheduleSyncToSupabase(['transactions', 'mappedData']);
   }

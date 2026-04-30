@@ -37,13 +37,15 @@ export const auditLogs = {
 // 매출/매입 장부 (Account Entries)
 // ============================================================
 export const accountEntries = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('account_entries')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '장부 조회');
     return data || [];
   },
@@ -99,13 +101,15 @@ export const accountEntries = {
 // 발주서 (Purchase Orders)
 // ============================================================
 export const purchaseOrders = {
-  async list() {
+  async list(options = {}) {
     const userId = await getUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from('purchase_orders')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+    if (options.limit) query = query.limit(options.limit);
+    const { data, error } = await query;
     handleError(error, '발주서 조회');
     return data || [];
   },

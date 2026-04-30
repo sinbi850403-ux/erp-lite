@@ -18,12 +18,17 @@ export function ItemModal({ item, editIdx, onClose, onSaved }) {
     itemCode:       item?.itemCode    ?? '',
     spec:           item?.spec        ?? '',
     category:       item?.category    ?? '',
+    color:          item?.color       ?? '',
+    year:           item?.year        ?? '',
     quantity:       String(item?.quantity    ?? ''),
     unit:           item?.unit        ?? '',
     unitPrice:      String(item?.unitPrice   ?? ''),
     salePrice:      String(item?.salePrice   ?? ''),
     vendor:         item?.vendor      ?? '',
     warehouse:      item?.warehouse   ?? '',
+    inDate:         item?.inDate      ?? '',
+    expiryDate:     item?.expiryDate  ?? '',
+    lotNumber:      item?.lotNumber   ?? '',
     note:           item?.note        ?? '',
     lockedUntil:    item?.lockedUntil ?? '',
     safetyStockMin: String(item?.itemName ? (safetyStock[item.itemName] ?? '') : ''),
@@ -73,12 +78,17 @@ export function ItemModal({ item, editIdx, onClose, onSaved }) {
       itemCode:    form.itemCode.trim(),
       spec:        form.spec.trim(),
       category:    form.category.trim(),
+      color:       form.color.trim(),
+      year:        form.year.trim(),
       vendor:      form.vendor,
       quantity:    parseFloat(form.quantity) || 0,
       unit:        form.unit.trim(),
       unitPrice:   up,
       salePrice:   sp,
       warehouse:   form.warehouse.trim(),
+      inDate:      form.inDate || '',
+      expiryDate:  form.expiryDate || '',
+      lotNumber:   form.lotNumber.trim(),
       note:        form.note.trim(),
       lockedUntil: form.lockedUntil || null,
     };
@@ -194,12 +204,32 @@ export function ItemModal({ item, editIdx, onClose, onSaved }) {
                   </div>
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label">비고</label>
-                      <input className="form-input" {...f('note')} placeholder="메모" />
+                      <label className="form-label">색상</label>
+                      <input className="form-input" {...f('color')} placeholder="예: 블랙, White, #FF0000" />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">품목 잠금 해제일</label>
-                      <input className="form-input" type="date" {...f('lockedUntil')} />
+                      <label className="form-label">년도</label>
+                      <input className="form-input" {...f('year')} placeholder="예: 2024" />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">입고일자</label>
+                      <input className="form-input" type="date" {...f('inDate')} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">유통기한</label>
+                      <input className="form-input" type="date" {...f('expiryDate')} />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">LOT번호</label>
+                      <input className="form-input" {...f('lotNumber')} placeholder="예: LOT-2024-001" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">비고</label>
+                      <input className="form-input" {...f('note')} placeholder="메모" />
                     </div>
                   </div>
                   <div className="form-row">
@@ -207,7 +237,10 @@ export function ItemModal({ item, editIdx, onClose, onSaved }) {
                       <label className="form-label">안전재고 기준 수량</label>
                       <input className="form-input" type="number" min="0" {...f('safetyStockMin')} placeholder="이 이하면 경고 표시" />
                     </div>
-                    <div className="form-group" />
+                    <div className="form-group">
+                      <label className="form-label">품목 잠금 해제일</label>
+                      <input className="form-input" type="date" {...f('lockedUntil')} />
+                    </div>
                   </div>
                 </div>
               </details>

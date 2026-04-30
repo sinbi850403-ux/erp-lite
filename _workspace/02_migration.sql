@@ -1,658 +1,1013 @@
--- ============================================================
--- INVEX ERP-Lite — 통합 마이그레이션 스크립트
--- 생성일: 2026-04-28
--- 대상 DBMS: PostgreSQL (Supabase 호스팅)
--- 실행 방법: Supabase SQL Editor에서 각 버전을 순서대로 실행
---
--- 주의사항:
---   1. 각 버전(V00X)은 독립적으로 실행 가능하나, 의존 관계를 반드시 준수
---   2. V002는 기존 team_workspaces 데이터가 있을 경우 UUID 변환 실패 가능
---      → 사전에 데이터 확인 필요 (아래 전처리 쿼리 참조)
---   3. V004 날짜 변환은 잘못된 형식 데이터를 NULL로 처리 (데이터 손실 없음)
---   4. Supabase 환경에서는 CONCURRENTLY 인덱스 생성 권장
--- ============================================================
+-- ====================================================
+-- INVEX 재고관리 DB 마이그레이션 v2.0.0
+-- 실행 환경: Supabase SQL Editor (PostgreSQL 15.x)
+-- 실행 순서: 반드시 아래 섹션 순서대로 실행
+-- 멱등성: 재실행해도 오류 없음 (IF NOT EXISTS, ON CONFLICT DO NOTHING)
+-- 작성일: 2026-04-29
+-- ====================================================
 
+-- ====================================================
+-- [SECTION 1] 신규 테이블: item_stocks
+-- 품목+창고별 현재고 캐시 테이블 (트리거로 자동 갱신)
+-- ====================================================
+-- 사전 확인 (실행 전 이 쿼리로 기존 상태 파악)
+-- SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'item_stocks') AS already_exists;
 
--- ============================================================
--- === V001: payrolls 스키마 충돌 해소 (schema.sql ↔ fix-hr.sql) ===
--- 문제: schema.sql의 payrolls.base vs fix-hr.sql의 base_salary,
---       gross vs gross_pay, other_deduct 중복 등
--- 전략: schema.sql의 컬럼명(base, gross)을 표준으로 유지하되
---       fix-hr.sql 개선사항(salary_items.is_taxable 등) 병합
--- 의존: 없음
--- 예상 시간: 1초 미만 (DDL only, 데이터 없을 경우)
--- 위험도: LOW (ADD COLUMN IF NOT EXISTS — 멱등성 보장)
--- ============================================================
-
--- V001 UP: payrolls 및 salary_items 컬럼 통합 정규화
-
--- [V001-1] salary_items: fix-hr.sql의 개선된 컬럼명(is_taxable, is_active, formula) 추가
---   schema.sql에는 taxable, active 가 있으므로 신규 컬럼을 추가한 뒤
---   애플리케이션 코드가 새 컬럼을 사용하도록 전환 완료 후 구 컬럼 삭제 예정
-ALTER TABLE salary_items
-  ADD COLUMN IF NOT EXISTS is_taxable BOOLEAN,
-  ADD COLUMN IF NOT EXISTS is_active  BOOLEAN,
-  ADD COLUMN IF NOT EXISTS formula    TEXT;
-
--- 기존 데이터를 새 컬럼으로 복사 (신규 컬럼이 NULL인 행만 대상)
-UPDATE salary_items
-SET
-  is_taxable = taxable,
-  is_active  = active
-WHERE is_taxable IS NULL OR is_active IS NULL;
-
--- 새 행 삽입 시 기본값 설정
-ALTER TABLE salary_items
-  ALTER COLUMN is_taxable SET DEFAULT true,
-  ALTER COLUMN is_active  SET DEFAULT true;
-
--- [V001-2] payrolls: fix-hr.sql에서 base_salary, gross_pay, deductions 컬럼이
---   별도 정의된 경우를 대비해 기존 컬럼(base, gross)의 별칭 컬럼을 뷰 형태로 제공
---   (실제 프로덕션 DB에 fix-hr.sql이 적용되었을 경우 아래 컬럼 추가가 필요)
-ALTER TABLE payrolls
-  ADD COLUMN IF NOT EXISTS base_salary NUMERIC(12,0),
-  ADD COLUMN IF NOT EXISTS gross_pay   NUMERIC(12,0),
-  ADD COLUMN IF NOT EXISTS deductions  JSONB DEFAULT '{}';
-
--- 기존 base → base_salary, gross → gross_pay 데이터 복사
-UPDATE payrolls
-SET
-  base_salary = base,
-  gross_pay   = gross
-WHERE base_salary IS NULL OR gross_pay IS NULL;
-
--- deductions가 비어있고 other_deduct에 데이터가 있으면 병합
-UPDATE payrolls
-SET deductions = other_deduct
-WHERE (deductions = '{}' OR deductions IS NULL)
-  AND other_deduct IS NOT NULL
-  AND other_deduct != '{}';
-
-COMMENT ON COLUMN payrolls.base        IS '[DEPRECATED] base_salary로 이전 예정. 이전 완료 후 삭제';
-COMMENT ON COLUMN payrolls.gross       IS '[DEPRECATED] gross_pay로 이전 예정. 이전 완료 후 삭제';
-COMMENT ON COLUMN payrolls.other_deduct IS '[DEPRECATED] deductions로 통합 예정. 이전 완료 후 삭제';
-COMMENT ON COLUMN payrolls.base_salary IS 'V001: base 컬럼의 표준화된 대체 컬럼';
-COMMENT ON COLUMN payrolls.gross_pay   IS 'V001: gross 컬럼의 표준화된 대체 컬럼';
-COMMENT ON COLUMN payrolls.deductions  IS 'V001: other_deduct 통합. {항목코드: 금액} 형태';
-
--- V001 DOWN: payrolls 및 salary_items 추가 컬럼 제거
--- (주의: 이 롤백 실행 전 애플리케이션이 신규 컬럼을 사용하지 않는지 확인 필요)
--- ALTER TABLE salary_items
---   DROP COLUMN IF EXISTS is_taxable,
---   DROP COLUMN IF EXISTS is_active,
---   DROP COLUMN IF EXISTS formula;
--- ALTER TABLE payrolls
---   DROP COLUMN IF EXISTS base_salary,
---   DROP COLUMN IF EXISTS gross_pay,
---   DROP COLUMN IF EXISTS deductions;
-
-
--- ============================================================
--- === V002: team_workspaces.id / owner_id TEXT → UUID 변환 ===
--- 문제: TEXT PRIMARY KEY와 TEXT FK로 인한 UUID 조인 불일치,
---       RLS 정책에서 auth.uid()::text 우회 필요
--- 전략: 기존 값이 유효한 UUID 형식인지 검증 후 타입 변환
---       유효하지 않은 값은 사전 정리 필요 (아래 진단 쿼리 참조)
--- 의존: 없음 (team_workspaces는 독립 테이블)
--- 예상 시간: 데이터 건수에 비례 (일반적으로 1초 미만)
--- 위험도: HIGH — 기존 RPC 함수 3개도 동시 갱신 필요
---
--- 사전 확인 쿼리 (실행 전 반드시 검토):
---   SELECT id, owner_id
---   FROM team_workspaces
---   WHERE id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
---      OR owner_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
---   → 위 쿼리 결과가 0건이어야 V002 안전 실행 가능
--- ============================================================
-
--- V002 UP: TEXT → UUID 타입 변환 + FK 제약 + RLS 정책 재작성
-
--- [V002-1] 비UUID 형식 데이터 안전 처리
---   UUID 형식이 아닌 행은 변환 불가이므로 사전 삭제 또는 별도 보관
---   (운영 데이터 보호를 위해 삭제 전 백업 테이블 생성)
-CREATE TABLE IF NOT EXISTS _migration_backup_team_workspaces AS
-  SELECT * FROM team_workspaces
-  WHERE id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-     OR owner_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
--- 비UUID 행 삭제 (UUID 형식이 아닌 레거시 데이터)
-DELETE FROM team_workspaces
-WHERE id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-   OR owner_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
--- [V002-2] 기존 RLS 정책 삭제 (TEXT 타입 기준으로 작성된 정책)
-DROP POLICY IF EXISTS "tw_select" ON team_workspaces;
-DROP POLICY IF EXISTS "tw_insert" ON team_workspaces;
-DROP POLICY IF EXISTS "tw_update" ON team_workspaces;
-DROP POLICY IF EXISTS "tw_delete" ON team_workspaces;
-
--- [V002-3] 기존 RPC 함수 삭제 (TEXT 파라미터 버전)
-DROP FUNCTION IF EXISTS workspace_add_member(TEXT, JSONB);
-DROP FUNCTION IF EXISTS workspace_remove_member(TEXT, TEXT);
-DROP FUNCTION IF EXISTS workspace_set_member_status(TEXT, TEXT, TEXT);
-
--- [V002-4] 컬럼 타입을 TEXT에서 UUID로 변환
---   USING 절: 기존 TEXT 값을 UUID로 CAST
-ALTER TABLE team_workspaces
-  ALTER COLUMN id       TYPE UUID USING id::UUID,
-  ALTER COLUMN owner_id TYPE UUID USING owner_id::UUID;
-
--- [V002-5] PRIMARY KEY 및 DEFAULT 재설정
---   새 레코드는 gen_random_uuid() 자동 생성
-ALTER TABLE team_workspaces
-  ALTER COLUMN id SET DEFAULT gen_random_uuid();
-
--- [V002-6] owner_id FK 제약 추가
-ALTER TABLE team_workspaces
-  ADD CONSTRAINT team_workspaces_owner_id_fkey
-  FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE;
-
--- [V002-7] UUID 타입 기준으로 RLS 정책 재작성
-CREATE POLICY "tw_select" ON team_workspaces
-  FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "tw_insert" ON team_workspaces
-  FOR INSERT WITH CHECK (auth.uid() = owner_id);
-
-CREATE POLICY "tw_update" ON team_workspaces
-  FOR UPDATE USING (auth.uid() = owner_id);
-
-CREATE POLICY "tw_delete" ON team_workspaces
-  FOR DELETE USING (auth.uid() = owner_id);
-
--- [V002-8] RPC 함수 재작성 (UUID 파라미터 버전)
-CREATE OR REPLACE FUNCTION workspace_add_member(ws_id UUID, new_member JSONB)
-RETURNS VOID AS $$
-DECLARE
-  ws_owner UUID;
-BEGIN
-  SELECT owner_id INTO ws_owner FROM team_workspaces WHERE id = ws_id;
-  IF ws_owner IS NULL THEN RAISE EXCEPTION '워크스페이스를 찾을 수 없습니다.'; END IF;
-  IF ws_owner != auth.uid() THEN RAISE EXCEPTION '팀장만 멤버를 초대할 수 있습니다.'; END IF;
-  UPDATE team_workspaces
-    SET members    = members || jsonb_build_array(new_member),
-        updated_at = now()
-    WHERE id = ws_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
-GRANT EXECUTE ON FUNCTION workspace_add_member(UUID, JSONB) TO authenticated;
-
-CREATE OR REPLACE FUNCTION workspace_remove_member(ws_id UUID, member_uid UUID)
-RETURNS VOID AS $$
-DECLARE
-  ws_owner UUID;
-  caller   UUID := auth.uid();
-BEGIN
-  SELECT owner_id INTO ws_owner FROM team_workspaces WHERE id = ws_id;
-  IF ws_owner IS NULL THEN RAISE EXCEPTION '워크스페이스를 찾을 수 없습니다.'; END IF;
-  IF caller != ws_owner AND caller != member_uid THEN RAISE EXCEPTION '권한이 없습니다.'; END IF;
-  IF member_uid = ws_owner THEN RAISE EXCEPTION '팀장은 제거할 수 없습니다.'; END IF;
-  UPDATE team_workspaces
-    SET members    = COALESCE((
-          SELECT jsonb_agg(m)
-          FROM jsonb_array_elements(members) m
-          WHERE (m->>'uid')::UUID != member_uid
-        ), '[]'::jsonb),
-        updated_at = now()
-    WHERE id = ws_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
-GRANT EXECUTE ON FUNCTION workspace_remove_member(UUID, UUID) TO authenticated;
-
-CREATE OR REPLACE FUNCTION workspace_set_member_status(ws_id UUID, member_uid UUID, new_status TEXT)
-RETURNS VOID AS $$
-DECLARE
-  caller UUID := auth.uid();
-BEGIN
-  IF caller != member_uid THEN RAISE EXCEPTION '본인의 초대 상태만 변경할 수 있습니다.'; END IF;
-  IF new_status NOT IN ('active', 'rejected') THEN RAISE EXCEPTION '유효하지 않은 상태값입니다.'; END IF;
-  UPDATE team_workspaces
-    SET members    = (
-          SELECT jsonb_agg(
-            CASE WHEN (m->>'uid')::UUID = member_uid
-              THEN m || jsonb_build_object('status', new_status)
-              ELSE m
-            END
-          )
-          FROM jsonb_array_elements(members) m
-        ),
-        updated_at = now()
-    WHERE id = ws_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
-GRANT EXECUTE ON FUNCTION workspace_set_member_status(UUID, UUID, TEXT) TO authenticated;
-
--- V002 DOWN: UUID → TEXT 롤백
--- (주의: FK 제약, RLS 정책, RPC를 순서대로 되돌려야 함)
--- ALTER TABLE team_workspaces DROP CONSTRAINT IF EXISTS team_workspaces_owner_id_fkey;
--- DROP POLICY IF EXISTS "tw_select" ON team_workspaces;
--- DROP POLICY IF EXISTS "tw_insert" ON team_workspaces;
--- DROP POLICY IF EXISTS "tw_update" ON team_workspaces;
--- DROP POLICY IF EXISTS "tw_delete" ON team_workspaces;
--- DROP FUNCTION IF EXISTS workspace_add_member(UUID, JSONB);
--- DROP FUNCTION IF EXISTS workspace_remove_member(UUID, UUID);
--- DROP FUNCTION IF EXISTS workspace_set_member_status(UUID, UUID, TEXT);
--- ALTER TABLE team_workspaces ALTER COLUMN id TYPE TEXT USING id::TEXT;
--- ALTER TABLE team_workspaces ALTER COLUMN owner_id TYPE TEXT USING owner_id::TEXT;
--- ALTER TABLE team_workspaces ALTER COLUMN id DROP DEFAULT;
--- CREATE POLICY "tw_select" ON team_workspaces FOR SELECT TO authenticated USING (true);
--- CREATE POLICY "tw_insert" ON team_workspaces FOR INSERT WITH CHECK (auth.uid()::text = owner_id);
--- CREATE POLICY "tw_update" ON team_workspaces FOR UPDATE USING (auth.uid()::text = owner_id);
--- CREATE POLICY "tw_delete" ON team_workspaces FOR DELETE USING (auth.uid()::text = owner_id);
--- (이후 원본 TEXT 파라미터 버전 RPC 함수 재생성 필요)
-
-
--- ============================================================
--- === V003: workspace_members 테이블 생성 (team_workspaces.members JSONB 정규화) ===
--- 문제: members JSONB 배열로 인한 동시성 문제, 개별 멤버 쿼리 비효율
--- 전략: workspace_members 정규화 테이블 생성 후 JSONB 데이터 행으로 분해
---       team_workspaces.members JSONB는 하위 호환성을 위해 즉시 삭제하지 않음
--- 의존: V002 (team_workspaces.id가 UUID여야 FK 참조 가능)
--- 예상 시간: 1초 미만 (DDL) + 데이터 이전 시간 (건수 비례)
--- 위험도: MEDIUM — 기존 members JSONB를 읽는 애플리케이션 코드 별도 수정 필요
--- ============================================================
-
--- V003 UP: workspace_members 정규화 테이블 생성 + 기존 JSONB 데이터 이전
-
--- [V003-1] 정규화 멤버 테이블 생성
-CREATE TABLE IF NOT EXISTS workspace_members (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID NOT NULL REFERENCES team_workspaces(id) ON DELETE CASCADE,
-  member_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  role         TEXT NOT NULL DEFAULT 'staff'
-                 CHECK (role IN ('viewer', 'staff', 'manager', 'admin')),
-  status       TEXT NOT NULL DEFAULT '초대중'
-                 CHECK (status IN ('초대중', 'active', 'rejected')),
-  invited_at   TIMESTAMPTZ DEFAULT now(),
-  joined_at    TIMESTAMPTZ,
-  UNIQUE(workspace_id, member_id)
+CREATE TABLE IF NOT EXISTS item_stocks (
+  item_id          UUID          NOT NULL REFERENCES items(id)      ON DELETE CASCADE,
+  warehouse_id     UUID          NOT NULL REFERENCES warehouses(id) ON DELETE RESTRICT,
+  user_id          UUID          NOT NULL REFERENCES profiles(id)   ON DELETE CASCADE,
+  quantity         NUMERIC(15,4) NOT NULL DEFAULT 0,
+  last_updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (item_id, warehouse_id)
 );
 
-ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE item_stocks ENABLE ROW LEVEL SECURITY;
 
--- 워크스페이스 소유자만 멤버 목록 조회 가능 (본인 멤버십도 조회 가능)
-CREATE POLICY "wm_select" ON workspace_members
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM team_workspaces tw
-      WHERE tw.id = workspace_id
-        AND tw.owner_id = auth.uid()
-    )
-    OR member_id = auth.uid()
-  );
-
--- 워크스페이스 소유자만 멤버 추가 가능
-CREATE POLICY "wm_insert" ON workspace_members
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM team_workspaces tw
-      WHERE tw.id = workspace_id
-        AND tw.owner_id = auth.uid()
-    )
-  );
-
--- 소유자: 멤버 역할/상태 수정 가능, 멤버 본인: 본인 상태만 수정 가능
-CREATE POLICY "wm_update" ON workspace_members
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM team_workspaces tw
-      WHERE tw.id = workspace_id
-        AND tw.owner_id = auth.uid()
-    )
-    OR member_id = auth.uid()
-  );
-
--- 소유자 또는 본인만 멤버십 삭제 가능
-CREATE POLICY "wm_delete" ON workspace_members
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM team_workspaces tw
-      WHERE tw.id = workspace_id
-        AND tw.owner_id = auth.uid()
-    )
-    OR member_id = auth.uid()
-  );
-
-CREATE INDEX IF NOT EXISTS idx_wm_workspace ON workspace_members(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_wm_member    ON workspace_members(member_id);
-
--- [V003-2] 기존 team_workspaces.members JSONB 데이터를 workspace_members 행으로 이전
---   members 배열 원소 구조: {uid, email, name, role, status, joinedAt}
---   uid 값이 유효한 UUID이고 profiles 테이블에 존재하는 경우만 이전
-INSERT INTO workspace_members (workspace_id, member_id, role, status, invited_at, joined_at)
-SELECT
-  tw.id                                              AS workspace_id,
-  (m->>'uid')::UUID                                  AS member_id,
-  COALESCE(
-    CASE WHEN m->>'role' IN ('viewer','staff','manager','admin') THEN m->>'role' END,
-    'staff'
-  )                                                  AS role,
-  COALESCE(
-    CASE WHEN m->>'status' IN ('초대중','active','rejected') THEN m->>'status' END,
-    '초대중'
-  )                                                  AS status,
-  now()                                              AS invited_at,
-  CASE WHEN m->>'joinedAt' IS NOT NULL
-    THEN (m->>'joinedAt')::TIMESTAMPTZ
-  END                                                AS joined_at
-FROM team_workspaces tw,
-     jsonb_array_elements(tw.members) AS m
-WHERE tw.members != '[]'::jsonb
-  AND tw.members IS NOT NULL
-  AND (m->>'uid') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  AND EXISTS (
-    SELECT 1 FROM profiles p WHERE p.id = (m->>'uid')::UUID
-  )
-ON CONFLICT (workspace_id, member_id) DO NOTHING;
-
--- [V003-3] 이전 완료 후 members JSONB 컬럼을 DEPRECATED 처리
---   즉시 삭제하지 않고 애플리케이션 코드 전환 후 별도 V00X에서 삭제 예정
-COMMENT ON COLUMN team_workspaces.members
-  IS '[DEPRECATED] workspace_members 테이블로 이전 완료. 다음 배포 사이클에 삭제 예정';
-
--- V003 DOWN: workspace_members 테이블 삭제 (데이터는 team_workspaces.members에 유지)
--- DROP TABLE IF EXISTS workspace_members;
--- COMMENT ON COLUMN team_workspaces.members IS NULL;
-
-
--- ============================================================
--- === V004: 날짜 컬럼 TEXT → DATE 변환 ===
--- 대상: transactions.date, account_entries.due_date, account_entries.paid_date
--- (purchase_orders.order_date/expected_date, transfers.date 는 Phase 2에서 처리)
--- 문제: 날짜 범위 쿼리 인덱스 비효율, 연체/만기 계산 불가
--- 전략: 새 DATE 컬럼 추가 → ISO-8601 형식 데이터만 변환 → 검증 후 OLD 컬럼 삭제
---       잘못된 형식 데이터는 NULL로 처리 (데이터 손실 없음, COMMENT로 추적)
--- 의존: 없음
--- 예상 시간: 데이터 건수 비례 (10만 건 기준 약 3~5초)
--- 위험도: MEDIUM — 인덱스 재생성 필요, 애플리케이션 컬럼명 변경 주의
--- ============================================================
-
--- V004 UP: 날짜 컬럼 TEXT → DATE 변환
-
--- [V004-1] transactions: date TEXT → txn_date DATE (신규 컬럼 추가)
-ALTER TABLE transactions
-  ADD COLUMN IF NOT EXISTS txn_date DATE;
-
--- ISO-8601(YYYY-MM-DD) 형식인 행만 변환
-UPDATE transactions
-SET txn_date = date::DATE
-WHERE date ~ '^\d{4}-\d{2}-\d{2}$'
-  AND txn_date IS NULL;
-
--- 변환 실패 케이스 로깅 (잘못된 형식 데이터 수 확인용)
--- SELECT COUNT(*) FROM transactions WHERE date IS NOT NULL AND txn_date IS NULL;
--- → 위 결과가 0이 아닌 경우 해당 행 데이터를 수동 검토 후 처리
-
--- 새 컬럼 NOT NULL 제약은 데이터 정리 후 별도 마이그레이션으로 추가
-COMMENT ON COLUMN transactions.txn_date
-  IS 'V004: date(TEXT) 컬럼의 DATE 타입 대체. date 컬럼 삭제 전까지 병행 운영';
-COMMENT ON COLUMN transactions.date
-  IS '[DEPRECATED] txn_date(DATE)로 이전 예정. 이전 완료 후 삭제';
-
--- txn_date 기반 새 인덱스 생성 (기존 TEXT 기반 인덱스와 병행)
-CREATE INDEX IF NOT EXISTS idx_tx_txn_date
-  ON transactions(user_id, txn_date DESC);
-
-CREATE INDEX IF NOT EXISTS idx_tx_composite_date
-  ON transactions(user_id, txn_date DESC, type);
-
--- [V004-2] account_entries: due_date TEXT → due_date_d DATE (신규 컬럼 추가)
-ALTER TABLE account_entries
-  ADD COLUMN IF NOT EXISTS due_date_d  DATE,
-  ADD COLUMN IF NOT EXISTS paid_date_d DATE;
-
-UPDATE account_entries
-SET due_date_d = due_date::DATE
-WHERE due_date ~ '^\d{4}-\d{2}-\d{2}$'
-  AND due_date_d IS NULL;
-
-UPDATE account_entries
-SET paid_date_d = paid_date::DATE
-WHERE paid_date ~ '^\d{4}-\d{2}-\d{2}$'
-  AND paid_date_d IS NULL;
-
-COMMENT ON COLUMN account_entries.due_date_d
-  IS 'V004: due_date(TEXT) 컬럼의 DATE 타입 대체';
-COMMENT ON COLUMN account_entries.paid_date_d
-  IS 'V004: paid_date(TEXT) 컬럼의 DATE 타입 대체';
-COMMENT ON COLUMN account_entries.due_date
-  IS '[DEPRECATED] due_date_d(DATE)로 이전 예정. 이전 완료 후 삭제';
-COMMENT ON COLUMN account_entries.paid_date
-  IS '[DEPRECATED] paid_date_d(DATE)로 이전 예정. 이전 완료 후 삭제';
-
--- 연체 조회 최적화 인덱스 (만기일 기준)
-CREATE INDEX IF NOT EXISTS idx_accounts_due_date
-  ON account_entries(user_id, due_date_d)
-  WHERE status = 'pending';
-
--- V004 DOWN: 추가 컬럼 및 인덱스 삭제
--- DROP INDEX IF EXISTS idx_tx_txn_date;
--- DROP INDEX IF EXISTS idx_tx_composite_date;
--- ALTER TABLE transactions DROP COLUMN IF EXISTS txn_date;
--- DROP INDEX IF EXISTS idx_accounts_due_date;
--- ALTER TABLE account_entries
---   DROP COLUMN IF EXISTS due_date_d,
---   DROP COLUMN IF EXISTS paid_date_d;
-
-
--- ============================================================
--- === V005: FK 제약 추가 (payrolls.confirmed_by, leaves.approved_by → profiles.id) ===
--- 문제: UUID 컬럼이 profiles 테이블을 참조하지 않아 존재하지 않는
---       사용자 UUID가 삽입될 수 있어 승인 추적 신뢰성 손상
--- 전략: 고아 UUID(profiles에 없는 값) 정리 후 FK 제약 추가
--- 의존: 없음 (profiles 테이블은 schema.sql 기준 존재)
--- 예상 시간: 1초 미만
--- 위험도: LOW
--- ============================================================
-
--- V005 UP: FK 제약 추가
-
--- [V005-1] 고아 UUID 탐지 및 NULL 처리
---   profiles에 존재하지 않는 confirmed_by 값 → NULL로 초기화
-UPDATE payrolls
-SET confirmed_by = NULL
-WHERE confirmed_by IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM profiles p WHERE p.id = payrolls.confirmed_by
-  );
-
-UPDATE leaves
-SET approved_by = NULL
-WHERE approved_by IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM profiles p WHERE p.id = leaves.approved_by
-  );
-
--- [V005-2] FK 제약 추가
---   ON DELETE SET NULL: 관리자 계정 삭제 시 승인 정보 유지(행 삭제 없음)
-ALTER TABLE payrolls
-  ADD CONSTRAINT payrolls_confirmed_by_fkey
-  FOREIGN KEY (confirmed_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
-ALTER TABLE leaves
-  ADD CONSTRAINT leaves_approved_by_fkey
-  FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
--- V005 DOWN: FK 제약 삭제
--- ALTER TABLE payrolls DROP CONSTRAINT IF EXISTS payrolls_confirmed_by_fkey;
--- ALTER TABLE leaves   DROP CONSTRAINT IF EXISTS leaves_approved_by_fkey;
-
-
--- ============================================================
--- === V006: warehouses 마스터 테이블 신규 생성 ===
--- 문제: 창고 이름이 items, transactions, transfers 세 테이블에
---       TEXT로 분산 저장되어 이름 변경 시 3개 테이블 전체 UPDATE 필요
--- 전략: warehouses 테이블 생성 → 기존 TEXT 값에서 고유 창고명 추출하여 시드 삽입
---       items/transfers에 warehouse_id FK 컬럼 추가 (TEXT 컬럼은 하위 호환 유지)
--- 의존: 없음
--- 예상 시간: DDL 1초 미만 + 데이터 이전 건수 비례
--- 위험도: LOW (기존 컬럼 유지, 신규 컬럼 추가만)
--- ============================================================
-
--- V006 UP: warehouses 마스터 테이블 생성 + FK 컬럼 추가
-
--- [V006-1] warehouses 마스터 테이블 생성
-CREATE TABLE IF NOT EXISTS warehouses (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  address    TEXT,
-  manager    TEXT,
-  phone      TEXT,
-  is_default BOOLEAN DEFAULT false,
-  memo       TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id, name)
-);
-
-ALTER TABLE warehouses ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "warehouses_all" ON warehouses
-  FOR ALL USING (auth.uid() = user_id);
-
-CREATE INDEX IF NOT EXISTS idx_warehouses_user
-  ON warehouses(user_id);
-
--- updated_at 트리거 연결
 DO $$
 BEGIN
-  DROP TRIGGER IF EXISTS set_updated_at ON warehouses;
-  CREATE TRIGGER set_updated_at
-    BEFORE UPDATE ON warehouses
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'item_stocks' AND policyname = 'item_stocks_all'
+  ) THEN
+    CREATE POLICY "item_stocks_all"
+      ON item_stocks FOR ALL
+      USING (auth.uid() = user_id);
+  END IF;
 END $$;
 
--- [V006-2] 기존 items.warehouse, transfers.from_warehouse, transfers.to_warehouse
---   에서 고유 창고명을 추출하여 warehouses 테이블에 시드 삽입
---   (user_id별로 창고명이 중복 없이 삽입됨)
-INSERT INTO warehouses (user_id, name, is_default)
-SELECT DISTINCT user_id, warehouse, false
-FROM items
-WHERE warehouse IS NOT NULL AND warehouse != ''
-ON CONFLICT (user_id, name) DO NOTHING;
+CREATE INDEX IF NOT EXISTS idx_item_stocks_user_item
+  ON item_stocks(user_id, item_id);
 
-INSERT INTO warehouses (user_id, name, is_default)
-SELECT DISTINCT user_id, from_warehouse, false
-FROM transfers
-WHERE from_warehouse IS NOT NULL AND from_warehouse != ''
-ON CONFLICT (user_id, name) DO NOTHING;
+CREATE INDEX IF NOT EXISTS idx_item_stocks_user_wh
+  ON item_stocks(user_id, warehouse_id);
 
-INSERT INTO warehouses (user_id, name, is_default)
-SELECT DISTINCT user_id, to_warehouse, false
-FROM transfers
-WHERE to_warehouse IS NOT NULL AND to_warehouse != ''
-ON CONFLICT (user_id, name) DO NOTHING;
+-- 재고 소진 알람용 부분 인덱스
+CREATE INDEX IF NOT EXISTS idx_item_stocks_zero
+  ON item_stocks(user_id, item_id)
+  WHERE quantity <= 0;
 
--- transactions.warehouse도 추출 (items/transfers와 중복 가능하므로 ON CONFLICT 처리)
-INSERT INTO warehouses (user_id, name, is_default)
-SELECT DISTINCT user_id, warehouse, false
-FROM transactions
-WHERE warehouse IS NOT NULL AND warehouse != ''
-ON CONFLICT (user_id, name) DO NOTHING;
+-- ROLLBACK SECTION 1:
+-- DROP TABLE IF EXISTS item_stocks;
 
--- [V006-3] items 테이블에 warehouse_id FK 컬럼 추가
-ALTER TABLE items
+-- ====================================================
+-- [SECTION 2] 신규 테이블: safety_stocks
+-- 안전재고 정규화 (기존 user_settings.key='safetyStock' JSON 대체)
+-- ====================================================
+-- 사전 확인
+-- SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'safety_stocks') AS already_exists;
+
+CREATE TABLE IF NOT EXISTS safety_stocks (
+  id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID          NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  item_id      UUID          NOT NULL REFERENCES items(id)    ON DELETE CASCADE,
+  warehouse_id UUID          REFERENCES warehouses(id)        ON DELETE CASCADE,
+  min_qty      NUMERIC(15,4) NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  -- PG15: warehouse_id NULL 포함 유니크 보장
+  CONSTRAINT uq_safety_stock UNIQUE NULLS NOT DISTINCT (user_id, item_id, warehouse_id)
+);
+
+ALTER TABLE safety_stocks ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'safety_stocks' AND policyname = 'safety_stocks_all'
+  ) THEN
+    CREATE POLICY "safety_stocks_all"
+      ON safety_stocks FOR ALL
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_safety_stocks_user_item
+  ON safety_stocks(user_id, item_id);
+
+CREATE INDEX IF NOT EXISTS idx_safety_stocks_item_wh
+  ON safety_stocks(item_id, warehouse_id);
+
+-- updated_at 자동 갱신 (기존 update_updated_at 트리거 함수 재사용)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'set_safety_stocks_updated_at'
+      AND tgrelid = 'safety_stocks'::regclass
+  ) THEN
+    CREATE TRIGGER set_safety_stocks_updated_at
+      BEFORE UPDATE ON safety_stocks
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+END $$;
+
+-- ROLLBACK SECTION 2:
+-- DROP TABLE IF EXISTS safety_stocks;
+
+-- ====================================================
+-- [SECTION 3] transactions 컬럼 추가
+-- item_id, warehouse_id, vendor_id, txn_date FK 컬럼 추가
+-- 기존 컬럼(item_name, warehouse, vendor, date)은 절대 삭제 금지
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS total_rows FROM transactions;
+-- SELECT COUNT(*) AS has_item_id FROM transactions WHERE item_id IS NOT NULL;
+-- SELECT COUNT(*) AS has_warehouse_id FROM transactions WHERE warehouse_id IS NOT NULL;
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS item_id      UUID REFERENCES items(id)      ON DELETE SET NULL;
+
+ALTER TABLE transactions
   ADD COLUMN IF NOT EXISTS warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
 
--- 기존 warehouse TEXT 값으로 warehouse_id 채우기
-UPDATE items i
-SET warehouse_id = w.id
-FROM warehouses w
-WHERE w.user_id = i.user_id
-  AND w.name    = i.warehouse
-  AND i.warehouse_id IS NULL;
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS vendor_id    UUID REFERENCES vendors(id)    ON DELETE SET NULL;
 
-COMMENT ON COLUMN items.warehouse_id
-  IS 'V006: warehouse(TEXT) 컬럼의 FK 버전. 마이그레이션 완료 후 warehouse 컬럼 삭제 예정';
-COMMENT ON COLUMN items.warehouse
-  IS '[DEPRECATED] warehouse_id(UUID FK)로 이전 예정. 이전 완료 후 삭제';
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS txn_date     DATE;
 
--- [V006-4] transfers 테이블에 warehouse FK 컬럼 추가
+-- transactions 인덱스 추가
+CREATE INDEX IF NOT EXISTS idx_tx_item_id
+  ON transactions(item_id)
+  WHERE item_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tx_txn_date
+  ON transactions(user_id, txn_date DESC)
+  WHERE txn_date IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tx_warehouse_id
+  ON transactions(user_id, warehouse_id, txn_date DESC)
+  WHERE warehouse_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tx_vendor_id
+  ON transactions(vendor_id)
+  WHERE vendor_id IS NOT NULL;
+
+-- ROLLBACK SECTION 3:
+-- ALTER TABLE transactions DROP COLUMN IF EXISTS item_id;
+-- ALTER TABLE transactions DROP COLUMN IF EXISTS warehouse_id;
+-- ALTER TABLE transactions DROP COLUMN IF EXISTS vendor_id;
+-- ALTER TABLE transactions DROP COLUMN IF EXISTS txn_date;
+-- DROP INDEX IF EXISTS idx_tx_item_id;
+-- DROP INDEX IF EXISTS idx_tx_txn_date;
+-- DROP INDEX IF EXISTS idx_tx_warehouse_id;
+-- DROP INDEX IF EXISTS idx_tx_vendor_id;
+
+-- ====================================================
+-- [SECTION 4] transfers 컬럼 추가
+-- item_id, from_warehouse_id, to_warehouse_id, date_d FK 컬럼 추가
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS total_rows FROM transfers;
+-- SELECT COUNT(*) AS has_item_id FROM transfers WHERE item_id IS NOT NULL;
+
 ALTER TABLE transfers
-  ADD COLUMN IF NOT EXISTS from_warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS to_warehouse_id   UUID REFERENCES warehouses(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS item_id           UUID REFERENCES items(id)      ON DELETE SET NULL;
 
-UPDATE transfers t
-SET from_warehouse_id = w.id
-FROM warehouses w
-WHERE w.user_id = t.user_id
-  AND w.name    = t.from_warehouse
-  AND t.from_warehouse_id IS NULL;
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS from_warehouse_id UUID REFERENCES warehouses(id) ON DELETE RESTRICT;
 
-UPDATE transfers t
-SET to_warehouse_id = w.id
-FROM warehouses w
-WHERE w.user_id = t.user_id
-  AND w.name    = t.to_warehouse
-  AND t.to_warehouse_id IS NULL;
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS to_warehouse_id   UUID REFERENCES warehouses(id) ON DELETE RESTRICT;
 
-COMMENT ON COLUMN transfers.from_warehouse_id
-  IS 'V006: from_warehouse(TEXT)의 FK 버전';
-COMMENT ON COLUMN transfers.to_warehouse_id
-  IS 'V006: to_warehouse(TEXT)의 FK 버전';
-COMMENT ON COLUMN transfers.from_warehouse
-  IS '[DEPRECATED] from_warehouse_id로 이전 예정';
-COMMENT ON COLUMN transfers.to_warehouse
-  IS '[DEPRECATED] to_warehouse_id로 이전 예정';
+ALTER TABLE transfers
+  ADD COLUMN IF NOT EXISTS date_d            DATE;
 
--- [V006-5] warehouses 인덱스 추가 (items 창고별 조회 최적화)
-CREATE INDEX IF NOT EXISTS idx_items_warehouse_id
-  ON items(user_id, warehouse_id);
+-- transfers 인덱스 추가
+CREATE INDEX IF NOT EXISTS idx_transfers_item_id
+  ON transfers(item_id)
+  WHERE item_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_transfers_date_d
+  ON transfers(user_id, date_d DESC)
+  WHERE date_d IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_transfers_from_wh
-  ON transfers(user_id, from_warehouse_id);
+  ON transfers(from_warehouse_id)
+  WHERE from_warehouse_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_transfers_to_wh
-  ON transfers(user_id, to_warehouse_id);
+  ON transfers(to_warehouse_id)
+  WHERE to_warehouse_id IS NOT NULL;
 
--- Realtime 활성화
-ALTER TABLE warehouses REPLICA IDENTITY FULL;
+-- ROLLBACK SECTION 4:
+-- ALTER TABLE transfers DROP COLUMN IF EXISTS item_id;
+-- ALTER TABLE transfers DROP COLUMN IF EXISTS from_warehouse_id;
+-- ALTER TABLE transfers DROP COLUMN IF EXISTS to_warehouse_id;
+-- ALTER TABLE transfers DROP COLUMN IF EXISTS date_d;
+-- DROP INDEX IF EXISTS idx_transfers_item_id;
+-- DROP INDEX IF EXISTS idx_transfers_date_d;
+-- DROP INDEX IF EXISTS idx_transfers_from_wh;
+-- DROP INDEX IF EXISTS idx_transfers_to_wh;
 
+-- ====================================================
+-- [SECTION 5] stocktake_items 컬럼 보강
+-- warehouse_id, unit_price 컬럼 추가
+-- diff_qty GENERATED ALWAYS AS STORED 컬럼 추가
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS total_rows FROM stocktake_items;
+-- SELECT column_name FROM information_schema.columns
+--   WHERE table_name = 'stocktake_items' AND column_name IN ('warehouse_id','unit_price','diff_qty');
+
+ALTER TABLE stocktake_items
+  ADD COLUMN IF NOT EXISTS warehouse_id UUID REFERENCES warehouses(id) ON DELETE SET NULL;
+
+ALTER TABLE stocktake_items
+  ADD COLUMN IF NOT EXISTS unit_price   NUMERIC(15,2) NOT NULL DEFAULT 0;
+
+-- diff_qty: actual_qty - system_qty GENERATED STORED
+-- GENERATED 컬럼은 IF NOT EXISTS 미지원이므로 DO 블록으로 처리
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE warehouses;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'stocktake_items' AND column_name = 'diff_qty'
+  ) THEN
+    ALTER TABLE stocktake_items
+      ADD COLUMN diff_qty NUMERIC(15,4) GENERATED ALWAYS AS (actual_qty - system_qty) STORED;
   END IF;
-EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
--- V006 DOWN: warehouses 테이블 및 FK 컬럼 삭제
--- ALTER TABLE items     DROP COLUMN IF EXISTS warehouse_id;
--- ALTER TABLE transfers DROP COLUMN IF EXISTS from_warehouse_id, DROP COLUMN IF EXISTS to_warehouse_id;
--- DROP INDEX  IF EXISTS idx_items_warehouse_id;
--- DROP INDEX  IF EXISTS idx_transfers_from_wh;
--- DROP INDEX  IF EXISTS idx_transfers_to_wh;
--- DROP TABLE  IF EXISTS warehouses;
+-- stocktake_items 인덱스 추가
+CREATE INDEX IF NOT EXISTS idx_sti_warehouse
+  ON stocktake_items(warehouse_id)
+  WHERE warehouse_id IS NOT NULL;
 
+-- ROLLBACK SECTION 5:
+-- ALTER TABLE stocktake_items DROP COLUMN IF EXISTS warehouse_id;
+-- ALTER TABLE stocktake_items DROP COLUMN IF EXISTS unit_price;
+-- ALTER TABLE stocktake_items DROP COLUMN IF EXISTS diff_qty;
+-- DROP INDEX IF EXISTS idx_sti_warehouse;
 
--- ============================================================
--- 마이그레이션 완료 확인 쿼리
--- 실행 후 아래 SELECT 문으로 적용 결과 검증
--- ============================================================
+-- ====================================================
+-- [SECTION 6] 백필: warehouse 텍스트 -> warehouse_id (transactions)
+-- 1,000행 배치 처리로 타임아웃 방지
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS null_warehouse_id_count
+--   FROM transactions
+--   WHERE warehouse_id IS NULL AND warehouse IS NOT NULL;
 
--- V001 검증
--- SELECT column_name, data_type FROM information_schema.columns
--- WHERE table_name = 'payrolls' AND column_name IN ('base','gross','base_salary','gross_pay','deductions','other_deduct');
--- SELECT column_name, data_type FROM information_schema.columns
--- WHERE table_name = 'salary_items' AND column_name IN ('taxable','active','is_taxable','is_active','formula');
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transactions t
+       SET warehouse_id = w.id
+      FROM warehouses w
+     WHERE w.user_id = t.user_id
+       AND w.name    = t.warehouse
+       AND t.warehouse_id IS NULL
+       AND t.warehouse IS NOT NULL
+       AND t.id IN (
+         SELECT id FROM transactions
+         WHERE warehouse_id IS NULL AND warehouse IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
 
--- V002 검증
--- SELECT column_name, data_type FROM information_schema.columns
--- WHERE table_name = 'team_workspaces' AND column_name IN ('id','owner_id');
--- SELECT COUNT(*) FROM pg_constraint WHERE conname = 'team_workspaces_owner_id_fkey';
+-- 백필 완료 확인
+-- SELECT COUNT(*) AS remaining_null
+--   FROM transactions
+--   WHERE warehouse_id IS NULL AND warehouse IS NOT NULL;
 
--- V003 검증
--- SELECT COUNT(*) FROM workspace_members;
--- SELECT COUNT(*) FROM team_workspaces WHERE jsonb_array_length(members) > 0;
+-- ROLLBACK SECTION 6:
+-- (백필은 FK 매핑이므로 개별 롤백 불필요. 컬럼 DROP은 SECTION 3 롤백 참조)
 
--- V004 검증
--- SELECT COUNT(*) FROM transactions WHERE date IS NOT NULL AND txn_date IS NULL;
--- SELECT COUNT(*) FROM account_entries WHERE due_date IS NOT NULL AND due_date_d IS NULL;
+-- ====================================================
+-- [SECTION 7] 백필: vendor 텍스트 -> vendor_id (transactions)
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS null_vendor_id_count
+--   FROM transactions
+--   WHERE vendor_id IS NULL AND vendor IS NOT NULL;
 
--- V005 검증
--- SELECT COUNT(*) FROM pg_constraint WHERE conname IN ('payrolls_confirmed_by_fkey','leaves_approved_by_fkey');
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transactions t
+       SET vendor_id = v.id
+      FROM vendors v
+     WHERE v.user_id = t.user_id
+       AND v.name    = t.vendor
+       AND t.vendor_id IS NULL
+       AND t.vendor IS NOT NULL
+       AND t.id IN (
+         SELECT id FROM transactions
+         WHERE vendor_id IS NULL AND vendor IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
 
--- V006 검증
--- SELECT COUNT(*) FROM warehouses;
--- SELECT COUNT(*) FROM items WHERE warehouse IS NOT NULL AND warehouse_id IS NULL;
+-- 백필 완료 확인
+-- SELECT COUNT(*) AS remaining_null
+--   FROM transactions
+--   WHERE vendor_id IS NULL AND vendor IS NOT NULL;
+
+-- ROLLBACK SECTION 7:
+-- UPDATE transactions SET vendor_id = NULL WHERE vendor_id IS NOT NULL;
+
+-- ====================================================
+-- [SECTION 8] 백필: item_name -> item_id (transactions + transfers)
+-- Phase 1 — NULL 허용 기간. NOT NULL은 Phase 3에서 별도 적용.
+-- ====================================================
+-- 사전 확인 (transactions)
+-- SELECT COUNT(*) AS null_item_id_tx
+--   FROM transactions
+--   WHERE item_id IS NULL AND item_name IS NOT NULL;
+-- 사전 확인 (transfers)
+-- SELECT COUNT(*) AS null_item_id_tr
+--   FROM transfers
+--   WHERE item_id IS NULL;
+
+-- 8-A: transactions.item_id 백필
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transactions t
+       SET item_id = i.id
+      FROM items i
+     WHERE i.user_id   = t.user_id
+       AND i.item_name = t.item_name
+       AND t.item_id IS NULL
+       AND t.item_name IS NOT NULL
+       AND t.id IN (
+         SELECT id FROM transactions
+         WHERE item_id IS NULL AND item_name IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- 8-B: transactions.txn_date 백필 (date 텍스트 -> DATE)
+-- YYYY-MM-DD 형식 가정. 파싱 실패 행은 NULL 유지.
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transactions
+       SET txn_date = date::DATE
+     WHERE txn_date IS NULL
+       AND date IS NOT NULL
+       AND date ~ '^\d{4}-\d{2}-\d{2}'
+       AND id IN (
+         SELECT id FROM transactions
+         WHERE txn_date IS NULL
+           AND date IS NOT NULL
+           AND date ~ '^\d{4}-\d{2}-\d{2}'
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- 8-C: transfers.item_id 백필
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transfers tr
+       SET item_id = i.id
+      FROM items i
+     WHERE i.user_id   = tr.user_id
+       AND i.item_name = tr.item_name
+       AND tr.item_id IS NULL
+       AND tr.item_name IS NOT NULL
+       AND tr.id IN (
+         SELECT id FROM transfers
+         WHERE item_id IS NULL AND item_name IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- 8-D: transfers.from_warehouse_id 백필
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transfers tr
+       SET from_warehouse_id = w.id
+      FROM warehouses w
+     WHERE w.user_id = tr.user_id
+       AND w.name    = tr.from_warehouse
+       AND tr.from_warehouse_id IS NULL
+       AND tr.from_warehouse IS NOT NULL
+       AND tr.id IN (
+         SELECT id FROM transfers
+         WHERE from_warehouse_id IS NULL AND from_warehouse IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- 8-E: transfers.to_warehouse_id 백필
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transfers tr
+       SET to_warehouse_id = w.id
+      FROM warehouses w
+     WHERE w.user_id = tr.user_id
+       AND w.name    = tr.to_warehouse
+       AND tr.to_warehouse_id IS NULL
+       AND tr.to_warehouse IS NOT NULL
+       AND tr.id IN (
+         SELECT id FROM transfers
+         WHERE to_warehouse_id IS NULL AND to_warehouse IS NOT NULL
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- 8-F: transfers.date_d 백필
+DO $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  LOOP
+    UPDATE transfers
+       SET date_d = date::DATE
+     WHERE date_d IS NULL
+       AND date IS NOT NULL
+       AND date ~ '^\d{4}-\d{2}-\d{2}'
+       AND id IN (
+         SELECT id FROM transfers
+         WHERE date_d IS NULL
+           AND date IS NOT NULL
+           AND date ~ '^\d{4}-\d{2}-\d{2}'
+         LIMIT 1000
+       );
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    EXIT WHEN rows_updated = 0;
+  END LOOP;
+END $$;
+
+-- Phase 2 확인 쿼리 (NULL 행 모두 0이면 Phase 3 진행 가능)
+-- SELECT 'transactions.item_id NULL'    AS check_name, COUNT(*) AS null_count FROM transactions WHERE item_id IS NULL AND item_name IS NOT NULL
+-- UNION ALL
+-- SELECT 'transfers.item_id NULL',       COUNT(*) FROM transfers WHERE item_id IS NULL
+-- UNION ALL
+-- SELECT 'transfers.from_wh NULL',       COUNT(*) FROM transfers WHERE from_warehouse_id IS NULL
+-- UNION ALL
+-- SELECT 'transfers.to_wh NULL',         COUNT(*) FROM transfers WHERE to_warehouse_id IS NULL;
+
+-- ROLLBACK SECTION 8:
+-- (백필은 데이터 보존이므로 롤백 불필요. FK 컬럼 DROP은 SECTION 3/4 롤백 참조)
+
+-- ====================================================
+-- [SECTION 9] 트리거 함수 설치
+-- fn_update_item_stock: transactions 변경 -> item_stocks 자동 갱신
+-- fn_update_item_stock_on_transfer: transfers 변경 -> item_stocks 자동 갱신
+-- fn_recalculate_item_stocks: 전체 재계산 (불일치 복구용)
+-- ====================================================
+
+-- 9-A: transactions 트리거 함수
+CREATE OR REPLACE FUNCTION fn_update_item_stock()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_item_id      UUID;
+  v_warehouse_id UUID;
+  v_user_id      UUID;
+  v_delta        NUMERIC;
+  v_sign         NUMERIC;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_item_id      := OLD.item_id;
+    v_warehouse_id := OLD.warehouse_id;
+    v_user_id      := OLD.user_id;
+  ELSE
+    v_item_id      := NEW.item_id;
+    v_warehouse_id := NEW.warehouse_id;
+    v_user_id      := NEW.user_id;
+  END IF;
+
+  -- item_id 또는 warehouse_id가 NULL이면 item_stocks 갱신 불가 -> 건너뜀
+  IF v_item_id IS NULL OR v_warehouse_id IS NULL THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    -- adjust 타입: 현재고를 NEW.quantity로 직접 설정
+    IF NEW.type = 'adjust' THEN
+      INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+        VALUES (v_item_id, v_warehouse_id, v_user_id, NEW.quantity, now())
+        ON CONFLICT (item_id, warehouse_id)
+        DO UPDATE SET quantity = NEW.quantity, last_updated_at = now();
+      RETURN NEW;
+    END IF;
+
+    v_delta := CASE NEW.type
+      WHEN 'in'   THEN  NEW.quantity
+      WHEN 'out'  THEN -NEW.quantity
+      WHEN 'loss' THEN -NEW.quantity
+      ELSE 0
+    END;
+
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (v_item_id, v_warehouse_id, v_user_id, GREATEST(0, v_delta), now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = GREATEST(0, item_stocks.quantity + v_delta),
+        last_updated_at = now();
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    -- item_id/warehouse_id 변경 시: OLD 위치 역전 + NEW 위치 적용
+    IF OLD.item_id IS DISTINCT FROM NEW.item_id
+       OR OLD.warehouse_id IS DISTINCT FROM NEW.warehouse_id THEN
+
+      IF OLD.item_id IS NOT NULL AND OLD.warehouse_id IS NOT NULL THEN
+        v_sign := CASE OLD.type
+          WHEN 'in'   THEN -1
+          WHEN 'out'  THEN  1
+          WHEN 'loss' THEN  1
+          ELSE 0
+        END;
+        UPDATE item_stocks SET
+          quantity        = GREATEST(0, quantity + v_sign * OLD.quantity),
+          last_updated_at = now()
+        WHERE item_id = OLD.item_id AND warehouse_id = OLD.warehouse_id;
+      END IF;
+
+      v_sign := CASE NEW.type
+        WHEN 'in'   THEN  1
+        WHEN 'out'  THEN -1
+        WHEN 'loss' THEN -1
+        ELSE 0
+      END;
+      INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+        VALUES (NEW.item_id, NEW.warehouse_id, v_user_id, GREATEST(0, v_sign * NEW.quantity), now())
+        ON CONFLICT (item_id, warehouse_id)
+        DO UPDATE SET
+          quantity        = GREATEST(0, item_stocks.quantity + v_sign * NEW.quantity),
+          last_updated_at = now();
+    ELSE
+      -- 동일 품목/창고, 수량/타입 변경
+      v_delta := CASE OLD.type
+        WHEN 'in'   THEN -OLD.quantity
+        WHEN 'out'  THEN  OLD.quantity
+        WHEN 'loss' THEN  OLD.quantity
+        ELSE 0
+      END;
+      v_delta := v_delta + CASE NEW.type
+        WHEN 'in'   THEN  NEW.quantity
+        WHEN 'out'  THEN -NEW.quantity
+        WHEN 'loss' THEN -NEW.quantity
+        ELSE 0
+      END;
+      UPDATE item_stocks SET
+        quantity        = GREATEST(0, quantity + v_delta),
+        last_updated_at = now()
+      WHERE item_id = v_item_id AND warehouse_id = v_warehouse_id;
+    END IF;
+
+  ELSIF TG_OP = 'DELETE' THEN
+    v_delta := CASE OLD.type
+      WHEN 'in'   THEN -OLD.quantity
+      WHEN 'out'  THEN  OLD.quantity
+      WHEN 'loss' THEN  OLD.quantity
+      ELSE 0
+    END;
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity + v_delta),
+      last_updated_at = now()
+    WHERE item_id = v_item_id AND warehouse_id = v_warehouse_id;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_update_item_stock ON transactions;
+CREATE TRIGGER trg_update_item_stock
+  AFTER INSERT OR UPDATE OR DELETE ON transactions
+  FOR EACH ROW EXECUTE FUNCTION fn_update_item_stock();
+
+-- 9-B: transfers 트리거 함수
+CREATE OR REPLACE FUNCTION fn_update_item_stock_on_transfer()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.item_id IS NULL OR NEW.from_warehouse_id IS NULL OR NEW.to_warehouse_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+    -- 출발 창고 차감
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity - NEW.quantity),
+      last_updated_at = now()
+    WHERE item_id = NEW.item_id AND warehouse_id = NEW.from_warehouse_id;
+    -- 도착 창고 증가
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (NEW.item_id, NEW.to_warehouse_id, NEW.user_id, NEW.quantity, now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = item_stocks.quantity + NEW.quantity,
+        last_updated_at = now();
+
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.item_id IS NULL OR OLD.from_warehouse_id IS NULL OR OLD.to_warehouse_id IS NULL THEN
+      RETURN OLD;
+    END IF;
+    -- 이동 역전: 출발 창고 복구
+    INSERT INTO item_stocks(item_id, warehouse_id, user_id, quantity, last_updated_at)
+      VALUES (OLD.item_id, OLD.from_warehouse_id, OLD.user_id, OLD.quantity, now())
+      ON CONFLICT (item_id, warehouse_id)
+      DO UPDATE SET
+        quantity        = item_stocks.quantity + OLD.quantity,
+        last_updated_at = now();
+    -- 도착 창고 차감
+    UPDATE item_stocks SET
+      quantity        = GREATEST(0, quantity - OLD.quantity),
+      last_updated_at = now()
+    WHERE item_id = OLD.item_id AND warehouse_id = OLD.to_warehouse_id;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_update_stock_on_transfer ON transfers;
+CREATE TRIGGER trg_update_stock_on_transfer
+  AFTER INSERT OR DELETE ON transfers
+  FOR EACH ROW EXECUTE FUNCTION fn_update_item_stock_on_transfer();
+
+-- 9-C: 재고 전체 재계산 함수 (불일치 복구용)
+CREATE OR REPLACE FUNCTION fn_recalculate_item_stocks(target_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  -- 본인 데이터만 재계산 가능
+  IF target_user_id != auth.uid() THEN
+    RAISE EXCEPTION '본인 데이터만 재계산할 수 있습니다.';
+  END IF;
+
+  -- 기존 캐시 삭제
+  DELETE FROM item_stocks WHERE user_id = target_user_id;
+
+  -- transactions 기반 재계산 (adjust 제외 먼저 합산)
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT
+    item_id,
+    warehouse_id,
+    target_user_id,
+    GREATEST(0,
+      SUM(CASE
+        WHEN type = 'in'   THEN  quantity
+        WHEN type = 'out'  THEN -quantity
+        WHEN type = 'loss' THEN -quantity
+        ELSE 0
+      END)
+    ) AS quantity,
+    now()
+  FROM transactions
+  WHERE user_id      = target_user_id
+    AND item_id      IS NOT NULL
+    AND warehouse_id IS NOT NULL
+    AND type != 'adjust'
+  GROUP BY item_id, warehouse_id
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = EXCLUDED.quantity,
+        last_updated_at = now();
+
+  -- adjust 타입: 가장 최근 adjust 값으로 덮어씀
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT DISTINCT ON (item_id, warehouse_id)
+    item_id,
+    warehouse_id,
+    target_user_id,
+    quantity,
+    now()
+  FROM transactions
+  WHERE user_id      = target_user_id
+    AND item_id      IS NOT NULL
+    AND warehouse_id IS NOT NULL
+    AND type = 'adjust'
+  ORDER BY item_id, warehouse_id, txn_date DESC NULLS LAST, created_at DESC
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = EXCLUDED.quantity,
+        last_updated_at = now();
+
+  -- transfers 반영: from 창고 차감
+  UPDATE item_stocks ist SET
+    quantity        = GREATEST(0, ist.quantity - sub.out_qty),
+    last_updated_at = now()
+  FROM (
+    SELECT item_id, from_warehouse_id AS warehouse_id, SUM(quantity) AS out_qty
+    FROM transfers
+    WHERE user_id           = target_user_id
+      AND item_id           IS NOT NULL
+      AND from_warehouse_id IS NOT NULL
+    GROUP BY item_id, from_warehouse_id
+  ) sub
+  WHERE ist.item_id = sub.item_id AND ist.warehouse_id = sub.warehouse_id;
+
+  -- transfers 반영: to 창고 증가
+  INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+  SELECT item_id, to_warehouse_id, target_user_id, SUM(quantity), now()
+  FROM transfers
+  WHERE user_id         = target_user_id
+    AND item_id         IS NOT NULL
+    AND to_warehouse_id IS NOT NULL
+  GROUP BY item_id, to_warehouse_id
+  ON CONFLICT (item_id, warehouse_id) DO UPDATE
+    SET quantity        = item_stocks.quantity + EXCLUDED.quantity,
+        last_updated_at = now();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp;
+
+GRANT EXECUTE ON FUNCTION fn_recalculate_item_stocks(UUID) TO authenticated;
+
+-- ROLLBACK SECTION 9:
+-- DROP TRIGGER IF EXISTS trg_update_item_stock ON transactions;
+-- DROP TRIGGER IF EXISTS trg_update_stock_on_transfer ON transfers;
+-- DROP FUNCTION IF EXISTS fn_update_item_stock();
+-- DROP FUNCTION IF EXISTS fn_update_item_stock_on_transfer();
+-- REVOKE EXECUTE ON FUNCTION fn_recalculate_item_stocks(UUID) FROM authenticated;
+-- DROP FUNCTION IF EXISTS fn_recalculate_item_stocks(UUID);
+
+-- ====================================================
+-- [SECTION 10] item_stocks 초기 데이터 계산
+-- 트리거 설치(SECTION 9) 완료 후 실행
+-- 기존 transactions/transfers 데이터 기반으로 초기 현재고 계산
+-- 주의: service_role 키로 Supabase SQL Editor에서 실행
+-- ====================================================
+-- 사전 확인
+-- SELECT COUNT(*) AS item_stocks_count FROM item_stocks;
+-- SELECT DISTINCT user_id FROM transactions LIMIT 20;
+
+-- 10-A: transactions 기반 초기 계산 (adjust 제외)
+INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+SELECT
+  t.item_id,
+  t.warehouse_id,
+  t.user_id,
+  GREATEST(0,
+    SUM(CASE
+      WHEN t.type = 'in'   THEN  t.quantity
+      WHEN t.type = 'out'  THEN -t.quantity
+      WHEN t.type = 'loss' THEN -t.quantity
+      ELSE 0
+    END)
+  ) AS quantity,
+  now() AS last_updated_at
+FROM transactions t
+WHERE t.item_id      IS NOT NULL
+  AND t.warehouse_id IS NOT NULL
+  AND t.type != 'adjust'
+GROUP BY t.item_id, t.warehouse_id, t.user_id
+ON CONFLICT (item_id, warehouse_id) DO UPDATE
+  SET quantity        = EXCLUDED.quantity,
+      last_updated_at = now();
+
+-- 10-B: adjust 타입: 가장 최근 adjust 값으로 덮어씀
+INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+SELECT DISTINCT ON (item_id, warehouse_id)
+  item_id,
+  warehouse_id,
+  user_id,
+  quantity,
+  now()
+FROM transactions
+WHERE item_id      IS NOT NULL
+  AND warehouse_id IS NOT NULL
+  AND type = 'adjust'
+ORDER BY item_id, warehouse_id, txn_date DESC NULLS LAST, created_at DESC
+ON CONFLICT (item_id, warehouse_id) DO UPDATE
+  SET quantity        = EXCLUDED.quantity,
+      last_updated_at = now();
+
+-- 10-C: transfers.from_warehouse 차감
+UPDATE item_stocks ist SET
+  quantity        = GREATEST(0, ist.quantity - sub.out_qty),
+  last_updated_at = now()
+FROM (
+  SELECT item_id, from_warehouse_id AS warehouse_id, user_id, SUM(quantity) AS out_qty
+  FROM transfers
+  WHERE item_id           IS NOT NULL
+    AND from_warehouse_id IS NOT NULL
+  GROUP BY item_id, from_warehouse_id, user_id
+) sub
+WHERE ist.item_id = sub.item_id AND ist.warehouse_id = sub.warehouse_id;
+
+-- 10-D: transfers.to_warehouse 증가
+INSERT INTO item_stocks (item_id, warehouse_id, user_id, quantity, last_updated_at)
+SELECT item_id, to_warehouse_id, user_id, SUM(quantity), now()
+FROM transfers
+WHERE item_id         IS NOT NULL
+  AND to_warehouse_id IS NOT NULL
+GROUP BY item_id, to_warehouse_id, user_id
+ON CONFLICT (item_id, warehouse_id) DO UPDATE
+  SET quantity        = item_stocks.quantity + EXCLUDED.quantity,
+      last_updated_at = now();
+
+-- 완료 확인
+-- SELECT COUNT(*) AS item_stocks_populated FROM item_stocks;
+-- SELECT user_id, COUNT(*) AS stock_lines FROM item_stocks GROUP BY user_id;
+
+-- ROLLBACK SECTION 10:
+-- TRUNCATE TABLE item_stocks;
+
+-- ====================================================
+-- [SECTION 11] 뷰 생성
+-- v_ledger: 수불대장 (거래처 현재명 + 당시 거래처명 모두 노출)
+-- v_low_stock_alert: 안전재고 미달 알람
+-- ====================================================
+
+-- 11-A: 수불대장 뷰
+CREATE OR REPLACE VIEW v_ledger AS
+SELECT
+  t.id,
+  t.user_id,
+  t.txn_date,
+  t.date                    AS date_text,
+  t.type,
+  t.item_id,
+  t.item_name,
+  t.item_code,
+  t.category,
+  t.spec,
+  t.color,
+  t.unit,
+  t.quantity,
+  t.unit_price,
+  t.selling_price,
+  t.actual_selling_price,
+  t.supply_value,
+  t.vat,
+  t.total_amount,
+  t.vendor                  AS vendor_name_at_txn,
+  t.vendor_id,
+  v.name                    AS vendor_name_current,
+  t.warehouse               AS warehouse_name_at_txn,
+  t.warehouse_id,
+  w.name                    AS warehouse_name_current,
+  ist.quantity              AS current_stock,
+  t.note,
+  t.created_at
+FROM transactions t
+LEFT JOIN vendors     v   ON v.id          = t.vendor_id
+LEFT JOIN warehouses  w   ON w.id          = t.warehouse_id
+LEFT JOIN item_stocks ist ON ist.item_id   = t.item_id
+                         AND ist.warehouse_id = t.warehouse_id;
+-- RLS: transactions 테이블의 RLS가 뷰를 통해 자동 적용됨
+
+-- 11-B: 안전재고 미달 알람 뷰
+CREATE OR REPLACE VIEW v_low_stock_alert AS
+SELECT
+  ss.user_id,
+  ss.item_id,
+  i.item_name,
+  i.item_code,
+  i.category,
+  ss.warehouse_id,
+  w.name                                 AS warehouse_name,
+  ss.min_qty                             AS safety_qty,
+  COALESCE(ist.quantity, 0)              AS current_qty,
+  ss.min_qty - COALESCE(ist.quantity, 0) AS shortage
+FROM safety_stocks ss
+JOIN  items      i   ON i.id = ss.item_id
+LEFT JOIN warehouses w   ON w.id = ss.warehouse_id
+LEFT JOIN item_stocks ist
+  ON ist.item_id = ss.item_id
+  AND (
+    ss.warehouse_id IS NULL
+    OR ist.warehouse_id = ss.warehouse_id
+  )
+WHERE COALESCE(ist.quantity, 0) < ss.min_qty;
+
+-- ROLLBACK SECTION 11:
+-- DROP VIEW IF EXISTS v_low_stock_alert;
+-- DROP VIEW IF EXISTS v_ledger;
+
+-- ====================================================
+-- [SECTION 12] RLS 정책 최종 확인
+-- 신규 테이블 RLS 적용 상태 검증 쿼리
+-- ====================================================
+
+SELECT
+  tablename,
+  rowsecurity,
+  CASE WHEN rowsecurity THEN 'RLS ON' ELSE 'RLS OFF (주의!)' END AS rls_status
+FROM pg_tables
+WHERE tablename IN ('item_stocks', 'safety_stocks', 'transactions', 'transfers', 'stocktake_items')
+ORDER BY tablename;
+
+SELECT
+  tablename,
+  policyname,
+  cmd,
+  qual
+FROM pg_policies
+WHERE tablename IN ('item_stocks', 'safety_stocks')
+ORDER BY tablename, policyname;
+
+SELECT
+  trigger_name,
+  event_object_table AS target_table,
+  event_manipulation AS event,
+  action_timing
+FROM information_schema.triggers
+WHERE trigger_name IN ('trg_update_item_stock', 'trg_update_stock_on_transfer')
+ORDER BY event_object_table;
+
+SELECT
+  routine_name,
+  routine_type,
+  security_type
+FROM information_schema.routines
+WHERE routine_name IN (
+  'fn_update_item_stock',
+  'fn_update_item_stock_on_transfer',
+  'fn_recalculate_item_stocks'
+)
+ORDER BY routine_name;
+
+-- ====================================================
+-- [SECTION 13] 안전재고 마이그레이션
+-- user_settings.key='safetyStock' JSONB -> safety_stocks 테이블
+-- 형식: {"품목명": min_qty, ...}
+-- ====================================================
+-- 사전 확인
+-- SELECT id, user_id, value FROM user_settings WHERE key = 'safetyStock' LIMIT 5;
+
+INSERT INTO safety_stocks (user_id, item_id, warehouse_id, min_qty)
+SELECT
+  us.user_id,
+  i.id        AS item_id,
+  NULL        AS warehouse_id,
+  (kv.value)::NUMERIC AS min_qty
+FROM user_settings us
+CROSS JOIN LATERAL jsonb_each_text(us.value) AS kv(item_name, value)
+JOIN items i
+  ON i.user_id   = us.user_id
+ AND i.item_name = kv.item_name
+WHERE us.key = 'safetyStock'
+  AND us.value IS NOT NULL
+ON CONFLICT ON CONSTRAINT uq_safety_stock DO UPDATE
+  SET min_qty    = EXCLUDED.min_qty,
+      updated_at = now();
+
+-- 마이그레이션 결과 확인
+-- SELECT COUNT(*) AS migrated FROM safety_stocks;
+-- SELECT user_id, COUNT(*) AS lines FROM safety_stocks GROUP BY user_id;
+
+-- ROLLBACK SECTION 13:
+-- TRUNCATE TABLE safety_stocks;
+
+-- ====================================================
+-- [PHASE 3] NOT NULL 제약 추가 — 백필 완료 확인 후 별도 실행
+-- Phase 2 검증 쿼리 결과가 모두 0인 경우에만 진행
+-- ====================================================
+
+-- Phase 2 검증 (모든 null_count = 0이어야 Phase 3 실행 가능)
+-- SELECT 'transactions.item_id NULL'    AS check_name, COUNT(*) AS null_count FROM transactions WHERE item_id IS NULL AND item_name IS NOT NULL
+-- UNION ALL
+-- SELECT 'transfers.item_id NULL',       COUNT(*) FROM transfers WHERE item_id IS NULL
+-- UNION ALL
+-- SELECT 'transfers.from_wh NULL',       COUNT(*) FROM transfers WHERE from_warehouse_id IS NULL
+-- UNION ALL
+-- SELECT 'transfers.to_wh NULL',         COUNT(*) FROM transfers WHERE to_warehouse_id IS NULL;
+
+-- Phase 3 실행 (모든 null_count = 0 확인 후 주석 해제하여 실행)
+-- ALTER TABLE transactions   ALTER COLUMN item_id           SET NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN item_id           SET NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN from_warehouse_id SET NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN to_warehouse_id   SET NOT NULL;
+
+-- Phase 3 롤백
+-- ALTER TABLE transactions   ALTER COLUMN item_id           DROP NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN item_id           DROP NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN from_warehouse_id DROP NOT NULL;
+-- ALTER TABLE transfers      ALTER COLUMN to_warehouse_id   DROP NOT NULL;
+
+-- ====================================================
+-- 마이그레이션 완료
+-- 실행 후 반드시 SECTION 12 확인 쿼리로 상태 검증
+-- ====================================================

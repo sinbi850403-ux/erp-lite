@@ -73,8 +73,8 @@ const REACT_PAGES = {
   'yearend-settlement': lazy(() => import('../../pages/YearendSettlementPage.jsx')),
   // 11차 변환 (재고현황·입출고·수주관리 — 마지막 3개 핵심 페이지)
   inventory:       lazy(() => import('../../pages/InventoryPage.jsx')),
-  in:              lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.InPage }))),
-  out:             lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.OutPage }))),
+  in:              lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.InPage || m.default }))),
+  out:             lazy(() => import('../../pages/InoutPage.jsx').then(m => ({ default: m.OutPage || m.default }))),
   sales:           lazy(() => import('../../pages/SalesPage.jsx')),
 };
 

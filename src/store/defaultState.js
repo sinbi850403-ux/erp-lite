@@ -59,6 +59,10 @@ export const DEFAULT_STATE = {
   currency: { code: 'KRW', symbol: '₩', rate: 1 },
   // 사용자명
   userName: '관리자',
+  // 창고별 현재고 캐시 (item_stocks 테이블, DB 트리거 자동갱신)
+  itemStocks: [],      // [{itemId, warehouseId, quantity, lastUpdatedAt}]
+  // 안전재고 (safety_stocks 테이블, 기존 safetyStock 객체 대체)
+  safetyStocks: [],    // [{id, itemId, warehouseId, minQty, updatedAt}]
   // 창고 마스터 (Enterprise: 다중 창고 관리)
   warehouses: [
     { id: 'wh-default', name: '본사 창고', type: 'main', address: '', manager: '', memo: '', createdAt: '' }

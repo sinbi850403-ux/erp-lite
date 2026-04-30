@@ -2,14 +2,14 @@
  * InoutPage.jsx - 입출고 관리 페이지
  * mode: 'all' | 'in' | 'out'
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../hooks/useStore.js';
 import { showToast } from '../toast.js';
 import { downloadExcel } from '../excel.js';
 import { canAction } from '../auth.js';
 import { addTransaction, deleteTransaction } from '../store.js';
 import { enableColumnResize } from '../ux-toolkit.js';
-import { fmtNum as fmt, fmtWon as W } from '../utils/formatters.js';
+import { fmtNum as fmt, fmtWon as W, normalizeCurrency } from '../utils/formatters.js';
 import { formatDateStr as formatDate } from '../domain/inoutExcelParser.js';
 import { TxModal } from '../components/inout/TxModal.jsx';
 import { BulkUploadModal } from '../components/inout/BulkUploadModal.jsx';
@@ -57,7 +57,7 @@ export function InoutPage({ mode = 'all' }) {
     dateFilter, setDateFilter,
     monthFilter, setMonthFilter,
     quick, sort, setSort,
-    sorted, itemMap, wacMap,
+    sorted, itemMap, wacMap, resolveItem, resolveWac,
     vendorOptions, quickChips,
     handleQuickChange, handleReset, toggleSort,
     inTotals, outTotals,
@@ -75,6 +75,7 @@ export function InoutPage({ mode = 'all' }) {
 
   // ── 선택 ───────────────────────────────────────────────────────────────────
   const allOnPageSelected = sorted.length > 0 && sorted.every(tx => selectedIds.has(tx.id));
+
 
   const toggleSelectAll = () => {
     setSelectedIds(prev => {
@@ -121,9 +122,9 @@ export function InoutPage({ mode = 'all' }) {
       const list = transactions.filter(tx => tx.type === 'in');
       if (!list.length) { showToast('입고 기록이 없습니다.', 'warning'); return; }
       data = list.map(tx => {
-        const it = iMap.get(tx.itemName) || {};
+        const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const cost = parseFloat(tx.unitPrice) || 0;
+        const cost = normalizeCurrency(tx.unitPrice);
         const supply = Math.round(cost * qty);
         const vat = Math.ceil(supply * 0.1);
         return {
@@ -138,9 +139,9 @@ export function InoutPage({ mode = 'all' }) {
       const list = transactions.filter(tx => tx.type === 'out');
       if (!list.length) { showToast('출고 기록이 없습니다.', 'warning'); return; }
       data = list.map(tx => {
-        const it = iMap.get(tx.itemName) || {};
+        const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const salePrice = parseFloat(tx.sellingPrice || it.sellingPrice) || 0;
+        const salePrice = normalizeCurrency(tx.sellingPrice || it.sellingPrice);
         const outAmt = Math.round(salePrice * qty);
         return {
           '자산': it.category || tx.category || '', '출고일자': tx.date || '',
@@ -153,9 +154,9 @@ export function InoutPage({ mode = 'all' }) {
       fileName = '출고관리';
     } else {
       data = transactions.map(tx => {
-        const it = iMap.get(tx.itemName) || {};
+        const it = resolveItem(tx);
         const qty = parseFloat(tx.quantity) || 0;
-        const cost = parseFloat(tx.unitPrice) || 0;
+        const cost = normalizeCurrency(tx.unitPrice);
         const supply = Math.round(cost * qty);
         const vat = tx.type === 'in' ? Math.ceil(supply * 0.1) : Math.floor(supply * 0.1);
         return {
@@ -353,16 +354,20 @@ export function InoutPage({ mode = 'all' }) {
           alignItems: 'center', borderBottom: '1px solid var(--border-color)',
           background: 'var(--bg-lighter)',
         }}>
-          <div style={{ fontSize: '13px', fontWeight: 600 }}>선택 {selectedIds.size}건</div>
-          {canBulk && (
-            <button
-              className="btn btn-danger btn-sm"
-              disabled={selectedIds.size === 0}
-              onClick={handleBulkDelete}
-            >
-              선택 삭제
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600 }}>선택 {selectedIds.size}건</div>
+          </div>
+          <div>
+            {canBulk && (
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={selectedIds.size === 0}
+                onClick={handleBulkDelete}
+              >
+                선택 삭제
+              </button>
+            )}
+          </div>
         </div>
 
         {sorted.length === 0 ? (
@@ -386,15 +391,19 @@ export function InoutPage({ mode = 'all' }) {
                     <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
                     <SortTh sortKey="itemCode" sort={sort} onSort={toggleSort}>상품코드</SortTh>
                     <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품명</SortTh>
+                    <SortTh sortKey="color" sort={sort} onSort={toggleSort}>색상</SortTh>
                     <SortTh sortKey="spec" sort={sort} onSort={toggleSort}>규격</SortTh>
                     <SortTh sortKey="unit" sort={sort} onSort={toggleSort}>단위</SortTh>
                     <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort}>출고수량</SortTh>
                     {[
-                      { key: 'sellingPrice', label: '출고단가', cls: 'th-section-out' },
-                      { key: 'outAmt',       label: '판매가',   cls: 'th-section-out' },
-                      { key: 'outTotal',     label: '출고합계', cls: 'th-section-out' },
-                    ].map(({ key, label, cls }) => (
-                      <SortTh key={key} sortKey={key} sort={sort} onSort={toggleSort} className={`text-right ${cls}`} style={{
+                      { key: 'sellingPrice', label: '출고단가' },
+                      { key: 'outAmt',       label: '판매가'   },
+                      { key: 'outVat',       label: '부가세'   },
+                      { key: 'outTotal',     label: '출고합계' },
+                      { key: 'profit',       label: '이익액'   },
+                      { key: 'profitMargin', label: '이익률'   },
+                    ].map(({ key, label }) => (
+                      <SortTh key={key} sortKey={key} sort={sort} onSort={toggleSort} className="text-right" style={{
                         fontWeight: 700, fontSize: '11px', textTransform: 'none', whiteSpace: 'nowrap', minWidth: 72,
                       }}>{label}</SortTh>
                     ))}
@@ -414,6 +423,7 @@ export function InoutPage({ mode = 'all' }) {
                         <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
                         <SortTh sortKey="itemCode" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>상품코드</SortTh>
                         <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품명</SortTh>
+                        <SortTh sortKey="color" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>색상</SortTh>
                         <SortTh sortKey="spec" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>규격</SortTh>
                         <SortTh sortKey="unit" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>단위</SortTh>
                         <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort}>입고수량</SortTh>
@@ -427,6 +437,7 @@ export function InoutPage({ mode = 'all' }) {
                         <SortTh sortKey="date" sort={sort} onSort={toggleSort}>날짜</SortTh>
                         <SortTh sortKey="vendor" sort={sort} onSort={toggleSort}>거래처</SortTh>
                         <SortTh sortKey="itemName" className="col-fill" sort={sort} onSort={toggleSort}>품목명</SortTh>
+                        <SortTh sortKey="color" sort={sort} onSort={toggleSort} style={{ color: 'var(--text-muted)' }}>색상</SortTh>
                         <SortTh sortKey="quantity" className="text-right" sort={sort} onSort={toggleSort} style={{ color: 'var(--danger)', fontWeight: 700 }}>수량</SortTh>
                         <SortTh sortKey="unitPrice" className="text-right" sort={sort} onSort={toggleSort}>원가</SortTh>
                         <SortTh sortKey="sellingPrice" className="text-right" sort={sort} onSort={toggleSort} style={{ color: 'var(--success)', fontWeight: 700 }}>판매가</SortTh>
@@ -442,14 +453,14 @@ export function InoutPage({ mode = 'all' }) {
                 {sorted.map((tx, i) => {
                   const rowNum = i + 1;
                   const qty = parseFloat(tx.quantity) || 0;
-                  const itemData = itemMap.get(tx.itemName) || {};
-                  const unitPrice = parseFloat(tx.unitPrice || itemData.unitPrice) || 0;
+                  const itemData = resolveItem(tx);
+                  const unitPrice = normalizeCurrency(tx.unitPrice || itemData.unitPrice);
                   const supply = Math.round(unitPrice * qty);
                   const vat = Math.ceil(supply * 0.1);
                   const totalPrice = supply + vat;
-                  const salePrice = parseFloat(tx.sellingPrice || itemData.salePrice) || 0;
+                  const salePrice = normalizeCurrency(tx.sellingPrice || itemData.salePrice);
                   const outAmt = Math.round(salePrice * qty);
-                  const wac = wacMap[tx.itemName] || unitPrice;
+                  const wac = resolveWac(tx, itemData);
                   const wacSupply = Math.round(wac * qty);
                   const profit = outAmt - wacSupply;
                   const category = tx.category || itemData.category || '';
@@ -473,6 +484,7 @@ export function InoutPage({ mode = 'all' }) {
                           <td style={{ fontSize: '12px' }}>{tx.vendor || '-'}</td>
                           <td style={{ fontSize: '12px' }}>{itemCode || '-'}</td>
                           <td className="col-fill"><strong>{tx.itemName || '-'}</strong></td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tx.color || itemData.color || '-'}</td>
                           <td style={{ fontSize: '12px' }}>{spec || '-'}</td>
                           <td style={{ fontSize: '12px' }}>{unit || '-'}</td>
                           <td className="text-right" style={{ fontWeight: 600 }}>
@@ -481,7 +493,10 @@ export function InoutPage({ mode = 'all' }) {
                           {/* 판매 그룹 */}
                           <td className="text-right">{salePrice ? W(salePrice) : '-'}</td>
                           <td className="text-right">{outAmt ? W(outAmt) : '-'}</td>
+                          <td className="text-right">{outAmt ? W(Math.round(outAmt * 0.1)) : '-'}</td>
                           <td className="text-right">{outAmt ? W(Math.round(outAmt * 1.1)) : '-'}</td>
+                          <td className="text-right">{outAmt ? W(profit) : '-'}</td>
+                          <td className="text-right">{outAmt > 0 ? (profit / outAmt * 100).toFixed(1) + '%' : '-'}</td>
                         </>
                       ) : isInMode ? (
                         <>
@@ -490,6 +505,7 @@ export function InoutPage({ mode = 'all' }) {
                           <td style={{ fontSize: '13px' }}>{tx.vendor || '-'}</td>
                           <td style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{itemCode || '-'}</td>
                           <td className="col-fill"><strong>{tx.itemName || '-'}</strong></td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tx.color || itemData.color || '-'}</td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{spec || '-'}</td>
                           <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{unit || '-'}</td>
                           <td className="text-right" style={{ fontWeight: 600, fontSize: '13px' }}>
@@ -508,6 +524,7 @@ export function InoutPage({ mode = 'all' }) {
                             <strong>{tx.itemName || '-'}</strong>
                             {itemCode && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>{itemCode}</span>}
                           </td>
+                          <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tx.color || itemData.color || '-'}</td>
                           <td className="text-right">
                             <span style={{ color: tx.type === 'in' ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
                               {tx.type === 'in' ? '+' : '-'}{fmt(qty)}
@@ -539,7 +556,7 @@ export function InoutPage({ mode = 'all' }) {
                 return (
                   <tfoot>
                     <tr style={{ background: 'var(--bg-lighter)', fontWeight: 700 }}>
-                      <td colSpan={9} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
+                      <td colSpan={10} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
                         합계 ({sorted.length.toLocaleString()}건)
                       </td>
                       <td className="text-right" style={{ ...S, fontSize: '13px' }}>
@@ -559,12 +576,15 @@ export function InoutPage({ mode = 'all' }) {
                 return (
                   <tfoot>
                     <tr style={{ background: 'var(--bg-lighter)', fontWeight: 700 }}>
-                      <td colSpan={10} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
+                      <td colSpan={11} className="text-right" style={{ ...S, color: 'var(--text-muted)', fontSize: '12px' }}>
                         합계 ({sorted.length.toLocaleString()}건)
                       </td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>-</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutAmt)}</td>
-                      <td className="text-right" style={{ ...S, background: '#eff6ff', color: '#111', fontWeight: 400 }}>{W(outTotals.totOutTotal)}</td>
+                      <td className="text-right" style={{ ...S, fontWeight: 400 }}>-</td>
+                      <td className="text-right" style={S}>{W(outTotals.totOutAmt)}</td>
+                      <td className="text-right" style={S}>{W(outTotals.totVat)}</td>
+                      <td className="text-right" style={S}>{W(outTotals.totOutTotal)}</td>
+                      <td className="text-right" style={S}>{W(outTotals.totProfit)}</td>
+                      <td className="text-right" style={{ ...S, fontSize: '12px' }}>{outTotals.totProfitMargin}</td>
                       <td style={S}></td>
                     </tr>
                   </tfoot>

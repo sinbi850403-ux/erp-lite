@@ -5,6 +5,15 @@
 import { supabase } from '../supabase-client.js';
 import { getUserId, withDbTimeout, handleError, toNullableNumber, toNullableString, generateClientUuid } from './core.js';
 
+const normalizeItemCode = (value) => String(value ?? '').replace(/\s+/g, '').trim().toLowerCase();
+const normalizeItemName = (value) => String(value ?? '').trim().toLowerCase();
+const preferValue = (prev, next) => {
+  const p = String(prev ?? '').trim();
+  const n = String(next ?? '').trim();
+  if (!p && n) return next;
+  return prev;
+};
+
 // ============================================================
 // 품목 (Items) CRUD
 // ============================================================
@@ -58,13 +67,32 @@ export const items = {
 
   /**
    * 품목 생성
-   * @param {Object} item - { item_name, category, quantity, ... }
+   * @param {Object} item - { itemName, category, unit, ... } (camelCase)
    */
   async create(item) {
     const userId = await getUserId();
+    // camelCase → snake_case 변환
+    const row = {
+      user_id: userId,
+      item_name: toNullableString(item?.itemName),
+      item_code: toNullableString(item?.itemCode),
+      item_code_norm: normalizeItemCode(item?.itemCode) || null,
+      category: toNullableString(item?.category),
+      unit: toNullableString(item?.unit || 'EA'),
+      unit_price: toNullableNumber(item?.unitPrice),
+      sale_price: toNullableNumber(item?.salePrice),
+      spec: toNullableString(item?.spec),
+      color: toNullableString(item?.color),
+      warehouse: toNullableString(item?.warehouse),
+      warehouse_id: item?.warehouseId,
+      location: toNullableString(item?.location),
+      vendor: toNullableString(item?.vendor),
+      min_stock: toNullableNumber(item?.minStock),
+      memo: toNullableString(item?.memo),
+    };
     // warehouse_id FK: fix-security-perf-2026-04.sql V008-ext 적용 후 활성화
     const { data, error } = await withDbTimeout(
-      supabase.from('items').insert({ ...item, user_id: userId }).select().single(),
+      supabase.from('items').insert(row).select().single(),
       '품목 생성'
     );
     handleError(error, '품목 생성');
@@ -78,10 +106,12 @@ export const items = {
   async bulkUpsert(itemsArray) {
     const userId = await getUserId();
     const rows = itemsArray.map((item) => {
+      const itemCode = toNullableString(item?.item_code);
       const payload = {
         user_id: userId,
         item_name: toNullableString(item?.item_name),
-        item_code: toNullableString(item?.item_code),
+        item_code: itemCode,
+        item_code_norm: normalizeItemCode(itemCode) || null,
         category: toNullableString(item?.category),
         quantity: toNullableNumber(item?.quantity),
         unit: toNullableString(item?.unit),
@@ -109,17 +139,39 @@ export const items = {
       return payload;
     });
     const dedupedMap = new Map();
-    const normalizeItemName = (value) => String(value ?? '').trim().toLowerCase();
     rows.forEach((row) => {
       const normalizedName = normalizeItemName(row.item_name);
-      if (!normalizedName) return;
-      const key = `${userId}::${normalizedName}`;
-      dedupedMap.set(key, { ...row, item_name: String(row.item_name ?? '').trim() });
+      const normalizedCode = normalizeItemCode(row.item_code);
+      if (!normalizedName && !normalizedCode) return;
+      const key = normalizedCode ? `${userId}::code::${normalizedCode}` : `${userId}::name::${normalizedName}`;
+      const existing = dedupedMap.get(key);
+      if (!existing) {
+        dedupedMap.set(key, {
+          ...row,
+          item_name: String(row.item_name ?? '').trim(),
+          item_code_norm: normalizedCode || null,
+        });
+        return;
+      }
+      // Same item_name rows can come from mixed sources; never let blank fields overwrite filled fields.
+      const merged = { ...existing, ...row };
+      merged.item_name = String(existing.item_name ?? row.item_name ?? '').trim();
+      merged.item_code = preferValue(existing.item_code, row.item_code);
+      merged.item_code_norm = normalizeItemCode(merged.item_code) || null;
+      merged.vendor = preferValue(existing.vendor, row.vendor);
+      merged.category = preferValue(existing.category, row.category);
+      merged.spec = preferValue(existing.spec, row.spec);
+      merged.color = preferValue(existing.color, row.color);
+      merged.unit = preferValue(existing.unit, row.unit);
+      merged.warehouse = preferValue(existing.warehouse, row.warehouse);
+      dedupedMap.set(key, merged);
     });
     const dedupedRows = [...dedupedMap.values()];
 
-    const existingIdByName = new Map();
-    const names = dedupedRows.map((row) => row.item_name).filter(Boolean);
+    const existingIdByCode = new Map();
+    const existingIdByNameNoCode = new Map();
+    const codes = dedupedRows.map((row) => row.item_code_norm).filter(Boolean);
+    const names = dedupedRows.filter((row) => !row.item_code_norm).map((row) => row.item_name).filter(Boolean);
     const QUERY_BATCH = 120;
 
     const isBatchRequestTooLarge = (error) => {
@@ -133,41 +185,53 @@ export const items = {
       );
     };
 
-    const fetchExistingByNameBatch = async (nameBatch, offsetLabel = 0) => {
-      if (!nameBatch.length) return [];
+    const fetchExistingBatch = async (batchValues, useCode, offsetLabel = 0) => {
+      if (!batchValues.length) return [];
       const { data, error } = await supabase
         .from('items')
-        .select('id,item_name')
+        .select('id,item_name,item_code_norm')
         .eq('user_id', userId)
-        .in('item_name', nameBatch);
+        .in(useCode ? 'item_code_norm' : 'item_name', batchValues);
 
       if (!error) return data || [];
 
-      if (nameBatch.length > 1 && isBatchRequestTooLarge(error)) {
-        const mid = Math.ceil(nameBatch.length / 2);
-        const left = await fetchExistingByNameBatch(nameBatch.slice(0, mid), offsetLabel);
-        const right = await fetchExistingByNameBatch(nameBatch.slice(mid), offsetLabel + mid);
+      if (batchValues.length > 1 && isBatchRequestTooLarge(error)) {
+        const mid = Math.ceil(batchValues.length / 2);
+        const left = await fetchExistingBatch(batchValues.slice(0, mid), useCode, offsetLabel);
+        const right = await fetchExistingBatch(batchValues.slice(mid), useCode, offsetLabel + mid);
         return [...left, ...right];
       }
 
-      handleError(error, `기존 품목 ID 조회(${offsetLabel}~${offsetLabel + nameBatch.length})`);
+      handleError(error, `기존 품목 ID 조회(${offsetLabel}~${offsetLabel + batchValues.length})`);
       return [];
     };
+
+    for (let i = 0; i < codes.length; i += QUERY_BATCH) {
+      const codeBatch = codes.slice(i, i + QUERY_BATCH);
+      if (!codeBatch.length) continue;
+      const existingRows = await fetchExistingBatch(codeBatch, true, i);
+      existingRows.forEach((row) => {
+        const key = normalizeItemCode(row.item_code_norm);
+        if (key && row.id) existingIdByCode.set(key, row.id);
+      });
+    }
 
     for (let i = 0; i < names.length; i += QUERY_BATCH) {
       const nameBatch = names.slice(i, i + QUERY_BATCH);
       if (!nameBatch.length) continue;
-      const existingRows = await fetchExistingByNameBatch(nameBatch, i);
+      const existingRows = await fetchExistingBatch(nameBatch, false, i);
       existingRows.forEach((row) => {
         const key = normalizeItemName(row.item_name);
-        if (key && row.id) existingIdByName.set(key, row.id);
+        if (key && row.id && !row.item_code_norm) existingIdByNameNoCode.set(key, row.id);
       });
     }
 
     dedupedRows.forEach((row) => {
       const hasId = row.id !== null && row.id !== undefined && String(row.id).trim() !== '';
       if (hasId) return;
-      const existingId = existingIdByName.get(normalizeItemName(row.item_name));
+      const existingId = row.item_code_norm
+        ? existingIdByCode.get(normalizeItemCode(row.item_code_norm))
+        : existingIdByNameNoCode.get(normalizeItemName(row.item_name));
       row.id = existingId || generateClientUuid();
     });
 
@@ -184,9 +248,9 @@ export const items = {
       const batch = dedupedRows.slice(i, i + BATCH_SIZE);
       const { data, error } = await supabase
         .from('items')
-        .upsert(batch, { onConflict: 'user_id,item_name' })
+        .upsert(batch)
         .select();
-      handleError(error, `품목 일괄 저장 (${i}~${i + batch.length})`);
+      handleError(error, `품목 일괄 저장(${i}~${i + batch.length})`);
       results.push(...(data || []));
     }
 
@@ -198,10 +262,14 @@ export const items = {
    */
   async update(itemId, updates) {
     const userId = await getUserId();
+    const nextUpdates = { ...updates };
+    if (Object.prototype.hasOwnProperty.call(nextUpdates, 'item_code')) {
+      nextUpdates.item_code_norm = normalizeItemCode(nextUpdates.item_code) || null;
+    }
     // warehouse_id FK: fix-security-perf-2026-04.sql V008-ext 적용 후 활성화
     const { data, error } = await supabase
       .from('items')
-      .update(updates)
+      .update(nextUpdates)
       .eq('id', itemId)
       .eq('user_id', userId)
       .select()

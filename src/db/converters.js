@@ -18,16 +18,18 @@ export function dbItemToStoreItem(dbItem) {
     vat: dbItem.vat,
     totalPrice: dbItem.total_price,
     salePrice: dbItem.sale_price,
-    sellingPrice: dbItem.sale_price,    // page-inout.js 호환 별칭
+    sellingPrice: dbItem.sale_price,
     warehouse: dbItem.warehouse,
+    warehouseId: dbItem.warehouse_id,   // FK
     location: dbItem.location,
     vendor: dbItem.vendor,
     minStock: dbItem.min_stock,
     expiryDate: dbItem.expiry_date,
     lotNumber: dbItem.lot_number,
     memo: dbItem.memo,
-    assetType: dbItem.asset_type,   // 자산 구분
-    spec: dbItem.spec,              // 규격
+    assetType: dbItem.asset_type,
+    spec: dbItem.spec,
+    color: dbItem.color || '',
     ...(dbItem.extra || {}),
   };
 }
@@ -69,22 +71,45 @@ export function dbTxToStoreTx(dbTx) {
   return {
     id: dbTx.id,
     type: dbTx.type,
+    itemId: dbTx.item_id,                           // UUID FK
     itemName: dbTx.item_name,
-    itemCode: dbTx.item_code,                       // 상품코드
+    itemCode: dbTx.item_code,
     quantity: dbTx.quantity,
     unitPrice: dbTx.unit_price,
-    supplyValue: dbTx.supply_value,                 // 공급가액
-    vat: dbTx.vat,                                  // 부가세
-    totalAmount: dbTx.total_amount,                 // 합계금액
-    sellingPrice: dbTx.selling_price,               // 출고단가
-    actualSellingPrice: dbTx.actual_selling_price,  // 실판매가
-    spec: dbTx.spec,                                // 규격
-    unit: dbTx.unit,                                // 단위
-    category: dbTx.category,                        // 자산구분
+    supplyValue: dbTx.supply_value,
+    vat: dbTx.vat,
+    totalAmount: dbTx.total_amount,
+    sellingPrice: dbTx.selling_price,
+    actualSellingPrice: dbTx.actual_selling_price,
+    spec: dbTx.spec,
+    unit: dbTx.unit,
+    category: dbTx.category,
+    color: dbTx.color || '',
     date: dbTx.date,
+    txnDate: dbTx.txn_date,                         // DATE 타입
     vendor: dbTx.vendor,
+    vendorId: dbTx.vendor_id,                       // UUID FK
     warehouse: dbTx.warehouse,
+    warehouseId: dbTx.warehouse_id,                 // UUID FK
     note: dbTx.note,
+  };
+}
+
+export function dbTransferToStore(r) {
+  return {
+    id: r.id,
+    itemId: r.item_id,
+    itemName: r.item_name,
+    itemCode: r.item_code,
+    fromWarehouse: r.from_warehouse,
+    toWarehouse: r.to_warehouse,
+    fromWarehouseId: r.from_warehouse_id,
+    toWarehouseId: r.to_warehouse_id,
+    quantity: r.quantity,
+    date: r.date,
+    dateD: r.date_d,
+    note: r.note,
+    createdAt: r.created_at,
   };
 }
 
