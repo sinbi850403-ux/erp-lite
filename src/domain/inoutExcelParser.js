@@ -36,8 +36,11 @@ export function formatDateStr(dateStr) {
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const d = new Date(raw);
-  if (isNaN(d.getTime())) return String(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  // Guard against abnormal parsed years (e.g. +057370-11...)
+  if (y < 1900 || y > 2100) return '';
+  return `${y}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** 헤더 배열 + modeDefault → colMap (컬럼 인덱스 맵) */

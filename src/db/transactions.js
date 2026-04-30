@@ -7,10 +7,25 @@ import { getUserId, handleError } from './core.js';
 
 function toDateOnly(value) {
   if (!value) return null;
-  const s = String(value).trim();
+  const s = String(value).trim().replace(/,/g, '');
+  if (!s) return null;
+  // Excel serials sometimes come in as text
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const serial = Number(s);
+    if (Number.isFinite(serial)) {
+      const ms = Math.round((Math.floor(serial) - 25569) * 86400 * 1000);
+      const d = new Date(ms);
+      if (!Number.isNaN(d.getTime())) {
+        const y = d.getUTCFullYear();
+        if (y >= 1900 && y <= 2100) return d.toISOString().slice(0, 10);
+      }
+    }
+  }
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  if (y < 1900 || y > 2100) return null;
   return d.toISOString().slice(0, 10);
 }
 
@@ -61,6 +76,8 @@ export const transactions = {
     const userId = await getUserId();
     const rows = txArray.map((tx) => {
       const rawDate = pick(tx, 'date', 'date');
+      const normalizedDate = toDateOnly(rawDate);
+      const normalizedTxnDate = toDateOnly(pick(tx, 'txnDate', 'txn_date'));
       return {
         id: pick(tx, 'id', 'id'),
         user_id: userId,
@@ -79,8 +96,8 @@ export const transactions = {
         unit: pick(tx, 'unit', 'unit') || null,
         category: pick(tx, 'category', 'category') || null,
         color: pick(tx, 'color', 'color') || null,
-        date: rawDate || null,
-        txn_date: pick(tx, 'txnDate', 'txn_date') || toDateOnly(rawDate),
+        date: normalizedDate,
+        txn_date: normalizedTxnDate || normalizedDate,
         vendor: pick(tx, 'vendor', 'vendor') || null,
         vendor_id: pick(tx, 'vendorId', 'vendor_id') || null,
         warehouse: pick(tx, 'warehouse', 'warehouse') || null,
