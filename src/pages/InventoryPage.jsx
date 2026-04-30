@@ -111,6 +111,9 @@ export default function InventoryPage() {
       return next;
     });
   }, []);
+  const allGroupKeys = useMemo(() => groupedRows.map((g) => g.key), [groupedRows]);
+  const expandAllGroups = useCallback(() => setExpandedGroups(new Set(allGroupKeys)), [allGroupKeys]);
+  const collapseAllGroups = useCallback(() => setExpandedGroups(new Set()), []);
 
   useEffect(() => { if (tableRef.current) enableColumnResize(tableRef.current); }, [sorted]);
 
@@ -330,6 +333,12 @@ export default function InventoryPage() {
 
       {/* 테이블 */}
       <div className="card card-flush">
+        {groupedRows.length > 0 && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: 8 }}>
+            <button className="btn btn-outline btn-sm" onClick={expandAllGroups}>전체 펼치기</button>
+            <button className="btn btn-outline btn-sm" onClick={collapseAllGroups}>전체 접기</button>
+          </div>
+        )}
         <div className="table-wrapper">
           <table className="data-table inv-table" ref={tableRef}>
             <thead>

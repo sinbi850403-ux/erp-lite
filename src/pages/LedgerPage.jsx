@@ -312,6 +312,9 @@ export default function LedgerPage() {
       return next;
     });
   };
+  const allGroupKeys = useMemo(() => groupedRows.map((g) => g.key), [groupedRows]);
+  const expandAllGroups = () => setExpandedGroups(new Set(allGroupKeys));
+  const collapseAllGroups = () => setExpandedGroups(new Set());
 
   const totals = useMemo(() => rows.reduce((acc, r) => ({
     openingQty:   acc.openingQty   + r.openingQty,
@@ -456,11 +459,19 @@ export default function LedgerPage() {
           </div>
         ) : (
           <>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>
-              <strong>수불대장</strong>
-              <span style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '8px' }}>
-                {fromDate} ~ {toDate} ({rows.length}개 품목)
-              </span>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <strong>수불대장</strong>
+                <span style={{ color: 'var(--text-muted)', fontSize: '13px', marginLeft: '8px' }}>
+                  {fromDate} ~ {toDate} ({rows.length}개 품목)
+                </span>
+              </div>
+              {groupedRows.length > 0 && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-outline btn-sm" onClick={expandAllGroups}>전체 펼치기</button>
+                  <button className="btn btn-outline btn-sm" onClick={collapseAllGroups}>전체 접기</button>
+                </div>
+              )}
             </div>
             <div className="table-wrapper" style={{ border: 'none', borderRadius: 0, overflowX: 'auto' }}>
               <table className="data-table inv-table" style={{ minWidth: '1200px' }}>

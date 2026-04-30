@@ -147,6 +147,13 @@ export function InoutPage({ mode = 'all' }) {
       return next;
     });
   };
+  const currentGroupKeys = useMemo(() => {
+    if (isOutMode) return groupedOutRows.map((g) => g.key);
+    if (isInMode) return groupedInRows.map((g) => g.key);
+    return [];
+  }, [isOutMode, isInMode, groupedOutRows, groupedInRows]);
+  const expandAllGroups = () => setExpandedGroups(new Set(currentGroupKeys));
+  const collapseAllGroups = () => setExpandedGroups(new Set());
 
   const toggleSelectAll = () => {
     setSelectedIds(prev => {
@@ -425,16 +432,26 @@ export function InoutPage({ mode = 'all' }) {
           alignItems: 'center', borderBottom: '1px solid var(--border-color)',
           background: 'var(--bg-lighter)',
         }}>
-          <div style={{ fontSize: '13px', fontWeight: 600 }}>선택 {selectedIds.size}건</div>
-          {canBulk && (
-            <button
-              className="btn btn-danger btn-sm"
-              disabled={selectedIds.size === 0}
-              onClick={handleBulkDelete}
-            >
-              선택 삭제
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600 }}>선택 {selectedIds.size}건</div>
+            {(isInMode || isOutMode) && currentGroupKeys.length > 0 && (
+              <>
+                <button className="btn btn-outline btn-sm" onClick={expandAllGroups}>전체 펼치기</button>
+                <button className="btn btn-outline btn-sm" onClick={collapseAllGroups}>전체 접기</button>
+              </>
+            )}
+          </div>
+          <div>
+            {canBulk && (
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={selectedIds.size === 0}
+                onClick={handleBulkDelete}
+              >
+                선택 삭제
+              </button>
+            )}
+          </div>
         </div>
 
         {sorted.length === 0 ? (
