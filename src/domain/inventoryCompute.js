@@ -7,7 +7,12 @@ export function computeData(rawData, transactions) {
       .toLowerCase()
       .replace(/\s+/g, '')
       .replace(/[^\p{L}\p{N}]/gu, '');
-  const normCode = (v) => String(v || '').trim().replace(/\s+/g, '').toLowerCase();
+  const normCode = (v) => {
+    const raw = String(v || '').trim().replace(/\s+/g, '').toLowerCase();
+    if (!raw) return '';
+    const stripped = raw.replace(/^0+/, '');
+    return stripped || '0';
+  };
   const makeKey = (itemName, itemCode) => {
     const code = normCode(itemCode);
     if (code) return `code:${code}`;
