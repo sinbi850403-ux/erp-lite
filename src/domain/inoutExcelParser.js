@@ -2,6 +2,16 @@
 
 export const EXCEL_EPOCH_OFFSET = 25569;
 
+function excelSerialToDateString(serialValue) {
+  const serial = Number(serialValue);
+  if (!Number.isFinite(serial)) return '';
+  // Excel serial date (days since 1899-12-30). Keep integer day part only.
+  const utcMs = Math.round((Math.floor(serial) - EXCEL_EPOCH_OFFSET) * 86400 * 1000);
+  const d = new Date(utcMs);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
 /** 엑셀 셀 값 → 숫자 (₩, 쉼표, 공백 제거) */
 export function parseBulkNumber(v) {
   const n = parseFloat(String(v ?? '').replace(/[₩,\s]/g, ''));
@@ -18,8 +28,14 @@ export function normType(v) {
 /** 날짜 문자열 → YYYY-MM-DD */
 export function formatDateStr(dateStr) {
   if (!dateStr || dateStr === '-') return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) return dateStr;
-  const d = new Date(dateStr);
+  const raw = String(dateStr).trim();
+  // Excel serial delivered as text (e.g. "45737", "45737.0")
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const fromSerial = excelSerialToDateString(raw);
+    if (fromSerial) return fromSerial;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
   if (isNaN(d.getTime())) return String(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -81,7 +97,7 @@ export function parseExcelRows(sheetData, colMap, modeDefault, items) {
     if (colMap.date >= 0) {
       const raw = row[colMap.date];
       if (typeof raw === 'number') {
-        dateStr = new Date((raw - EXCEL_EPOCH_OFFSET) * 86400 * 1000).toISOString().slice(0, 10);
+        dateStr = excelSerialToDateString(raw);
       } else {
         dateStr = formatDateStr(String(raw ?? '').trim());
       }

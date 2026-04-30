@@ -79,7 +79,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
       const nk = makeKey(it.itemName, '');
       if (ck && !map.has(ck)) map.set(ck, it);
       if (nk && !map.has(nk)) map.set(nk, it);
-      if (it.itemName && !map.has(it.itemName)) map.set(it.itemName, it); // 疫꿸퀣???紐낆넎
+      if (it.itemName && !map.has(it.itemName)) map.set(it.itemName, it); // ?リ옇????筌뤿굞??
     });
     return map;
   }, [mappedData]);
@@ -165,7 +165,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     const costFromRow = toPositiveNumber(tx.unitPrice);
     if (isPlausibleCost(costFromRow)) return costFromRow;
 
-    // ?癒? ?袁⑤궖揶쎛 ?袁? ??쑴??怨명뒄嚥??癒?뼊??롢늺, ?癒?뵡???⑥눖猷????땾嚥???볥걹??? ??낅즲嚥?筌띲끉????????묐립?醫롮몵嚥?????
+    // ??? ?熬곣뫀沅뽪뤆?쎛 ?熬? ??????⑤챸?꾢슖????堉??濡?듆, ???逾????λ닑??????얍슖???蹂κ국??? ???낆┣??嶺뚮씞?????????臾먮┰??ル‘紐드슖?????
     if (salePrice > 0) return salePrice;
     return costFromStats || costFromItemSupply || costFromItemUnit || costFromRow || 0;
   };
@@ -180,27 +180,26 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
 
   const quickChips = isInMode
     ? [
-        { value: 'in', label: '?袁⑷퍥 癰귣떯由? },
-        { value: 'today', label: '??삳뮎 疫꿸퀡以? },
-        { value: 'recent3', label: '筌ㅼ뮄??3?? },
-        { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
+        { value: 'in', label: '전체 보기' },
+        { value: 'today', label: '오늘 기록' },
+        { value: 'recent3', label: '최근 3일' },
+        { value: 'missingVendor', label: '거래처 미입력' },
       ]
     : isOutMode
       ? [
-          { value: 'out', label: '?袁⑷퍥 癰귣떯由? },
-          { value: 'today', label: '??삳뮎 疫꿸퀡以? },
-          { value: 'recent3', label: '筌ㅼ뮄??3?? },
-          { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
+          { value: 'out', label: '전체 보기' },
+          { value: 'today', label: '오늘 기록' },
+          { value: 'recent3', label: '최근 3일' },
+          { value: 'missingVendor', label: '거래처 미입력' },
         ]
       : [
-          { value: 'all', label: '?袁⑷퍥 癰귣떯由? },
-          { value: 'today', label: '??삳뮎 疫꿸퀡以? },
-          { value: 'in', label: '??껎э쭕? },
-          { value: 'out', label: '?곗뮄?э쭕? },
-          { value: 'missingVendor', label: '椰꾧퀡?믭㎗?沃섎챷??? },
-          { value: 'recent3', label: '筌ㅼ뮄??3?? },
+          { value: 'all', label: '전체 보기' },
+          { value: 'today', label: '오늘 기록' },
+          { value: 'in', label: '입고만' },
+          { value: 'out', label: '출고만' },
+          { value: 'missingVendor', label: '거래처 미입력' },
+          { value: 'recent3', label: '최근 3일' },
         ];
-
   const handleQuickChange = (val) => {
     setQuick(val);
     if (!isInMode && !isOutMode) {
@@ -398,7 +397,7 @@ export function useInoutFilters({ transactions, mappedData, mode }) {
     setDateFilter('');
     setQuick(initialQuick);
     setSort({ key: 'date', dir: 'desc' });
-    showToast('?袁り숲?? ?類ｌ졊???λ뜃由?酉六??щ빍??', 'info');
+    showToast('?熬곥굤??? ?筌먲퐣議???貫?껆뵳??됀筌???鍮??', 'info');
   };
 
   return {
